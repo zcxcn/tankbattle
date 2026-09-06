@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-feature android:glEsVersion="0x00030000" android:required="true" />
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <uses-feature android:name="android.hardware.gamepad" android:required="false" />
+    <application android:label="钢铁余烬" android:icon="@drawable/ic_tank"
+        android:theme="@style/GameTheme" android:appCategory="game"
+        android:hardwareAccelerated="true" android:allowBackup="false"
+        android:usesCleartextTraffic="false" android:enableOnBackInvokedCallback="false">
+        <activity android:name=".MainActivity" android:exported="true"
+            android:launchMode="singleTask"
+            android:screenOrientation="sensorLandscape"
+            android:configChanges="orientation|screenSize|keyboard|keyboardHidden|navigation|uiMode"
+            android:resizeableActivity="true">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity>
+    </application>
+</manifest>

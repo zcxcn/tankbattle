@@ -1,0 +1,25 @@
+apply plugin: 'com.android.application'
+
+android {
+    namespace 'com.ironembers.game'
+    compileSdk 36
+    buildToolsVersion '35.0.0'
+    defaultConfig {
+        applicationId 'com.ironembers.game'
+        minSdk 26
+        targetSdk 35
+        versionCode 1
+        versionName '1.0.0'
+    }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+    sourceSets { main { assets.srcDirs = ['../../outputs/android-web'] } }
+    buildTypes {
+        debug { debuggable true }
+        release { signingConfig signingConfigs.debug; minifyEnabled true; shrinkResources true; proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro' }
+    }
+}
+dependencies {
+    implementation 'androidx.webkit:webkit:1.14.0'
+    implementation 'androidx.core:core:1.17.0'
+    implementation 'androidx.concurrent:concurrent-futures:1.1.0'
+}
