@@ -1,0 +1,839 @@
+class_name GameUI
+extends Control
+## Reusable presentation layer for the native PC game.
+## It never changes scenes, pauses the tree, or touches persistence directly.
+
+signal start_requested
+signal resume_requested
+signal retry_requested
+signal menu_requested
+signal settings_requested
+signal quit_requested
+signal setting_requested(id: String)
+
+const ThemeFactory = preload("res://ui/iron_theme.gd")
+const Backdrop = preload("res://ui/iron_backdrop.gd")
+
+const VALID_MODES: Array[String] = ["title", "playing", "paused", "won", "lost", "settings"]
+const DISPLAY_MODE_NAMES: Array[String] = ["窗口", "无边框全屏", "独占全屏"]
+const QUALITY_NAMES: Array[String] = ["低", "中", "高", "极高"]
+
+var _snapshot: Dictionary = {}
+var _mode := "title"
+var _return_mode := "title"
+var _focused_mode := ""
+var _safe_containers: Array[MarginContainer] = []
+var _focus_targets: Dictionary = {}
+var _setting_buttons: Dictionary = {}
+var _pulse := 0.0
+var _shake_enabled := true
+
+var _title_layer: Control
+var _hud_layer: Control
+var _pause_layer: Control
+var _settings_layer: Control
+var _result_layer: Control
+
+var _title_start_button: Button
+var _title_kills: Label
+var _title_level: Label
+var _title_best: Label
+
+var _hud_level: Label
+var _hud_hp_text: Label
+var _hud_hp_bar: ProgressBar
+var _hud_armor: Label
+var _hud_objective: Label
+var _hud_kills: Label
+var _hud_kill_bar: ProgressBar
+var _hud_score: Label
+var _hud_time: Label
+var _hud_boss_panel: PanelContainer
+var _hud_boss_name: Label
+var _hud_boss_phase: Label
+var _hud_boss_bar: ProgressBar
+var _hud_boss_hp: Label
+var _hud_boss_warning: Label
+var _hud_notice_panel: PanelContainer
+var _hud_notice: Label
+var _hud_weapon: Label
+var _hud_reload: Label
+var _hud_mine: Label
+var _hud_emp: Label
+var _hud_dash: Label
+
+var _pause_notice: Label
+var _result_panel: PanelContainer
+var _result_kicker: Label
+var _result_title: Label
+var _result_score: Label
+var _result_kills: Label
+var _result_time: Label
+var _result_career: Label
+var _result_primary: Button
+
+
+func _init() -> void:
+	name = "GameUI"
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+
+func _ready() -> void:
+	theme = ThemeFactory.build()
+	_build_title_layer()
+	_build_hud_layer()
+	_build_pause_layer()
+	_build_settings_layer()
+	_build_result_layer()
+	resized.connect(_apply_safe_margins)
+	_apply_safe_margins()
+	_apply_snapshot()
+
+
+func _process(delta: float) -> void:
+	if not _hud_boss_panel or not _hud_boss_panel.visible:
+		return
+	_pulse = fmod(_pulse + delta, TAU)
+	if _bool_value("boss_warning", false):
+		var strength := 0.82 + sin(_pulse * 5.2) * 0.18
+		_hud_boss_panel.modulate = Color(1.0, strength, strength, 1.0)
+	else:
+		_hud_boss_panel.modulate = Color.WHITE
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not event.is_action_pressed(&"ui_cancel"):
+		return
+	match _mode:
+		"paused":
+			resume_requested.emit()
+			get_viewport().set_input_as_handled()
+		"settings", "won", "lost":
+			menu_requested.emit()
+			get_viewport().set_input_as_handled()
+
+
+func update_snapshot(snapshot: Dictionary) -> void:
+	for key: Variant in snapshot:
+		_snapshot[key] = snapshot[key]
+	if snapshot.has("shake"):
+		_shake_enabled = bool(snapshot["shake"])
+	elif snapshot.has("screen_shake"):
+		_shake_enabled = bool(snapshot["screen_shake"])
+	if is_node_ready():
+		_apply_snapshot()
+
+
+func _build_title_layer() -> void:
+	_title_layer = _new_layer("TitleLayer")
+	_title_layer.add_child(Backdrop.new())
+	_title_layer.get_child(0).set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+
+	var safe := _new_safe_container(_title_layer)
+	var layout := VBoxContainer.new()
+	layout.add_theme_constant_override(&"separation", 24)
+	safe.add_child(layout)
+
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override(&"separation", 14)
+	layout.add_child(header)
+	var mark := Label.new()
+	mark.text = "IE"
+	mark.theme_type_variation = &"SectionTitle"
+	mark.add_theme_color_override(&"font_color", ThemeFactory.ORANGE_BRIGHT)
+	header.add_child(mark)
+	var identity := VBoxContainer.new()
+	identity.add_theme_constant_override(&"separation", 0)
+	header.add_child(identity)
+	identity.add_child(_label("钢铁余烬 · 重铸", &"SectionTitle"))
+	identity.add_child(_label("IRON EMBERS / NATIVE PC EDITION", &"Micro"))
+	header.add_child(_spacer(true, false))
+	var status := Label.new()
+	status.text = "●  SYSTEM READY"
+	status.theme_type_variation = &"Muted"
+	status.add_theme_color_override(&"font_color", ThemeFactory.GREEN)
+	header.add_child(status)
+
+	layout.add_child(HSeparator.new())
+
+	var body := HBoxContainer.new()
+	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	body.alignment = BoxContainer.ALIGNMENT_CENTER
+	body.add_theme_constant_override(&"separation", 72)
+	layout.add_child(body)
+
+	var command := VBoxContainer.new()
+	command.custom_minimum_size = Vector2(480.0, 0.0)
+	command.alignment = BoxContainer.ALIGNMENT_CENTER
+	command.add_theme_constant_override(&"separation", 13)
+	body.add_child(command)
+	command.add_child(_label("TACTICAL ARMORED COMMAND", &"Kicker"))
+	var game_title := _label("钢铁余烬", &"DisplayTitle")
+	game_title.add_theme_color_override(&"font_color", Color("#f4f1e7"))
+	command.add_child(game_title)
+	var subtitle := _label("从灰烬中点火，驾驶最后的装甲穿过尘湾。", &"Body")
+	subtitle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	subtitle.custom_minimum_size = Vector2(470.0, 54.0)
+	subtitle.add_theme_color_override(&"font_color", ThemeFactory.MUTED)
+	command.add_child(subtitle)
+	command.add_child(_fixed_spacer(12.0))
+
+	_title_start_button = _button("开始行动", &"PrimaryButton", func() -> void: start_requested.emit())
+	command.add_child(_title_start_button)
+	var settings_button := _button("作战设置", &"CommandButton", func() -> void: settings_requested.emit())
+	command.add_child(settings_button)
+	var quit_button := _button("退出游戏", &"DangerButton", func() -> void: quit_requested.emit())
+	command.add_child(quit_button)
+	_wire_vertical_focus([_title_start_button, settings_button, quit_button])
+	_focus_targets["title"] = _title_start_button
+
+	var feature := _panel(&"FeaturePanel")
+	feature.custom_minimum_size = Vector2(420.0, 440.0)
+	body.add_child(feature)
+	var briefing := VBoxContainer.new()
+	briefing.add_theme_constant_override(&"separation", 15)
+	feature.add_child(briefing)
+	briefing.add_child(_label("首次作战切片", &"Kicker"))
+	briefing.add_child(_label("第 01 章 · 灰中点火", &"ScreenTitle"))
+	var mission := _label("突破黄昏修理厂封锁，歼灭 6 辆敌军，并击毁指挥重坦「铁牙」。", &"Body")
+	mission.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	mission.custom_minimum_size = Vector2(0.0, 72.0)
+	briefing.add_child(mission)
+	briefing.add_child(HSeparator.new())
+	briefing.add_child(_label("本机作战履历", &"Muted"))
+	var stats := HBoxContainer.new()
+	stats.add_theme_constant_override(&"separation", 10)
+	briefing.add_child(stats)
+	var kills_card := _metric_card("累计击毁")
+	_title_kills = kills_card.get_meta("value") as Label
+	stats.add_child(kills_card)
+	var level_card := _metric_card("坦克等级")
+	_title_level = level_card.get_meta("value") as Label
+	stats.add_child(level_card)
+	var score_card := _metric_card("最高评分")
+	_title_best = score_card.get_meta("value") as Label
+	stats.add_child(score_card)
+	briefing.add_child(_spacer(false, true))
+	var tips := _label("键鼠与标准手柄完整支持\nENTER / A  确认    ESC / B  返回", &"Muted")
+	tips.add_theme_color_override(&"font_color", ThemeFactory.GREEN)
+	briefing.add_child(tips)
+
+	layout.add_child(HSeparator.new())
+	var footer := HBoxContainer.new()
+	layout.add_child(footer)
+	footer.add_child(_label("BUILD 0.1 · FORWARD+", &"Micro"))
+	footer.add_child(_spacer(true, false))
+	footer.add_child(_label("NO RETREAT. ONLY DAWN.", &"Micro"))
+
+
+func _build_hud_layer() -> void:
+	_hud_layer = _new_layer("BattleHUD")
+	var safe := _new_safe_container(_hud_layer)
+	var layout := VBoxContainer.new()
+	layout.add_theme_constant_override(&"separation", 10)
+	safe.add_child(layout)
+
+	var top := HBoxContainer.new()
+	top.add_theme_constant_override(&"separation", 10)
+	layout.add_child(top)
+
+	var player_panel := _panel(&"HUDPanel")
+	player_panel.custom_minimum_size = Vector2(330.0, 104.0)
+	top.add_child(player_panel)
+	var player := VBoxContainer.new()
+	player.add_theme_constant_override(&"separation", 5)
+	player_panel.add_child(player)
+	var player_header := HBoxContainer.new()
+	player.add_child(player_header)
+	_hud_level = _label("LV.01 · 新兵战车", &"Kicker")
+	player_header.add_child(_hud_level)
+	player_header.add_child(_spacer(true, false))
+	_hud_armor = _label("装甲 0", &"Muted")
+	player_header.add_child(_hud_armor)
+	_hud_hp_text = _label("100 / 100", &"HudValue")
+	player.add_child(_hud_hp_text)
+	_hud_hp_bar = _progress(&"HealthBar", 100.0)
+	player.add_child(_hud_hp_bar)
+
+	var objective_panel := _panel(&"HUDPanel")
+	objective_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	objective_panel.custom_minimum_size = Vector2(0.0, 104.0)
+	top.add_child(objective_panel)
+	var objective_box := VBoxContainer.new()
+	objective_box.add_theme_constant_override(&"separation", 7)
+	objective_panel.add_child(objective_box)
+	var objective_header := HBoxContainer.new()
+	objective_box.add_child(objective_header)
+	objective_header.add_child(_label("CHAPTER 01 / CURRENT OBJECTIVE", &"Kicker"))
+	objective_header.add_child(_spacer(true, false))
+	_hud_kills = _label("0 / 6", &"Muted")
+	objective_header.add_child(_hud_kills)
+	_hud_objective = _label("突破封锁", &"HudValue")
+	_hud_objective.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	objective_box.add_child(_hud_objective)
+	_hud_kill_bar = _progress(&"ObjectiveBar", 6.0)
+	objective_box.add_child(_hud_kill_bar)
+
+	var score_panel := _panel(&"HUDPanel")
+	score_panel.custom_minimum_size = Vector2(230.0, 104.0)
+	top.add_child(score_panel)
+	var score_box := VBoxContainer.new()
+	score_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	score_panel.add_child(score_box)
+	score_box.add_child(_label("作战评分", &"Muted"))
+	_hud_score = _label("00000", &"Metric")
+	_hud_score.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	score_box.add_child(_hud_score)
+	_hud_time = _label("00:00", &"Muted")
+	_hud_time.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	score_box.add_child(_hud_time)
+
+	var boss_center := HBoxContainer.new()
+	layout.add_child(boss_center)
+	boss_center.add_child(_spacer(true, false))
+	_hud_boss_panel = _panel(&"BossPanel")
+	_hud_boss_panel.custom_minimum_size = Vector2(760.0, 92.0)
+	boss_center.add_child(_hud_boss_panel)
+	boss_center.add_child(_spacer(true, false))
+	var boss := VBoxContainer.new()
+	boss.add_theme_constant_override(&"separation", 5)
+	_hud_boss_panel.add_child(boss)
+	var boss_header := HBoxContainer.new()
+	boss.add_child(boss_header)
+	_hud_boss_name = _label("铁牙", &"SectionTitle")
+	boss_header.add_child(_hud_boss_name)
+	_hud_boss_phase = _label("PHASE 1", &"Kicker")
+	boss_header.add_child(_hud_boss_phase)
+	boss_header.add_child(_spacer(true, false))
+	_hud_boss_warning = _label("齐射锁定 · 使用 EMP 打断", &"Danger")
+	boss_header.add_child(_hud_boss_warning)
+	var boss_health := HBoxContainer.new()
+	boss.add_child(boss_health)
+	_hud_boss_bar = _progress(&"BossBar", 100.0)
+	_hud_boss_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	boss_health.add_child(_hud_boss_bar)
+	_hud_boss_hp = _label("100 / 100", &"Muted")
+	boss_health.add_child(_hud_boss_hp)
+
+	layout.add_child(_spacer(false, true))
+
+	var notice_center := HBoxContainer.new()
+	layout.add_child(notice_center)
+	notice_center.add_child(_spacer(true, false))
+	_hud_notice_panel = _panel(&"NoticePanel")
+	_hud_notice_panel.custom_minimum_size = Vector2(520.0, 0.0)
+	notice_center.add_child(_hud_notice_panel)
+	notice_center.add_child(_spacer(true, false))
+	_hud_notice = _label("", &"Body")
+	_hud_notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_hud_notice_panel.add_child(_hud_notice)
+
+	var bottom := HBoxContainer.new()
+	bottom.add_theme_constant_override(&"separation", 10)
+	layout.add_child(bottom)
+	var mine_panel := _panel(&"HUDPanel")
+	mine_panel.custom_minimum_size = Vector2(230.0, 72.0)
+	bottom.add_child(mine_panel)
+	_hud_mine = _label("M  地雷 × 6", &"HudValue")
+	mine_panel.add_child(_hud_mine)
+
+	var weapon_panel := _panel(&"HUDPanel")
+	weapon_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	weapon_panel.custom_minimum_size = Vector2(380.0, 72.0)
+	bottom.add_child(weapon_panel)
+	var weapon_box := HBoxContainer.new()
+	weapon_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	weapon_panel.add_child(weapon_box)
+	weapon_box.add_child(_label("主武器", &"Muted"))
+	_hud_weapon = _label("加农炮", &"SectionTitle")
+	weapon_box.add_child(_hud_weapon)
+	weapon_box.add_child(_spacer(true, false))
+	_hud_reload = _label("READY", &"Success")
+	weapon_box.add_child(_hud_reload)
+
+	var ability_panel := _panel(&"HUDPanel")
+	ability_panel.custom_minimum_size = Vector2(390.0, 72.0)
+	bottom.add_child(ability_panel)
+	var abilities := HBoxContainer.new()
+	abilities.alignment = BoxContainer.ALIGNMENT_CENTER
+	ability_panel.add_child(abilities)
+	_hud_dash = _label("SPACE 冲刺", &"Muted")
+	abilities.add_child(_hud_dash)
+	abilities.add_child(VSeparator.new())
+	_hud_emp = _label("E EMP", &"Muted")
+	abilities.add_child(_hud_emp)
+
+	_set_mouse_passthrough(_hud_layer)
+
+
+func _build_pause_layer() -> void:
+	_pause_layer = _new_layer("PauseLayer")
+	_add_dimmer(_pause_layer, 0.76)
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_pause_layer.add_child(center)
+	var panel := _panel(&"OverlayPanel")
+	panel.custom_minimum_size = Vector2(570.0, 590.0)
+	center.add_child(panel)
+	var box := VBoxContainer.new()
+	box.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.add_theme_constant_override(&"separation", 14)
+	panel.add_child(box)
+	box.add_child(_label("OPERATION SUSPENDED", &"Kicker"))
+	var heading := _label("战场已暂停", &"ScreenTitle")
+	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(heading)
+	_pause_notice = _label("所有作战计时已经停止。", &"Muted")
+	_pause_notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_pause_notice.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(_pause_notice)
+	box.add_child(HSeparator.new())
+	var resume_button := _button("继续行动", &"PrimaryButton", func() -> void: resume_requested.emit())
+	box.add_child(resume_button)
+	var retry_button := _button("重新部署", &"CommandButton", func() -> void: retry_requested.emit())
+	box.add_child(retry_button)
+	var settings_button := _button("作战设置", &"CommandButton", func() -> void: settings_requested.emit())
+	box.add_child(settings_button)
+	var menu_button := _button("返回指挥中心", &"DangerButton", func() -> void: menu_requested.emit())
+	box.add_child(menu_button)
+	_wire_vertical_focus([resume_button, retry_button, settings_button, menu_button])
+	_focus_targets["paused"] = resume_button
+	box.add_child(_spacer(false, true))
+	var hint := _label("ESC / START  继续    A / ENTER  确认", &"Micro")
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(hint)
+
+
+func _build_settings_layer() -> void:
+	_settings_layer = _new_layer("SettingsLayer")
+	_add_dimmer(_settings_layer, 0.88)
+	var safe := _new_safe_container(_settings_layer)
+	var outer := VBoxContainer.new()
+	outer.add_theme_constant_override(&"separation", 18)
+	safe.add_child(outer)
+	var header := HBoxContainer.new()
+	outer.add_child(header)
+	var title_box := VBoxContainer.new()
+	header.add_child(title_box)
+	title_box.add_child(_label("SYSTEM CONFIGURATION", &"Kicker"))
+	title_box.add_child(_label("作战设置", &"ScreenTitle"))
+	header.add_child(_spacer(true, false))
+	var back_button := _button("返回", &"CommandButton", func() -> void: menu_requested.emit())
+	back_button.custom_minimum_size = Vector2(150.0, 58.0)
+	header.add_child(back_button)
+	outer.add_child(HSeparator.new())
+
+	var content_center := CenterContainer.new()
+	content_center.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	outer.add_child(content_center)
+	var panel := _panel(&"OverlayPanel")
+	panel.custom_minimum_size = Vector2(900.0, 600.0)
+	content_center.add_child(panel)
+	var settings_box := VBoxContainer.new()
+	settings_box.add_theme_constant_override(&"separation", 13)
+	panel.add_child(settings_box)
+	settings_box.add_child(_label("显示与图形", &"SectionTitle"))
+	var explanation := _label("切换项目后由设置服务应用并保存。全屏变更应由游戏流程提供确认与自动回退。", &"Muted")
+	explanation.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	settings_box.add_child(explanation)
+	settings_box.add_child(HSeparator.new())
+
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override(&"h_separation", 13)
+	grid.add_theme_constant_override(&"v_separation", 13)
+	settings_box.add_child(grid)
+	var buttons: Array[Button] = []
+	for entry: Array in [
+		["display_mode", "显示模式", "窗口 / 无边框 / 独占全屏"],
+		["quality", "画面质量", "渲染比例、阴影和抗锯齿预设"],
+		["fps", "目标帧率", "60 / 120 / 144 / 不限帧"],
+		["vsync", "垂直同步", "减少画面撕裂"],
+		["shake", "屏幕震动", "爆炸与重炮冲击反馈"],
+		["master_volume", "总音量", "每次调整 10%"],
+		["effects_volume", "战斗音效", "炮声、爆炸、引擎与界面音效"],
+	]:
+		var id := String(entry[0])
+		var button := _button("", &"SettingButton", setting_requested.emit.bind(id))
+		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		button.tooltip_text = String(entry[2])
+		button.custom_minimum_size = Vector2(0.0, 64.0)
+		_setting_buttons[id] = button
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		grid.add_child(button)
+		buttons.append(button)
+	settings_box.add_child(_spacer(false, true))
+	var note := _label("提示：可随时按 F11 切换窗口模式。设置层不会自行暂停、切场景或写入存档。", &"Micro")
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	settings_box.add_child(note)
+	buttons.append(back_button)
+	_wire_vertical_focus(buttons)
+	_focus_targets["settings"] = _setting_buttons["display_mode"]
+
+
+func _build_result_layer() -> void:
+	_result_layer = _new_layer("ResultLayer")
+	_result_layer.add_child(Backdrop.new())
+	_result_layer.get_child(0).set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_add_dimmer(_result_layer, 0.46)
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_result_layer.add_child(center)
+	_result_panel = _panel(&"OverlayPanel")
+	_result_panel.custom_minimum_size = Vector2(760.0, 640.0)
+	center.add_child(_result_panel)
+	var box := VBoxContainer.new()
+	box.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.add_theme_constant_override(&"separation", 16)
+	_result_panel.add_child(box)
+	_result_kicker = _label("MISSION ACCOMPLISHED", &"Kicker")
+	_result_kicker.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(_result_kicker)
+	_result_title = _label("行动成功", &"ScreenTitle")
+	_result_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(_result_title)
+	box.add_child(HSeparator.new())
+	var stats := HBoxContainer.new()
+	stats.alignment = BoxContainer.ALIGNMENT_CENTER
+	stats.add_theme_constant_override(&"separation", 12)
+	box.add_child(stats)
+	var score_card := _metric_card("作战评分")
+	_result_score = score_card.get_meta("value") as Label
+	stats.add_child(score_card)
+	var kills_card := _metric_card("本次击毁")
+	_result_kills = kills_card.get_meta("value") as Label
+	stats.add_child(kills_card)
+	var time_card := _metric_card("作战用时")
+	_result_time = time_card.get_meta("value") as Label
+	stats.add_child(time_card)
+	_result_career = _label("坦克等级 LV.01 · 累计击毁 0 · 最高评分 0", &"Body")
+	_result_career.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_result_career.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(_result_career)
+	box.add_child(_spacer(false, true))
+	_result_primary = _button("继续战役", &"PrimaryButton", func() -> void: _result_primary_action())
+	box.add_child(_result_primary)
+	var retry_button := _button("再战本关", &"CommandButton", func() -> void: retry_requested.emit())
+	box.add_child(retry_button)
+	var menu_button := _button("返回指挥中心", &"CommandButton", func() -> void: menu_requested.emit())
+	box.add_child(menu_button)
+	_wire_vertical_focus([_result_primary, retry_button, menu_button])
+	_focus_targets["won"] = _result_primary
+	_focus_targets["lost"] = _result_primary
+	box.add_child(_label("ENTER / A  确认    ESC / B  返回指挥中心", &"Micro"))
+
+
+func _apply_snapshot() -> void:
+	var requested_mode := str(_snapshot.get("mode", "title")).to_lower()
+	if requested_mode not in VALID_MODES:
+		requested_mode = "title"
+	if requested_mode == "settings" and _mode != "settings":
+		_return_mode = _mode
+	elif requested_mode != "settings":
+		_return_mode = requested_mode
+	_mode = requested_mode
+
+	var settings_over_battle := _mode == "settings" and _return_mode in ["playing", "paused"]
+	_title_layer.visible = _mode == "title" or (_mode == "settings" and not settings_over_battle)
+	_hud_layer.visible = _mode in ["playing", "paused"] or settings_over_battle
+	_pause_layer.visible = _mode == "paused"
+	_settings_layer.visible = _mode == "settings"
+	_result_layer.visible = _mode in ["won", "lost"]
+
+	_update_title()
+	_update_hud()
+	_update_settings()
+	_update_pause()
+	_update_result()
+	if _focused_mode != _mode:
+		_focused_mode = _mode
+		call_deferred("_focus_current_mode")
+
+
+func _update_title() -> void:
+	var lifetime := _int_value("lifetime_kills", 0)
+	var level := maxi(1, _int_value("tank_level", 1))
+	var best := _int_value("best_score", 0)
+	_title_kills.text = str(lifetime)
+	_title_level.text = "LV.%02d" % level
+	_title_best.text = _compact_number(best)
+	_title_start_button.text = "继续行动" if lifetime > 0 or best > 0 else "开始行动"
+
+
+func _update_hud() -> void:
+	var hp := maxf(0.0, _float_value("hp", 100.0))
+	var max_hp := maxf(1.0, _float_value("max_hp", 100.0))
+	var level := maxi(1, _int_value("tank_level", 1))
+	_hud_level.text = "LV.%02d · 指挥战车" % level
+	_hud_hp_text.text = "%d / %d" % [ceili(hp), ceili(max_hp)]
+	_hud_hp_bar.max_value = max_hp
+	_hud_hp_bar.value = clampf(hp, 0.0, max_hp)
+	_hud_armor.text = "装甲 %d" % maxi(0, _int_value("armor", 0))
+
+	var kills := maxi(0, _int_value("kills", 0))
+	var target := maxi(1, _int_value("target_kills", 6))
+	_hud_objective.text = str(_snapshot.get("objective", "突破封锁并击毁本关首领"))
+	_hud_kills.text = "%d / %d" % [kills, target]
+	_hud_kill_bar.max_value = target
+	_hud_kill_bar.value = mini(kills, target)
+	_hud_score.text = "%05d" % maxi(0, _int_value("score", 0))
+	_hud_time.text = _format_time(_float_value("time", 0.0))
+
+	var boss_max := maxf(0.0, _float_value("boss_max_hp", 0.0))
+	var boss_hp := clampf(_float_value("boss_hp", 0.0), 0.0, boss_max)
+	var boss_name := str(_snapshot.get("boss_name", ""))
+	_hud_boss_panel.visible = boss_max > 0.0 and not boss_name.is_empty()
+	_hud_boss_name.text = boss_name
+	_hud_boss_phase.text = "PHASE %d" % clampi(_int_value("boss_phase", 1), 1, 3)
+	_hud_boss_bar.max_value = maxf(1.0, boss_max)
+	_hud_boss_bar.value = boss_hp
+	_hud_boss_hp.text = "%d / %d" % [ceili(boss_hp), ceili(boss_max)]
+	_hud_boss_warning.visible = _bool_value("boss_warning", false)
+
+	var notice := str(_snapshot.get("notice", ""))
+	_hud_notice.text = notice
+	_hud_notice_panel.visible = not notice.is_empty()
+	_hud_weapon.text = str(_snapshot.get("weapon", "加农炮"))
+	var reload := maxf(0.0, _float_value("reload", 0.0))
+	_hud_reload.text = "READY" if reload <= 0.01 else "装填 %.1fs" % reload
+	_hud_reload.theme_type_variation = &"Success" if reload <= 0.01 else &"Danger"
+	var mine_cooldown := maxf(0.0, _float_value("mine_cooldown", 0.0))
+	_hud_mine.text = "M  地雷 × %d%s" % [
+		maxi(0, _int_value("mine_ammo", 0)),
+		" · %.1fs" % mine_cooldown if mine_cooldown > 0.01 else "",
+	]
+	_hud_emp.text = _cooldown_text("E  EMP", _float_value("emp_cooldown", 0.0))
+	_hud_dash.text = _cooldown_text("SPACE  冲刺", _float_value("dash_cooldown", 0.0))
+
+
+func _update_settings() -> void:
+	var display_value: Variant = _snapshot.get("display_mode", 0)
+	var display_text := str(display_value)
+	if display_value is int or display_value is float:
+		display_text = DISPLAY_MODE_NAMES[clampi(int(display_value), 0, DISPLAY_MODE_NAMES.size() - 1)]
+	var quality_value: Variant = _snapshot.get("quality", 2)
+	var quality_text := str(quality_value)
+	if quality_value is int or quality_value is float:
+		quality_text = QUALITY_NAMES[clampi(int(quality_value), 0, QUALITY_NAMES.size() - 1)]
+	var cap := _int_value("fps_cap", 60)
+	var values := {
+		"display_mode": ["显示模式", display_text],
+		"quality": ["画面质量", quality_text],
+		"fps": ["目标帧率", "不限帧" if cap == 0 else "%d FPS" % cap],
+		"vsync": ["垂直同步", "开启" if _bool_value("vsync", true) else "关闭"],
+		"shake": ["屏幕震动", "开启" if _shake_enabled else "关闭"],
+		"master_volume": ["总音量", "%d%%" % _int_value("master_volume", 80)],
+		"effects_volume": ["战斗音效", "%d%%" % _int_value("effects_volume", 85)],
+	}
+	for id: String in _setting_buttons:
+		var parts: Array = values[id]
+		(_setting_buttons[id] as Button).text = "%s\n%s" % [parts[0], parts[1]]
+
+
+func _update_pause() -> void:
+	var notice := str(_snapshot.get("notice", ""))
+	if not notice.is_empty():
+		_pause_notice.text = notice
+		return
+	match str(_snapshot.get("pause_reason", "manual")):
+		"focus_lost":
+			_pause_notice.text = "窗口失去焦点，战场已自动暂停。请主动继续行动。"
+		"controller_disconnected":
+			_pause_notice.text = "手柄连接已中断。重新连接后再继续行动。"
+		_:
+			_pause_notice.text = "所有作战计时已经停止。继续后输入会从中立状态恢复。"
+
+
+func _update_result() -> void:
+	var won := _mode == "won"
+	_result_kicker.text = "MISSION ACCOMPLISHED" if won else "OPERATION FAILED"
+	_result_kicker.add_theme_color_override(&"font_color", ThemeFactory.GREEN if won else ThemeFactory.RED)
+	_result_title.text = "行动成功" if won else "战车失去作战能力"
+	_result_score.text = str(maxi(0, _int_value("score", 0)))
+	_result_kills.text = str(maxi(0, _int_value("kills", 0)))
+	_result_time.text = _format_time(_float_value("time", 0.0))
+	_result_career.text = "坦克等级 LV.%02d · 累计击毁 %d · 最高评分 %d" % [
+		maxi(1, _int_value("tank_level", 1)),
+		maxi(0, _int_value("lifetime_kills", 0)),
+		maxi(0, _int_value("best_score", 0)),
+	]
+	_result_primary.text = "继续战役" if won else "重新部署"
+
+
+func _result_primary_action() -> void:
+	if _mode == "won":
+		start_requested.emit()
+	else:
+		retry_requested.emit()
+
+
+func _focus_current_mode() -> void:
+	if not is_inside_tree() or not is_visible_in_tree():
+		return
+	var target: Variant = _focus_targets.get(_mode)
+	if target is Control:
+		var control := target as Control
+		if control.is_visible_in_tree():
+			control.grab_focus()
+
+
+func _apply_safe_margins() -> void:
+	var viewport_size := size
+	if viewport_size.x <= 0.0 or viewport_size.y <= 0.0:
+		viewport_size = get_viewport_rect().size
+	var aspect := viewport_size.x / maxf(1.0, viewport_size.y)
+	var horizontal_factor := 0.035 if aspect < 2.0 else 0.065
+	var horizontal := clampf(viewport_size.x * horizontal_factor, 24.0, 180.0)
+	var vertical := clampf(viewport_size.y * 0.032, 18.0, 58.0)
+	for container: MarginContainer in _safe_containers:
+		container.add_theme_constant_override(&"margin_left", int(horizontal))
+		container.add_theme_constant_override(&"margin_right", int(horizontal))
+		container.add_theme_constant_override(&"margin_top", int(vertical))
+		container.add_theme_constant_override(&"margin_bottom", int(vertical))
+
+
+func _new_layer(layer_name: String) -> Control:
+	var layer := Control.new()
+	layer.name = layer_name
+	layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(layer)
+	return layer
+
+
+func _new_safe_container(parent: Control) -> MarginContainer:
+	var safe := MarginContainer.new()
+	safe.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	parent.add_child(safe)
+	_safe_containers.append(safe)
+	return safe
+
+
+func _add_dimmer(parent: Control, opacity: float) -> void:
+	var dimmer := ColorRect.new()
+	dimmer.color = Color(0.01, 0.015, 0.012, opacity)
+	dimmer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dimmer.mouse_filter = Control.MOUSE_FILTER_STOP
+	parent.add_child(dimmer)
+
+
+func _label(text_value: String, variation: StringName = &"Body") -> Label:
+	var value := Label.new()
+	value.text = text_value
+	value.theme_type_variation = variation
+	return value
+
+
+func _button(text_value: String, variation: StringName, action: Callable) -> Button:
+	var value := Button.new()
+	value.text = text_value
+	value.theme_type_variation = variation
+	value.focus_mode = Control.FOCUS_ALL
+	value.custom_minimum_size = Vector2(0.0, 58.0)
+	value.pressed.connect(action)
+	value.mouse_entered.connect(value.grab_focus)
+	return value
+
+
+func _panel(variation: StringName) -> PanelContainer:
+	var value := PanelContainer.new()
+	value.theme_type_variation = variation
+	return value
+
+
+func _progress(variation: StringName, maximum: float) -> ProgressBar:
+	var value := ProgressBar.new()
+	value.theme_type_variation = variation
+	value.max_value = maximum
+	value.show_percentage = false
+	value.custom_minimum_size = Vector2(0.0, 10.0)
+	value.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return value
+
+
+func _spacer(horizontal: bool, vertical: bool) -> Control:
+	var value := Control.new()
+	if horizontal:
+		value.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if vertical:
+		value.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	value.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return value
+
+
+func _fixed_spacer(height: float) -> Control:
+	var value := Control.new()
+	value.custom_minimum_size = Vector2(0.0, height)
+	value.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return value
+
+
+func _metric_card(caption: String) -> PanelContainer:
+	var panel := _panel(&"HUDPanel")
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.custom_minimum_size = Vector2(112.0, 112.0)
+	var box := VBoxContainer.new()
+	box.alignment = BoxContainer.ALIGNMENT_CENTER
+	panel.add_child(box)
+	var value := _label("0", &"Metric")
+	value.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(value)
+	var name_label := _label(caption, &"Micro")
+	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(name_label)
+	panel.set_meta("value", value)
+	return panel
+
+
+func _wire_vertical_focus(buttons: Array[Button]) -> void:
+	if buttons.is_empty():
+		return
+	for index in range(buttons.size()):
+		var button := buttons[index]
+		var previous := buttons[(index - 1 + buttons.size()) % buttons.size()]
+		var following := buttons[(index + 1) % buttons.size()]
+		button.focus_neighbor_top = button.get_path_to(previous)
+		button.focus_neighbor_bottom = button.get_path_to(following)
+		button.focus_neighbor_left = button.get_path_to(previous)
+		button.focus_neighbor_right = button.get_path_to(following)
+
+
+func _set_mouse_passthrough(root: Node) -> void:
+	if root is Control:
+		root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for child: Node in root.get_children():
+		_set_mouse_passthrough(child)
+
+
+func _float_value(key: String, fallback: float) -> float:
+	var value: Variant = _snapshot.get(key, fallback)
+	return float(value) if value is int or value is float else fallback
+
+
+func _int_value(key: String, fallback: int) -> int:
+	var value: Variant = _snapshot.get(key, fallback)
+	return int(value) if value is int or value is float else fallback
+
+
+func _bool_value(key: String, fallback: bool) -> bool:
+	var value: Variant = _snapshot.get(key, fallback)
+	return bool(value) if value is bool else fallback
+
+
+func _format_time(seconds: float) -> String:
+	var safe_seconds := maxi(0, floori(seconds))
+	return "%02d:%02d" % [floori(float(safe_seconds) / 60.0), safe_seconds % 60]
+
+
+func _cooldown_text(label_text: String, seconds: float) -> String:
+	return "%s · READY" % label_text if seconds <= 0.01 else "%s · %.1fs" % [label_text, seconds]
+
+
+func _compact_number(value: int) -> String:
+	if value >= 1000000:
+		return "%.1fM" % (float(value) / 1000000.0)
+	if value >= 10000:
+		return "%.1fK" % (float(value) / 1000.0)
+	return str(value)

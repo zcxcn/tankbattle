@@ -1,0 +1,191 @@
+#Requires -Version 7.0
+
+[CmdletBinding()]
+param(
+    [ValidateSet("Release", "Debug")]
+    [string]$Configuration = "Release",
+
+    [string]$GodotPath = "",
+
+    [switch]$SkipTests,
+
+    [switch]$SkipLaunchSmoke
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
+
+function Assert-LastExitCode {
+    param([Parameter(Mandatory)][string]$Action)
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "$Action failed with exit code $LASTEXITCODE."
+    }
+}
+
+function Get-RequiredPath {
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][string]$Description
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        throw "$Description was not found: $Path"
+    }
+    return (Resolve-Path -LiteralPath $Path).Path
+}
+
+$repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
+$projectRoot = Get-RequiredPath -Path (Join-Path $repositoryRoot "pc-godot") -Description "Godot project"
+$projectFile = Get-RequiredPath -Path (Join-Path $projectRoot "project.godot") -Description "Godot project file"
+$mainScene = Get-RequiredPath -Path (Join-Path $projectRoot "scenes/main/main.tscn") -Description "Main scene"
+$icon = Get-RequiredPath -Path (Join-Path $projectRoot "assets/branding/icon.svg") -Description "Application icon"
+
+if ([string]::IsNullOrWhiteSpace($GodotPath)) {
+    if (-not [string]::IsNullOrWhiteSpace($env:IRON_EMBERS_GODOT)) {
+        $GodotPath = $env:IRON_EMBERS_GODOT
+    } else {
+        $GodotPath = Join-Path $repositoryRoot "work/tools/godot-4.7.2/editor/Godot_v4.7.2-stable_win64_console.exe"
+    }
+}
+$GodotPath = Get-RequiredPath -Path $GodotPath -Description "Godot 4.7.2 console executable"
+$expectedGodotHash = "c8f0a6bc45a19b33541501e57f6f7cd972ab18453743266339d495cbbe846643"
+$actualGodotHash = (Get-FileHash -LiteralPath $GodotPath -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($actualGodotHash -ne $expectedGodotHash) {
+    throw "Godot executable SHA-256 does not match the pinned official 4.7.2 build."
+}
+
+$templateName = if ($Configuration -eq "Release") {
+    "windows_release_x86_64.exe"
+} else {
+    "windows_debug_x86_64.exe"
+}
+$templatePath = Get-RequiredPath -Path (Join-Path $repositoryRoot "work/tools/godot-4.7.2/templates/$templateName") -Description "$Configuration export template"
+$expectedTemplateHash = if ($Configuration -eq "Release") {
+    "d34d36f3be1a6c49c56525ae86469b92e4f417ddf0b43cf00dd80c385c4b0562"
+} else {
+    "51498b72b3a237f882ebd7d1787f06a4bc1eaf0572daab93837adcfd3cfdc107"
+}
+$actualTemplateHash = (Get-FileHash -LiteralPath $templatePath -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($actualTemplateHash -ne $expectedTemplateHash) {
+    throw "$Configuration template SHA-256 does not match the pinned official Godot 4.7.2 template."
+}
+
+$versionOutput = @(& $GodotPath --version)
+Assert-LastExitCode -Action "Godot version check"
+$godotVersion = [string]($versionOutput | Select-Object -First 1)
+if (-not $godotVersion.StartsWith("4.7.2.stable.official", [System.StringComparison]::Ordinal)) {
+    throw "Expected official Godot 4.7.2, found '$godotVersion'."
+}
+
+Write-Host "Importing and validating project resources with Godot $godotVersion..."
+& $GodotPath --headless --editor --path $projectRoot --quit
+Assert-LastExitCode -Action "Godot project import"
+
+if (-not $SkipTests) {
+    Write-Host "Running deterministic logic tests..."
+    & $GodotPath --headless --path $projectRoot --script "res://tests/test_runner.gd" -- --test
+    Assert-LastExitCode -Action "Godot logic tests"
+
+    Write-Host "Running scene integration tests..."
+    & $GodotPath --headless --path $projectRoot "res://tests/integration_scene.tscn" -- --test
+    Assert-LastExitCode -Action "Godot integration tests"
+}
+
+$outputRoot = [System.IO.Path]::GetFullPath((Join-Path $repositoryRoot "outputs/pc-godot"))
+$artifactDirectoryName = if ($Configuration -eq "Release") { "windows-x86_64" } else { "windows-x86_64-debug" }
+$artifactDirectory = [System.IO.Path]::GetFullPath((Join-Path $outputRoot $artifactDirectoryName))
+$outputPrefix = $outputRoot.TrimEnd([System.IO.Path]::DirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
+if (-not $artifactDirectory.StartsWith($outputPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+    throw "Refusing to prepare an output directory outside $outputRoot."
+}
+if (Test-Path -LiteralPath $artifactDirectory) {
+    Remove-Item -LiteralPath $artifactDirectory -Recurse -Force
+}
+[System.IO.Directory]::CreateDirectory($artifactDirectory) | Out-Null
+
+$executablePath = Join-Path $artifactDirectory "IronEmbers.exe"
+$exportFlag = if ($Configuration -eq "Release") { "--export-release" } else { "--export-debug" }
+Write-Host "Exporting $Configuration Windows x86_64 build..."
+& $GodotPath --headless --path $projectRoot $exportFlag "Windows Desktop" $executablePath
+Assert-LastExitCode -Action "Godot Windows export"
+
+$pckPath = Join-Path $artifactDirectory "IronEmbers.pck"
+Get-RequiredPath -Path $executablePath -Description "Exported executable" | Out-Null
+Get-RequiredPath -Path $pckPath -Description "Exported PCK" | Out-Null
+
+$productVersion = "0.1.0"
+$manifestPath = Join-Path $artifactDirectory "build-manifest.json"
+$payloadFiles = @(Get-ChildItem -LiteralPath $artifactDirectory -File -Recurse | Sort-Object FullName)
+$manifestFiles = @(
+    foreach ($file in $payloadFiles) {
+        $relativePath = [System.IO.Path]::GetRelativePath($artifactDirectory, $file.FullName).Replace("\", "/")
+        [ordered]@{
+            path = $relativePath
+            size = $file.Length
+            sha256 = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+        }
+    }
+)
+$manifest = [ordered]@{
+    manifest_version = 1
+    product = "Iron Embers"
+    product_version = $productVersion
+    configuration = $Configuration
+    engine = "Godot"
+    engine_version = $godotVersion
+    target = "windows-x86_64"
+    files = $manifestFiles
+}
+$manifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $manifestPath -Encoding utf8NoBOM
+
+$archiveName = if ($Configuration -eq "Release") {
+    "Iron-Embers-Windows-x86_64-$productVersion.zip"
+} else {
+    "Iron-Embers-Windows-x86_64-$productVersion-Debug.zip"
+}
+$archivePath = Join-Path $outputRoot $archiveName
+if (Test-Path -LiteralPath $archivePath) {
+    Remove-Item -LiteralPath $archivePath -Force
+}
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$archive = [System.IO.Compression.ZipFile]::Open($archivePath, [System.IO.Compression.ZipArchiveMode]::Create)
+try {
+    $archiveTimestamp = [System.DateTimeOffset]::new(2000, 1, 1, 0, 0, 0, [System.TimeSpan]::Zero)
+    foreach ($file in @(Get-ChildItem -LiteralPath $artifactDirectory -File -Recurse | Sort-Object FullName)) {
+        $relativePath = [System.IO.Path]::GetRelativePath($artifactDirectory, $file.FullName).Replace("\", "/")
+        $entry = $archive.CreateEntry($relativePath, [System.IO.Compression.CompressionLevel]::Optimal)
+        $entry.LastWriteTime = $archiveTimestamp
+        $entryStream = $entry.Open()
+        $fileStream = [System.IO.File]::OpenRead($file.FullName)
+        try {
+            $fileStream.CopyTo($entryStream)
+        } finally {
+            $fileStream.Dispose()
+            $entryStream.Dispose()
+        }
+    }
+} finally {
+    $archive.Dispose()
+}
+
+$smokeArguments = @(
+    "-NoProfile",
+    "-File", (Join-Path $PSScriptRoot "smoke-pc-godot.ps1"),
+    "-ArtifactDirectory", $artifactDirectory,
+    "-ArchivePath", $archivePath
+)
+if ($SkipLaunchSmoke) {
+    $smokeArguments += "-SkipLaunch"
+}
+& pwsh @smokeArguments
+Assert-LastExitCode -Action "Packaged build smoke test"
+
+Write-Host "Build complete."
+[pscustomobject]@{
+    Executable = $executablePath
+    DataPack = $pckPath
+    Manifest = $manifestPath
+    Archive = $archivePath
+    Template = $templatePath
+} | Format-List

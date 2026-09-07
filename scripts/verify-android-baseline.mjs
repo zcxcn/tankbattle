@@ -7,7 +7,7 @@ const manifest = JSON.parse(
 for (const [file, expected] of Object.entries(manifest.files)) {
   const bytes = await fs.readFile(file);
   // Git may convert line endings; game semantics must remain exactly the same.
-  const normalized = /\.(tsx?|css|java|xml|gradle|properties)$/.test(file)
+  const normalized = /\.(tsx?|css|java|xml|svg|gradle|properties|pro)$/.test(file)
     ? Buffer.from(bytes.toString('utf8').replaceAll('\r\n', '\n'))
     : bytes;
   assert.equal(

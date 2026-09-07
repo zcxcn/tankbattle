@@ -46,3 +46,9 @@ android/build/
 android/local.properties
 *.jks
 *.keystore
+
+# Godot generated/editor state and local export credentials
+/pc-godot/.godot/
+/pc-godot/.editor/
+/pc-godot/.mono/
+/pc-godot/export_credentials.cfg

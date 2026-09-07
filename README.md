@@ -1,6 +1,45 @@
-# 钢铁余烬 · IRON EMBERS — 3D Edition
+# 钢铁余烬 · IRON EMBERS
 
-使用 **Babylon.js 9.25** 游戏引擎的网页版 3D 坦克动作游戏。真实透视场景、实体装甲模型、PBR 金属材质、工业城区、跟随镜头与后期光效。所有代码、素材与配置都位于此独立子目录。
+项目同时包含使用 Godot 制作的 Windows PC 原生重制版，以及使用 **Babylon.js 9.25** 的网页版 3D 坦克动作游戏。网页版原有代码、部署方式和 Android 基线继续保留。
+
+## Godot PC 原生重制
+
+`pc-godot/` 是用 **Godot 4.7.2、Forward+ 和 Jolt Physics** 重新制作的原生 PC 游戏，不是网页游戏加桌面外壳。当前可玩首章包含实体三维坦克、工业战场、CC0 PBR 路面、可破坏掩体、分层粒子爆炸、合成瞬态与 CC0 真实户外录音组成的武器音效、固定 60 Hz 战斗逻辑和本机存档。首关需先击毁 6 辆普通敌军，随后攻入 Boss 区击毁“铁牙”；Boss 会在 70% / 35% 装甲阶段强化攻击并召唤护卫。
+
+玩家和敌军使用同一套实体地雷系统：地雷经过 1.2 秒布防后才会触发，只攻击敌对车辆，90 秒后失效。玩家的电磁脉冲可安全排除范围内双方地雷，并短暂瘫痪敌军、打断 Boss 攻击准备。
+
+键鼠和标准手柄操作：
+
+| 操作 | 键鼠 | 标准手柄 |
+| --- | --- | --- |
+| 移动 | WASD / 方向键 | 左摇杆 |
+| 瞄准 | 鼠标 | 右摇杆 |
+| 开火 | 鼠标左键 | RT |
+| 冲刺 | 空格 | LB |
+| 电磁脉冲 / 排雷 | E | RB |
+| 布设地雷 | M | 右摇杆按下（R3） |
+| 切换镜头 | C | Y |
+| 暂停 | Esc | Start |
+| 全屏切换 | F11 | — |
+
+本地已准备官方 Godot 4.7.2 Standard x86_64 和 Windows 导出模板时，可在 PowerShell 7 中运行：
+
+```powershell
+$godot = (Resolve-Path .\work\tools\godot-4.7.2\editor\Godot_v4.7.2-stable_win64_console.exe).Path
+& $godot --editor --path .\pc-godot
+& $godot --path .\pc-godot
+
+# 独立逻辑测试与真实场景集成测试
+& $godot --headless --path .\pc-godot --script res://tests/test_runner.gd -- --test
+& $godot --headless --path .\pc-godot res://tests/integration_scene.tscn -- --test
+
+# 导入资源、运行测试、导出并启动成品冒烟检查
+pwsh -NoProfile -File .\scripts\build-pc-godot.ps1 -Configuration Release
+```
+
+构建脚本固定校验官方 Godot 可执行文件和模板的 SHA-256；其他位置的同版 console 程序可通过 `-GodotPath <路径>` 指定，Windows 模板仍放在 `work/tools/godot-4.7.2/templates/`。Release 成品位于 `outputs/pc-godot/windows-x86_64/`，可分发压缩包为 `outputs/pc-godot/Iron-Embers-Windows-x86_64-0.1.0.zip`。当前 Windows 可执行文件未做代码签名，首次运行可能显示系统信誉提示。
+
+本次 PC 重制的源码集中在 `pc-godot/`，构建与验收脚本为 `scripts/build-pc-godot.ps1`、`scripts/smoke-pc-godot.ps1`；`mobile/baseline/` 和 `android/` 未改动。
 
 ## 2026-09 网页战斗升级
 
