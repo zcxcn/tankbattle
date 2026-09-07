@@ -41,7 +41,7 @@ export function createMaterials(scene: Scene, assets = true, mobile = false) {
     glass = pbr(scene, 'optical-glass', '#1a3937', 0.75, 0.16);
   if (assets) {
     for (const painted of [armor, enemy, heavy])
-      applySurface(painted, scene, 'paintedMetal', { mobile, strength: 0.28 });
+      applySurface(painted, scene, 'armor', { mobile, strength: 0.28 });
     applySurface(ground, scene, 'concrete', {
       repeat: 20,
       mobile,

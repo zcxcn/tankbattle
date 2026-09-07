@@ -54,12 +54,31 @@ for (const mount of ['/', base]) {
   assert.equal(assetModule.assetUrl('/'), mount);
 }
 const assets = await fs.readdir(path.join(root, 'assets'));
-const surfaceFiles = (await fs.readdir('web/assets/surfaces')).filter((file) =>
-  file.endsWith('.webp'),
+// Retired source textures remain beside their provenance. Only the active
+// imports, including generated albedos, belong in the deployed asset graph.
+const surfaceModulePath = path.resolve('lib/three/surface-textures.ts');
+const surfaceModule = ts.createSourceFile(
+  surfaceModulePath,
+  await fs.readFile(surfaceModulePath, 'utf8'),
+  ts.ScriptTarget.Latest,
+  false,
+  ts.ScriptKind.TS,
 );
+const surfaceFiles = surfaceModule.statements
+  .filter(
+    (statement) =>
+      ts.isImportDeclaration(statement) &&
+      ts.isStringLiteral(statement.moduleSpecifier),
+  )
+  .map((statement) => statement.moduleSpecifier.text)
+  .filter((url) => /\.(?:webp|png)\?url$/.test(url))
+  .map((url) =>
+    path.resolve(path.dirname(surfaceModulePath), url.slice(0, -4)),
+  );
+assert(surfaceFiles.length > 0, 'surface material imports must be verified');
 const visualFiles = [
   'web/assets/iron-embers-cover.png',
-  ...surfaceFiles.map((file) => 'web/assets/surfaces/' + file),
+  ...new Set(surfaceFiles),
 ];
 let visualBytes = 0;
 const publishedVisuals = [];
