@@ -33,9 +33,7 @@ await fs.writeFile(
     },
   ).outputText,
 );
-const { GameMusic } = await import(
-  pathToFileURL(path.join(tmp, 'music.mjs'))
-);
+const { GameMusic } = await import(pathToFileURL(path.join(tmp, 'music.mjs')));
 let passed = 0;
 const test = async (name, fn) => {
   await fn();
@@ -263,6 +261,23 @@ try {
     assert.equal(c.state, 'closed');
     assert(c.sources.every((s) => s.stops === 1 && s.disconnected));
   });
+  await test('command radio ducks the current music without restarting and restores the selected volume', async () => {
+    const music = new GameMusic();
+    music.unlock();
+    await settle();
+    const c = Context.instances.at(-1);
+    const level = c.gains[0].gain.value;
+    music.setRadioActive(true);
+    assert(Math.abs(c.gains[0].gain.value - level * 0.3) < 1e-8);
+    music.setRadioActive(false);
+    assert.equal(c.gains[0].gain.value, level);
+    assert.equal(c.sources.length, 1);
+    music.setPreferences(false, 40);
+    music.setRadioActive(true);
+    music.setRadioActive(false);
+    assert.equal(c.gains[0].gain.value, 0);
+    music.dispose();
+  });
   await test('blocked browser autoplay never claims playback and a later gesture can recover', async () => {
     Context.blocked = true;
     const states = [],
@@ -370,7 +385,12 @@ try {
     assert.equal(Context.instances.at(-1).state, 'suspended');
     music.dispose();
   });
-  for (const name of ['weapon-audio', 'audio']) {
+  // Audio asset URL imports are supplied by Vite in production; radio playback has its own tests.
+  await fs.writeFile(
+    path.join(tmp, 'radio-assets.mjs'),
+    'export const RADIO_ASSETS = {};',
+  );
+  for (const name of ['weapon-audio', 'track-audio', 'radio-audio', 'audio']) {
     const source = await fs.readFile(
       new URL(`../lib/${name}.ts`, import.meta.url),
       'utf8',
@@ -384,7 +404,10 @@ try {
             target: ts.ScriptTarget.ES2022,
           },
         })
-        .outputText.replace("'./weapon-audio'", "'./weapon-audio.mjs'"),
+        .outputText.replace(
+          /'\.\/(weapon-audio|track-audio|radio-audio|radio-assets)'/g,
+          "'./$1.mjs'",
+        ),
     );
   }
   const { weaponRecording } = await import(
@@ -430,9 +453,45 @@ try {
     assert.equal(audio.shotVoices, 0);
     const before = c.sources.length;
     audio.enabled = false;
+    assert.equal(
+      audio.effects.gain.value,
+      0,
+      'mute silences already connected gunshot voices',
+    );
     audio.play('fire', 0);
     assert.equal(c.sources.length, before);
     audio.dispose();
+  });
+  await test('rapid pause/resume reconciles an in-flight audio suspension and disposed contexts stay closed', async () => {
+    const audio = new GameAudio();
+    audio.unlock();
+    await settle();
+    const c = Context.instances.at(-1);
+    let finishSuspend;
+    c.suspend = () =>
+      new Promise((resolve) => {
+        finishSuspend = () => {
+          c.state = 'suspended';
+          resolve();
+        };
+      });
+    audio.suspend();
+    audio.unlock();
+    finishSuspend();
+    await settle();
+    assert.equal(c.state, 'running');
+    audio.suspend();
+    audio.dispose();
+    finishSuspend();
+    await settle();
+    const resumes = c.resumes;
+    audio.unlock();
+    assert.equal(
+      c.resumes,
+      resumes,
+      'disposal cannot recreate or resume an audio context',
+    );
+    assert.equal(audio.context, null);
   });
   console.log(`\n${passed} music checks passed.`);
 } finally {

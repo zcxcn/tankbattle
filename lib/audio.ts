@@ -1,18 +1,51 @@
 import type { SoundEvent } from './engine';
 import { weaponRecording } from './weapon-audio';
+import { TankMotionAudio } from './track-audio';
+import { RadioAudio } from './radio-audio';
+import type { RadioCue } from './tactical-radio';
 export class GameAudio {
   context: AudioContext | null = null;
-  enabled = true;
+  private effectsEnabled = true;
   lastEnemy = 0;
-  private motor: OscillatorNode | null = null;
-  private motorGain: GainNode | null = null;
+  private motion: TankMotionAudio | null = null;
+  private radio: RadioAudio | null = null;
+  private effects: GainNode | null = null;
+  private speaking = false;
+  private paused = false;
+  private disposed = false;
   private master: DynamicsCompressorNode | null = null;
   private noise = new Map<number, AudioBuffer>();
   private explosionVoices = 0;
   private shotVoices = 0;
   private shotSequence = 0;
   private shots = new Map<number, AudioBuffer>();
-  private output() {
+  constructor(
+    private onRadio: (cue: RadioCue | null) => void = () => {},
+    private onSpeaking: (active: boolean) => void = () => {},
+  ) {}
+  get enabled() {
+    return this.effectsEnabled;
+  }
+  set enabled(value: boolean) {
+    this.effectsEnabled = value;
+    if (!value) {
+      this.radio?.stop();
+      this.motion?.update(0, false);
+    }
+    this.mix();
+  }
+  get radioBusy() {
+    return this.radio?.busy ?? false;
+  }
+  private mix() {
+    if (!this.effects || !this.context) return;
+    this.effects.gain.setTargetAtTime(
+      this.enabled ? (this.speaking ? 0.42 : 1) : 0,
+      this.context.currentTime,
+      0.06,
+    );
+  }
+  private masterOutput() {
     const c = this.context!;
     if (!this.master) {
       this.master = c.createDynamicsCompressor();
@@ -24,6 +57,34 @@ export class GameAudio {
       this.master.connect(c.destination);
     }
     return this.master;
+  }
+  private output() {
+    if (!this.effects) {
+      this.effects = this.context!.createGain();
+      this.effects.gain.value = this.enabled ? 1 : 0;
+      this.effects.connect(this.masterOutput());
+    }
+    return this.effects;
+  }
+  prepareRadio() {
+    if (!this.context || this.radio) return;
+    this.radio = new RadioAudio(
+      this.context,
+      this.masterOutput(),
+      this.onRadio,
+      (active) => {
+        this.speaking = active;
+        this.mix();
+        this.onSpeaking(active);
+      },
+    );
+    void this.radio.preload();
+  }
+  announce(cue: RadioCue) {
+    if (!this.enabled || this.paused || this.context?.state !== 'running')
+      return;
+    this.prepareRadio();
+    this.radio?.play(cue);
   }
   private noiseBuffer(seconds: number) {
     let buffer = this.noise.get(seconds);
@@ -94,37 +155,39 @@ export class GameAudio {
     }
   }
   unlock() {
+    if (this.disposed) return;
+    this.paused = false;
     try {
       this.context ??= new AudioContext();
-      if (this.context.state === 'suspended')
-        void this.context.resume().catch(() => {});
+      this.syncContext();
     } catch {}
   }
-  setMotion(throttle: number, active: boolean) {
+  private syncContext() {
+    const context = this.context;
+    if (!context || this.disposed || context.state === 'closed') return;
+    const desired = this.paused ? 'suspended' : 'running';
+    if (context.state === desired) return;
+    const change = this.paused ? context.suspend() : context.resume();
+    void change
+      .then(() => {
+        // A rapid resume can arrive before suspend() settles (and vice versa).
+        if (
+          this.context === context &&
+          (this.paused ? 'suspended' : 'running') !== desired
+        )
+          this.syncContext();
+      })
+      .catch(() => {});
+  }
+  setMotion(throttle: number, active: boolean, turning = 0) {
     const c = this.context;
     if (!c) return;
-    if (!this.motor) {
-      this.motor = c.createOscillator();
-      this.motor.type = 'sawtooth';
-      this.motorGain = c.createGain();
-      const filter = c.createBiquadFilter();
-      filter.type = 'lowpass';
-      filter.frequency.value = 160;
-      this.motor.connect(filter);
-      filter.connect(this.motorGain);
-      this.motorGain.connect(this.output());
-      this.motorGain.gain.value = 0;
-      this.motor.start();
-    }
-    this.motor.frequency.setTargetAtTime(
-      38 + Math.min(1, throttle) * 32,
-      c.currentTime,
-      0.2,
-    );
-    this.motorGain!.gain.setTargetAtTime(
-      active && this.enabled ? 0.012 + Math.min(1, throttle) * 0.013 : 0,
-      c.currentTime,
-      0.12,
+    if (!this.motion && active && this.enabled)
+      this.motion = new TankMotionAudio(c, this.output());
+    this.motion?.update(
+      throttle,
+      active && this.enabled && !this.paused,
+      turning,
     );
   }
   private shot(weapon: number, enemy: boolean) {
@@ -156,7 +219,7 @@ export class GameAudio {
     source.start();
   }
   play(kind: SoundEvent, weapon = 0) {
-    if (!this.enabled || !this.context) return;
+    if (!this.enabled || !this.context || this.paused) return;
     const c = this.context,
       t = c.currentTime;
     if (kind === 'enemyfire' && t - this.lastEnemy < 0.08) return;
@@ -225,15 +288,23 @@ export class GameAudio {
     } catch {}
   }
   suspend() {
+    this.paused = true;
+    this.radio?.stop();
     this.setMotion(0, false);
-    if (this.context?.state === 'running')
-      void this.context.suspend().catch(() => {});
+    this.syncContext();
   }
   dispose() {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.radio?.dispose();
+    this.motion?.dispose();
+    this.effects?.disconnect();
+    this.master?.disconnect();
     if (this.context) void this.context.close().catch(() => {});
     this.context = null;
-    this.motor = null;
-    this.motorGain = null;
+    this.motion = null;
+    this.radio = null;
+    this.effects = null;
     this.master = null;
     this.noise.clear();
     this.shots.clear();

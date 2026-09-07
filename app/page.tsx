@@ -107,6 +107,9 @@ export default function Home() {
     musicScene.current = scene;
     music.current?.setScene(scene);
   }, []);
+  const setRadioActive = useCallback((active: boolean) => {
+    music.current?.setRadioActive(active);
+  }, []);
   function updateAudio(patch: Partial<AudioSettings>) {
     setSave((s) => ({ ...s, ...patch }));
     const next = { ...saveRef.current, ...patch };
@@ -1218,7 +1221,7 @@ export default function Home() {
               <label>
                 <span>
                   <strong>战斗音效</strong>
-                  <small>炮火、爆炸、技能与补给提示</small>
+                  <small>炮火、爆炸、履带与英文战术播报</small>
                 </span>
                 <Switch
                   checked={save.sound}
@@ -1255,6 +1258,7 @@ export default function Home() {
           onRetry={() => start(run.endless, run.mission)}
           onMusicScene={setMusicScene}
           onMusicPause={setMusicPaused}
+          onRadioActive={setRadioActive}
           onAudioChange={updateAudio}
         />
       )}

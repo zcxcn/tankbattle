@@ -49,6 +49,7 @@ import {
 } from '@/lib/performance';
 import { FixedStep } from '@/lib/fixed-step';
 import { GameAudio } from '@/lib/audio';
+import { TacticalRadioDirector, type RadioCue } from '@/lib/tactical-radio';
 import { MUSIC_TRACKS, type MusicScene, type AudioSettings } from '@/lib/music';
 import MusicControls from './music-controls';
 import { progression } from '@/lib/progression';
@@ -85,6 +86,7 @@ type Props = {
   onRetry: () => void;
   onMusicScene: (scene: MusicScene) => void;
   onMusicPause: (paused: boolean) => void;
+  onRadioActive?: (active: boolean) => void;
   onAudioChange: (patch: Partial<AudioSettings>) => void;
 };
 export default function BattleGame({
@@ -98,6 +100,7 @@ export default function BattleGame({
   onRetry,
   onMusicScene,
   onMusicPause,
+  onRadioActive,
   onAudioChange,
 }: Props) {
   const canvas = useRef<HTMLCanvasElement>(null),
@@ -111,6 +114,9 @@ export default function BattleGame({
   const musicCallback = useRef(onMusicScene);
   musicCallback.current = onMusicScene;
   const [gamepad, setGamepad] = useState(false);
+  const [radioCue, setRadioCue] = useState<RadioCue | null>(null);
+  const radioCallback = useRef(onRadioActive);
+  radioCallback.current = onRadioActive;
   const mouseFire = useRef(false);
   const renderDirty = useRef(true);
   const aimSource = useRef<'mouse' | 'pad' | 'touch'>('mouse');
@@ -191,7 +197,7 @@ export default function BattleGame({
     const b = engine.current;
     if (!b || b.result || (!v && errorRef.current)) return;
     b.paused = v;
-    if (v) sound.current?.setMotion(0, false);
+    if (v) sound.current?.suspend();
     else sound.current?.unlock();
     clearInput.current();
     mouseFire.current = false;
@@ -219,9 +225,13 @@ export default function BattleGame({
     let nextBudget = 0;
     let policy = renderPolicy(save.fps, mobile, deviceState);
     const fixed = new FixedStep(),
-      a = new GameAudio();
+      radio = new TacticalRadioDirector(),
+      a = new GameAudio(setRadioCue, (active) =>
+        radioCallback.current?.(active),
+      );
     a.enabled = save.sound;
     a.unlock();
+    a.prepareRadio();
     sound.current = a;
     b.onSound = (event, weapon) => a.play(event, weapon);
     let disposed = false,
@@ -351,7 +361,10 @@ export default function BattleGame({
     };
     const keyup = (event: KeyboardEvent) =>
       keys.delete(event.key.toLowerCase());
-    const blur = () => pause(true);
+    const blur = () => {
+      pause(true);
+      a.suspend();
+    };
     const nativeState = () => {
       if (deviceState.background) {
         pause(true);
@@ -415,9 +428,10 @@ export default function BattleGame({
         if (!finaleStarted)
           musicCallback.current(b.result.won ? 'victory' : 'defeat');
         finaleStarted ||= now;
-        const age = Math.min(0.85, (now - finaleStarted) / 1000);
-        if (pacer.take(now, policy.fps)) r.draw(b, null, b.elapsed + age);
-        if (age >= (mobile ? 0.25 : 0.85)) {
+        const age = (now - finaleStarted) / 1000;
+        if (pacer.take(now, policy.fps))
+          r.draw(b, null, b.elapsed + Math.min(0.85, age));
+        if (age >= (mobile ? 0.25 : 0.85) && (!a.radioBusy || age >= 4)) {
           reported = true;
           callback.current(b.result);
         }
@@ -487,11 +501,47 @@ export default function BattleGame({
         );
         if (picked) controls.current.aim = picked;
       }
+      const oldX = b.player.x,
+        oldY = b.player.y,
+        oldAngle = b.player.angle,
+        oldTime = b.elapsed;
       if (initialized) fixed.advance(b, dt, controls.current);
-      a.setMotion(
-        Math.hypot(horizontal, vertical),
-        initialized && !b.paused && !b.result,
-      );
+      const stepTime = b.elapsed - oldTime;
+      // Drive sound from simulation displacement so a blocked tank does not clatter at full speed.
+      if (stepTime > 0 || !initialized || b.result)
+        a.setMotion(
+          stepTime > 0
+            ? Math.hypot(b.player.x - oldX, b.player.y - oldY) /
+                stepTime /
+                b.player.speed
+            : 0,
+          initialized && !b.paused && !b.result,
+          stepTime > 0
+            ? Math.abs(
+                Math.atan2(
+                  Math.sin(b.player.angle - oldAngle),
+                  Math.cos(b.player.angle - oldAngle),
+                ),
+              ) /
+                stepTime /
+                4
+            : 0,
+        );
+      if (initialized) {
+        const cue = radio.update(b);
+        if (cue) {
+          if (cue.id === 'incoming_barrage') {
+            const warningBoss = b.boss;
+            cue.maxDelayMs = Math.min(
+              500,
+              (warningBoss?.attackWindup ?? 0) * 1000,
+            );
+            cue.valid = () =>
+              b.boss === warningBoss && (warningBoss?.attackWindup ?? 0) > 0;
+          }
+          a.announce(cue);
+        }
+      }
       r.draw(b, controls.current.aim);
       renderDirty.current = false;
       if (now > nextHud) {
@@ -599,7 +649,10 @@ export default function BattleGame({
           radarPlayer: { x: b.player.x, y: b.player.y, angle: b.player.angle },
         });
       }
-      if (b.result && !reported) {
+      // The fixed step can finish the battle after the early result guard above.
+      const result = b.result as BattleResult | null;
+      if (result && !reported) {
+        musicCallback.current(result.won ? 'victory' : 'defeat');
         finaleStarted = now;
         clear();
       }
@@ -821,6 +874,23 @@ export default function BattleGame({
           <span>{gamepad ? 'Y 切换 · 手柄已连接' : 'C 切换 · 滚轮缩放'}</span>
           <small className="performance-status">{performanceLabel}</small>
         </div>
+        {radioCue && !paused && (
+          <div
+            className={
+              'command-radio' +
+              (radioCue.priority >= 80 ? ' command-radio-alert' : '')
+            }
+            role="status"
+            lang="en"
+          >
+            <Radio size={16} />
+            <div>
+              <small>COMMAND · FIELD RADIO</small>
+              <span>{radioCue.text}</span>
+            </div>
+            <i aria-hidden="true" />
+          </div>
+        )}
         {(loading || loadError) && (
           <div
             className="engine-loading"
@@ -1117,25 +1187,26 @@ export default function BattleGame({
                   : 'Q'}
             </kbd>
           </button>
-        <button
-          className="mine-control"
-          aria-label={`布设地雷，剩余 ${hud.mineAmmo} 枚`}
-          onClick={() => {
-            controls.current.mine = true;
-          }}
-          disabled={hud.mineCd > 0 || hud.mineAmmo <= 0}
-          title="M / 右摇杆按下：车尾布雷。每击毁 3 辆补充 1 枚，上限 8 枚。"
-        >
-          <CircleDot size={20} />
-          <span>布设地雷</span><b>{hud.mineAmmo}</b>
-          <kbd>
-            {hud.mineCd > 0
-              ? hud.mineCd.toFixed(1) + 's'
-              : gamepad
-                ? 'R3'
-                : 'M'}
-          </kbd>
-        </button>
+          <button
+            className="mine-control"
+            aria-label={`布设地雷，剩余 ${hud.mineAmmo} 枚`}
+            onClick={() => {
+              controls.current.mine = true;
+            }}
+            disabled={hud.mineCd > 0 || hud.mineAmmo <= 0}
+            title="M / 右摇杆按下：车尾布雷。每击毁 3 辆补充 1 枚，上限 8 枚。"
+          >
+            <CircleDot size={20} />
+            <span>布设地雷</span>
+            <b>{hud.mineAmmo}</b>
+            <kbd>
+              {hud.mineCd > 0
+                ? hud.mineCd.toFixed(1) + 's'
+                : gamepad
+                  ? 'R3'
+                  : 'M'}
+            </kbd>
+          </button>
         </div>
         <div className="buffs">
           {hud.rapid > 0 && <span>超频 {Math.ceil(hud.rapid)}s</span>}

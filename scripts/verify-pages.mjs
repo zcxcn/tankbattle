@@ -54,6 +54,20 @@ for (const mount of ['/', base]) {
   assert.equal(assetModule.assetUrl('/'), mount);
 }
 const assets = await fs.readdir(path.join(root, 'assets'));
+const radioFiles = (await fs.readdir('web/audio/radio')).filter((file) =>
+  file.endsWith('.wav'),
+);
+for (const file of radioFiles) {
+  const id = file.slice(0, -4);
+  const published = assets.filter(
+    (asset) => asset.startsWith(id + '-') && asset.endsWith('.wav'),
+  );
+  assert.equal(published.length, 1, 'one hashed radio clip: ' + id);
+  assert.deepEqual(
+    await fs.readFile(path.join(root, 'assets', published[0])),
+    await fs.readFile(path.join('web/audio/radio', file)),
+  );
+}
 let cssCount = 0,
   jsCount = 0;
 for (const file of assets) {
@@ -81,5 +95,5 @@ for (const file of assets) {
 assert(cssCount > 0 && jsCount > 0);
 assert(!(await fs.stat(path.join(root, '.openai')).catch(() => null)));
 console.log(
-  `Pages verified: ${required.length} required assets, ${jsCount} JS chunks, ${cssCount} stylesheets; root and /tankbattle/ asset URLs pass.`,
+  `Pages verified: ${required.length} required assets, ${radioFiles.length} English voice clips, ${jsCount} JS chunks, ${cssCount} stylesheets; root and /tankbattle/ asset URLs pass.`,
 );

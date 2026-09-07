@@ -4,6 +4,10 @@
 
 ## 2026-09 网页战斗升级
 
+新增坦克柴油怠速、钢制履带敲击与摩擦声，车速和转向由实际移动驱动；撞墙时不会保持全速履带声。英文中控电台提供 21 条播报，覆盖接敌、击毁、Boss 阶段与齐射、装甲告急与修复、地雷与脉冲、弹药、目标和胜负。短电台接通音、窄频语音和收尾杂音均已打包；播报期间自动压低音乐与战斗音量。警报按优先级、冷却和有效期播放，暂停、静音、后台和退出会停止播报。音效开关同时控制履带与电台，音乐仍可单独调整。
+
+新增 WAV 约 2 MB，通过网页模块导入，Android 不包含它们。语音由本地 Windows 英文 Zira 合成，再应用原创电台处理；无需在线语音服务，未使用红警原声音频。`npm run test:audio` 检查音频循环、触发与中断逻辑、资源完整性。需要重新生成时，在装有 Zira、Node 和 Python 的 Windows 上执行 `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/generate-radio.ps1`。
+
 本轮仅升级网页版（Vinext 与 GitHub Pages）。Android 使用 `mobile/baseline/` 中升级前的游戏代码；`mobile/main.tsx` 和移动构建别名指向该基线，构建时检查依赖图，禁止混入网页新代码。Android 原生工程、贴图、音乐和 APK 未更新。`scripts/verify-android-baseline.mjs` 校验冻结源码、原生工程和原有资源的 SHA-256。
 
 - 每一关都有具名 Boss，必须同时完成原任务与击毁 Boss 才能通关。普通关 Boss 随章节增强，原第 6/12/18 关为强化首领；70% / 35% 生命时切换榴弹 / 火箭齐射并呼叫护卫。蓄力期间停止移动、锁定炮口，红色瞄准线提示危险方向，脉冲可中断蓄力。

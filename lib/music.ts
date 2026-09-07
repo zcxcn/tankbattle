@@ -54,6 +54,7 @@ export class GameMusic {
   private paused = false;
   private enabled = true;
   private volume = 40;
+  private radioActive = false;
   private scene: MusicScene = 'menu';
   private status: MusicStatus = 'locked';
   private resuming = false;
@@ -81,6 +82,10 @@ export class GameMusic {
   }
   setScene(scene: MusicScene) {
     this.scene = scene;
+    this.mix();
+  }
+  setRadioActive(active: boolean) {
+    this.radioActive = active;
     this.mix();
   }
   setPaused(paused: boolean) {
@@ -198,7 +203,10 @@ export class GameMusic {
     param.setValueAtTime(param.value, t);
     param.setTargetAtTime(
       this.enabled
-        ? Math.pow(this.volume / 100, 1.25) * 0.65 * ENERGY[this.scene]
+        ? Math.pow(this.volume / 100, 1.25) *
+            0.65 *
+            ENERGY[this.scene] *
+            (this.radioActive ? 0.3 : 1)
         : 0,
       t,
       0.14,

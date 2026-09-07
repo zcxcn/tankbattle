@@ -3605,10 +3605,95 @@ html {
   }
 }
 /* Web combat upgrade: tactical mines and readable Boss attack telegraphs. */
-.battle-abilities .mine-control { border-color:#79b5a5; background:#172521ed; color:#c5e8da; }
-.mine-control b { display:inline-block; min-width:24px; color:#8fe3c9; }
-.mine-control kbd { color:#e8c48b; }
-.mine-control:disabled { opacity:.5; }
-.mine-control:focus-visible { outline:2px solid #d4f6e6; outline-offset:3px; }
-.boss-hud.boss-warning { border:1px solid #ee8056; background:#3e201eea; box-shadow:0 0 24px #e65c2738; }
-.boss-hud.boss-warning small { color:#ffd0a4; }
+.battle-abilities .mine-control {
+  border-color: #79b5a5;
+  background: #172521ed;
+  color: #c5e8da;
+}
+.mine-control b {
+  display: inline-block;
+  min-width: 24px;
+  color: #8fe3c9;
+}
+.mine-control kbd {
+  color: #e8c48b;
+}
+.mine-control:disabled {
+  opacity: 0.5;
+}
+.mine-control:focus-visible {
+  outline: 2px solid #d4f6e6;
+  outline-offset: 3px;
+}
+.boss-hud.boss-warning {
+  border: 1px solid #ee8056;
+  background: #3e201eea;
+  box-shadow: 0 0 24px #e65c2738;
+}
+.boss-hud.boss-warning small {
+  color: #ffd0a4;
+}
+.command-radio {
+  position: absolute;
+  z-index: 5;
+  left: 24px;
+  top: 58px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: max-content;
+  max-width: min(310px, 28%);
+  padding: 11px 15px;
+  background: #101c16ee;
+  border: 1px solid #8faa7466;
+  border-left: 3px solid #b4cd8e;
+  box-shadow: 0 5px 22px #0006;
+  color: #e4edcf;
+  pointer-events: none;
+}
+.command-radio > div {
+  display: grid;
+  gap: 4px;
+}
+.command-radio small {
+  color: #acc58f;
+  font-size: 9px;
+  letter-spacing: 2px;
+}
+.command-radio span {
+  font-size: 13px;
+  line-height: 1.4;
+}
+.command-radio > svg {
+  flex-shrink: 0;
+}
+.command-radio > i {
+  width: 5px;
+  height: 5px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #b4cd8e;
+}
+.command-radio-alert {
+  border-left-color: #efaa6c;
+}
+@media (max-width: 700px), (max-height: 540px) {
+  .command-radio {
+    top: 52px;
+    left: 12px;
+    max-width: 26%;
+    padding: 7px 10px;
+    gap: 7px;
+  }
+  .command-radio small {
+    font-size: 8px;
+    letter-spacing: 1px;
+  }
+  .command-radio span {
+    font-size: 11px;
+  }
+  .command-radio > svg,
+  .command-radio > i {
+    display: none;
+  }
+}
