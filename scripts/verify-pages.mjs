@@ -98,6 +98,22 @@ for (const file of radioFiles) {
 }
 let cssCount = 0,
   jsCount = 0;
+const combatFiles = (await fs.readdir('web/audio/combat')).filter((file) =>
+  file.endsWith('.wav'),
+);
+const publishedCombat = [];
+for (const file of combatFiles) {
+  const published = assets.filter(
+    (asset) =>
+      asset.startsWith(file.slice(0, -4) + '-') && asset.endsWith('.wav'),
+  );
+  assert.equal(published.length, 1, 'one hashed combat recording: ' + file);
+  assert.deepEqual(
+    await fs.readFile(path.join(root, 'assets', published[0])),
+    await fs.readFile(path.join('web/audio/combat', file)),
+  );
+  publishedCombat.push(base + 'assets/' + published[0]);
+}
 let jsContent = '';
 for (const file of assets) {
   if (!file.endsWith('.js') && !file.endsWith('.css')) continue;
@@ -129,7 +145,12 @@ for (const url of publishedVisuals)
     jsContent.includes(url),
     'visual asset must use the Pages base URL: ' + url,
   );
+for (const url of publishedCombat)
+  assert(
+    jsContent.includes(url),
+    'combat audio uses the Pages base URL: ' + url,
+  );
 assert(!(await fs.stat(path.join(root, '.openai')).catch(() => null)));
 console.log(
-  `Pages verified: ${required.length} required assets, ${radioFiles.length} English voice clips, ${visualFiles.length} new visual assets (${(visualBytes / 1048576).toFixed(2)} MiB), ${jsCount} JS chunks, ${cssCount} stylesheets; root and /tankbattle/ asset URLs pass.`,
+  `Pages verified: ${required.length} required assets, ${radioFiles.length} English voice clips, ${combatFiles.length} combat recordings, ${visualFiles.length} new visual assets (${(visualBytes / 1048576).toFixed(2)} MiB), ${jsCount} JS chunks, ${cssCount} stylesheets; root and /tankbattle/ asset URLs pass.`,
 );

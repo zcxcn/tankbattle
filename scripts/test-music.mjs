@@ -390,7 +390,17 @@ try {
     path.join(tmp, 'radio-assets.mjs'),
     'export const RADIO_ASSETS = {};',
   );
-  for (const name of ['weapon-audio', 'track-audio', 'radio-audio', 'audio']) {
+  await fs.writeFile(
+    path.join(tmp, 'combat-audio-assets.mjs'),
+    'export const COMBAT_AUDIO_ASSETS = {}; export const WEAPON_CLIPS = Array.from({length: 7}, () => []);',
+  );
+  for (const name of [
+    'weapon-audio',
+    'track-audio',
+    'radio-audio',
+    'combat-audio',
+    'audio',
+  ]) {
     const source = await fs.readFile(
       new URL(`../lib/${name}.ts`, import.meta.url),
       'utf8',
@@ -405,7 +415,7 @@ try {
           },
         })
         .outputText.replace(
-          /'\.\/(weapon-audio|track-audio|radio-audio|radio-assets)'/g,
+          /'\.\/(weapon-audio|track-audio|radio-audio|radio-assets|combat-audio|combat-audio-assets)'/g,
           "'./$1.mjs'",
         ),
     );

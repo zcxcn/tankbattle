@@ -104,12 +104,16 @@ export class TankMotionAudio {
   constructor(
     private readonly context: AudioContext,
     output: AudioNode,
+    recordings: Partial<Record<MotionRecording, AudioBuffer>> = {},
   ) {
     const makeLoop = (kind: MotionRecording) => {
-      const recording = tankMotionRecording(kind, context.sampleRate),
-        buffer = context.createBuffer(1, recording.length, context.sampleRate),
-        source = context.createBufferSource();
-      buffer.copyToChannel(recording, 0);
+      let buffer = recordings[kind];
+      if (!buffer) {
+        const recording = tankMotionRecording(kind, context.sampleRate);
+        buffer = context.createBuffer(1, recording.length, context.sampleRate);
+        buffer.copyToChannel(recording, 0);
+      }
+      const source = context.createBufferSource();
       source.buffer = buffer;
       source.loop = true;
       return source;

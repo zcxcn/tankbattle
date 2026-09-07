@@ -805,7 +805,7 @@ await test('seven projectile silhouettes and colors are distinct and their cente
     signatures.add(JSON.stringify(batch.mesh.getVerticesData('position')));
     colors.add(
       (
-        batch.mesh.material.emissiveColor ?? batch.mesh.material.albedoColor
+        batch.mesh.material.albedoColor ?? batch.mesh.material.emissiveColor
       ).toHexString(),
     );
   });
@@ -817,6 +817,128 @@ await test('seven projectile silhouettes and colors are distinct and their cente
   );
   assert.equal(JSON.stringify(b), before);
   assert(f.scene.meshes.every((mesh) => !mesh.isPickable));
+  f.dispose();
+});
+await test('conventional projectile tracers stay short at low frame rates and machine-gun belts mix unlit rounds', () => {
+  const f = projectileFixture();
+  const bullets = Array.from({ length: 12 }, (_, index) =>
+    visualBullet(1, 1000 + index * 15),
+  );
+  bullets.push(visualBullet(0, 1500), visualBullet(4, 1650));
+  const b = { elapsed: 0, weapon: 1, bullets };
+  f.fx.update(b);
+  const before = JSON.stringify(bullets);
+  assert.equal(
+    f.fx.core.count,
+    0,
+    'ordinary metal rounds must not carry a white laser core',
+  );
+  for (const weapon of [0, 1, 2, 4]) {
+    const material = f.fx.bodies[weapon].mesh.material;
+    assert.equal(material.getClassName(), 'PBRMaterial');
+    assert.equal(material.emissiveColor.toHexString(), '#000000');
+  }
+  assert.equal(
+    JSON.stringify(bullets),
+    before,
+    'rendering must not alter combat bullets',
+  );
+  b.elapsed = 1 / 15;
+  bullets.forEach((bullet) => {
+    bullet.x += 60;
+  });
+  b.weapon = 6; // Switching the equipped weapon cannot change rounds in flight.
+  f.fx.update(b);
+  assert.equal(f.fx.bodies[1].count, 12);
+  assert.equal(
+    f.fx.trails[1].count,
+    3,
+    'one stable tracer in each four-round belt group',
+  );
+  assert.equal(f.fx.trails[0].count, 1);
+  for (const [weapon, maximum] of [
+    [0, 0.95],
+    [1, 0.42],
+    [2, 0.16],
+  ]) {
+    const batch = f.fx.trails[weapon];
+    for (let index = 0; index < batch.count; index++) {
+      const at = index * 16;
+      const length = Math.hypot(
+        batch.matrices[at + 8],
+        batch.matrices[at + 9],
+        batch.matrices[at + 10],
+      );
+      assert(
+        length <= maximum + 1e-5,
+        'a delayed render frame must not stretch AP/MG into a beam',
+      );
+    }
+  }
+  const matrix = f.fx.bodies[4].matrices;
+  assert(
+    Math.abs(matrix[13] - 2.12) < 1e-5,
+    'grenade visuals must stay at the collision system height',
+  );
+  const tracerSnapshot = Array.from(f.fx.trails[1].matrices);
+  f.fx.update(b);
+  assert.deepEqual(
+    Array.from(f.fx.trails[1].matrices),
+    tracerSnapshot,
+    'paused tracer selection must remain stable',
+  );
+  f.dispose();
+});
+await test('rocket projectile exhaust stays connected across low-FPS turns without moving recorded hit paths', () => {
+  const f = projectileFixture(),
+    rocket = visualBullet(6, W / 2 + 120),
+    b = { elapsed: 0, weapon: 6, bullets: [rocket] };
+  f.fx.update(b);
+  b.elapsed = 0.1;
+  rocket.x += 50;
+  f.fx.update(b);
+  assert(
+    f.fx.trails[6].count >= 10,
+    'a long render step needs multiple evenly spaced smoke samples',
+  );
+  const firstFlight = f.fx.flights.get(rocket),
+    originalPoints = firstFlight.points.map((point) => point.position.clone());
+  b.elapsed = 0.2;
+  rocket.vx = 0;
+  rocket.vy = 620;
+  rocket.y += 50;
+  b.weapon = 0;
+  f.fx.update(b);
+  assert.equal(f.fx.flights.get(rocket), firstFlight);
+  assert(firstFlight.points[0].position.equals(originalPoints[0]));
+  assert(firstFlight.points[1].position.equals(originalPoints[1]));
+  const smoke = f.fx.trails[6],
+    centers = Array.from({ length: smoke.count }, (_, index) =>
+      Vector3.FromArray(smoke.matrices, index * 16 + 12),
+    );
+  assert(centers.some((point) => point.z > originalPoints[1].z + 1));
+  assert(centers.some((point) => point.x < originalPoints[1].x - 1));
+  assert(
+    centers.every((point) => point.y >= 2.12 && point.y < 2.4),
+    'smoke rises gently while the physical rocket stays on its flight height',
+  );
+  assert.equal(smoke.mesh.material.getClassName(), 'PBRMaterial');
+  assert.equal(smoke.mesh.material.emissiveColor.toHexString(), '#000000');
+  const rocketCenter = worldPosition(rocket.x, rocket.y, 2.12);
+  for (const [offset, coordinate] of [
+    [12, rocketCenter.x],
+    [13, rocketCenter.y],
+    [14, rocketCenter.z],
+  ])
+    assert(Math.abs(f.fx.bodies[6].matrices[offset] - coordinate) < 1e-5);
+  b.bullets = [];
+  f.fx.update(b);
+  assert.equal(f.fx.stats.bodies, 0);
+  assert(f.fx.stats.retired > 0);
+  b.elapsed += 0.6;
+  f.fx.update(b);
+  assert.equal(f.fx.stats.trails, 0);
+  assert.equal(f.fx.stats.retired, 0);
   f.dispose();
 });
 await test('projectile history follows each actual shot through deletion, switching, homing and pause', () => {

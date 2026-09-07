@@ -1238,6 +1238,16 @@ export default function Home() {
                 />
               </label>
               <p>难度在战役任务卡中选择。新兵受到的伤害更低，适合熟悉操作。</p>
+              <p>
+                <a
+                  href="https://github.com/zcxcn/tankbattle/blob/main/web/audio/combat/README.md"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline underline-offset-4"
+                >
+                  Audio credits · 音效来源与授权
+                </a>
+              </p>
             </div>
           )}
         </DialogContent>

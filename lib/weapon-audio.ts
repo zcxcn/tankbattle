@@ -1,7 +1,7 @@
-/** Original layered pressure/noise samples, cached once for each weapon. */
-export const SHOT_SECONDS = [1.2, 0.24, 0.85, 0.95, 0.95, 0.8, 1.45] as const;
+/** Offline fallback; the web game normally plays licensed library recordings. */
+export const SHOT_SECONDS = [2.4, 0.24, 0.85, 0.95, 0.95, 0.8, 1.45] as const;
 const profiles = [
-  [1.7, 0.012, 1.5, 0.072, 1.25, 0.24, 78, 42, 0.22, 0.17],
+  [0.4, 0.018, 1.65, 0.16, 2.3, 0.46, 68, 31, 0.4, 0.36],
   [1.45, 0.006, 1.05, 0.022, 0.45, 0.044, 150, 95, 0.12, 0.025],
   [1.25, 0.011, 1.65, 0.062, 0.95, 0.13, 95, 56, 0.14, 0.1],
   [1.8, 0.01, 1, 0.045, 1.05, 0.17, 160, 70, 0.12, 0.12],

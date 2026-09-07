@@ -12,7 +12,7 @@
     "lint": "oxlint",
     "format": "oxfmt",
     "test": "node scripts/test-engine.mjs && node scripts/test-web-upgrade.mjs && node scripts/test-battle-hud.mjs && node scripts/test-3d.mjs && node scripts/test-music.mjs && npm run test:audio && node scripts/verify-android-baseline.mjs",
-    "test:audio": "node scripts/test-track-audio.mjs && node scripts/test-tactical-radio.mjs && node scripts/test-radio-audio.mjs && node scripts/verify-radio-assets.mjs",
+    "test:audio": "node scripts/test-track-audio.mjs && node scripts/test-tactical-radio.mjs && node scripts/test-radio-audio.mjs && node scripts/test-combat-audio.mjs && node scripts/verify-radio-assets.mjs && node scripts/verify-combat-assets.mjs",
     "test:web-upgrade": "node scripts/test-web-upgrade.mjs",
     "test:music": "node scripts/test-music.mjs",
     "test:3d": "node scripts/test-3d.mjs",
