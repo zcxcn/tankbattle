@@ -24,6 +24,7 @@ export class GameAudio {
   private effectSequence = 0;
   private effectVoices = 0;
   private voices = new Set<{ stop: () => void }>();
+  private enemyShots = new Set<{ stop: () => void }>();
   private shots = new Map<number, AudioBuffer>();
   constructor(
     private onRadio: (cue: RadioCue | null) => void = () => {},
@@ -215,7 +216,13 @@ export class GameAudio {
     );
   }
   private shot(weapon: number, enemy: boolean) {
-    if (this.shotVoices >= 12) return;
+    // Longer recorded tails must not let distant volleys silence the player.
+    if (enemy && this.enemyShots.size >= 6) return;
+    if (this.shotVoices >= 12) {
+      if (enemy) return;
+      this.enemyShots.values().next().value?.stop();
+      if (this.shotVoices >= 12) return;
+    }
     const c = this.context!;
     const index =
       Number.isInteger(weapon) && weapon >= 0 && weapon < 7 ? weapon : 0;
@@ -236,6 +243,7 @@ export class GameAudio {
       enemy ? 0.19 : index === 0 ? 0.7 : index === 1 ? 0.27 : 0.48,
       (enemy ? 0.96 : 1) * [0.987, 1, 1.013][sequence % 3],
       'shot',
+      enemy,
     );
   }
   /** One budgeted voice may contain several layered scheduled sources. */
@@ -253,6 +261,7 @@ export class GameAudio {
     const pending = new Set(sources);
     const finish = () => {
       if (!this.voices.delete(voice)) return;
+      this.enemyShots.delete(voice);
       for (const source of sources) source.onended = null;
       pending.clear();
       for (const node of nodes) node.disconnect();
@@ -282,6 +291,7 @@ export class GameAudio {
     volume: number,
     rate: number,
     category: 'shot' | 'effect' | 'explosion',
+    enemy = false,
   ) {
     const c = this.context!;
     const source = c.createBufferSource(),
@@ -292,6 +302,7 @@ export class GameAudio {
     source.connect(gain);
     gain.connect(this.output());
     const voice = this.ownVoice(category, [source], [source, gain]);
+    if (enemy) this.enemyShots.add(voice);
     try {
       source.start();
     } catch {

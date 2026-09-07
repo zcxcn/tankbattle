@@ -246,6 +246,82 @@ try {
     assert.equal(game.shotVoices, 0);
     game.dispose();
   });
+  await test('player fire preempts the oldest enemy tail at the shared voice limit and releases every counter', async () => {
+    const game = new GameAudio();
+    game.unlock();
+    await settle();
+    const context = game.context;
+    const enemyShot = () => {
+      context.currentTime += 0.1; // Each request is outside enemy-fire throttling.
+      game.play('enemyfire', 0);
+    };
+    for (let index = 0; index < 6; index++) enemyShot();
+    const enemies = context.sources.slice();
+    assert.equal(enemies.length, 6);
+    assert.equal(game.enemyShots.size, 6);
+    enemyShot();
+    assert.equal(
+      context.sources.length,
+      6,
+      'enemy tails must keep room for player fire',
+    );
+    for (let index = 0; index < 6; index++) game.play('fire', 0);
+    assert.equal(context.sources.length, 12);
+    assert.equal(game.shotVoices, 12);
+    const oldestEnded = enemies[0].onended;
+    game.play('fire', 0);
+    assert.equal(
+      context.sources.length,
+      13,
+      'a player shot must still start when 12 tails are active',
+    );
+    assert.equal(context.sources.at(-1).starts, 1);
+    assert.equal(enemies[0].stops, 1, 'replace the oldest enemy tail first');
+    assert(enemies[0].disconnected && enemies[0].target.disconnected);
+    assert(enemies.slice(1).every((source) => source.stops === 0));
+    assert(
+      context.sources.slice(6).every((source) => source.stops === 0),
+      'player tails must not be evicted while enemy tails remain',
+    );
+    assert.equal(game.shotVoices, 12);
+    assert.equal(game.voices.size, 12);
+    assert.equal(game.enemyShots.size, 5);
+    oldestEnded?.(); // A queued ended event after preemption cannot decrement twice.
+    assert.equal(game.shotVoices, 12);
+    assert.equal(game.enemyShots.size, 5);
+    for (const source of context.sources) source.onended?.();
+    assert.equal(game.shotVoices, 0);
+    assert.equal(game.enemyShots.size, 0);
+    assert.equal(game.voices.size, 0);
+    assert(
+      context.sources.every(
+        (source) => source.disconnected && source.target.disconnected,
+      ),
+    );
+
+    const beforeSecondVolley = context.sources.length;
+    for (let index = 0; index < 6; index++) enemyShot();
+    for (let index = 0; index < 6; index++) game.play('fire', 0);
+    assert.equal(game.shotVoices, 12);
+    assert.equal(game.enemyShots.size, 6);
+    game.suspend();
+    assert.equal(game.shotVoices, 0);
+    assert.equal(game.enemyShots.size, 0);
+    assert.equal(game.voices.size, 0);
+    assert(
+      context.sources
+        .slice(beforeSecondVolley)
+        .every(
+          (source) =>
+            source.stops === 1 &&
+            source.disconnected &&
+            source.target.disconnected,
+        ),
+    );
+    game.dispose();
+    assert.equal(game.shotVoices, 0);
+    assert.equal(game.enemyShots.size, 0);
+  });
   await test('late recordings only affect future shots and never replay a shot after pause', async () => {
     const ready = deferred();
     globalThis.fetch = async (url) => {
