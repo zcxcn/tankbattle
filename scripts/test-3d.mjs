@@ -95,7 +95,7 @@ let passed = 0;
 async function test(name, fn) {
   fn();
   // Babylon defers readiness/disposal callbacks; let each test release them.
-  await new Promise(resolve => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
   console.log('PASS ' + name);
   passed++;
 }
@@ -1017,6 +1017,117 @@ await test('weapon impacts use short colored volumes and ground covers every enl
   const extents = ground.getBoundingInfo().boundingBox.extendSizeWorld;
   assert(extents.x > W * 0.05 && extents.z > H * 0.05);
   view.dispose();
+});
+await test('received hits keep their flash, fire and sparks under load, then clear the tank quickly at both quality levels', () => {
+  for (const quality of ['performance', 'balanced']) {
+    const b = new Battle(0, true, config(), 85);
+    const view = new Renderer3D(canvas, b, {
+      assets: false,
+      quality,
+      headlessEngine: new NullEngine({
+        renderWidth: 1280,
+        renderHeight: 800,
+        textureSize: 128,
+      }),
+    });
+    const hit = {
+      id: 901,
+      x: b.player.x,
+      y: b.player.y,
+      bornAt: 0,
+      scale: 1.4,
+      kind: 'impact',
+      weapon: 0,
+      playerHit: true,
+    };
+    // Later incoming pellets must not evict the main damage flash in the 3-slot budget.
+    b.explosions = [
+      hit,
+      ...Array.from({ length: 12 }, (_, i) => ({
+        ...hit,
+        id: 902 + i,
+        playerHit: false,
+        scale: 0.45,
+      })),
+    ];
+    b.elapsed = 0.08;
+    const snapshot = JSON.stringify(b);
+    view.draw(b, null);
+    assert.equal(JSON.stringify(b), snapshot);
+    const active = () =>
+      view.explosions.sprites.filter((mesh) => mesh.isEnabled());
+    const modes = new Set(active().map((mesh) => mesh.metadata.mode));
+    for (const mode of [0, 1, 2, 3, 6])
+      assert(modes.has(mode), 'damage effect layer ' + mode);
+    assert(active().filter((mesh) => mesh.metadata.mode === 6).length >= 5);
+    assert(
+      active().some((mesh) => mesh.metadata.mode === 3 && mesh.scaling.x > 5),
+    );
+    assert.equal(view.explosions.light.intensity > 0, quality === 'balanced');
+    b.paused = true;
+    const frozen = JSON.stringify(
+      active().map((m) => [
+        m.metadata,
+        m.position.asArray(),
+        m.scaling.asArray(),
+      ]),
+    );
+    view.draw(b, null);
+    assert.equal(
+      JSON.stringify(
+        active().map((m) => [
+          m.metadata,
+          m.position.asArray(),
+          m.scaling.asArray(),
+        ]),
+      ),
+      frozen,
+    );
+    b.paused = false;
+    b.elapsed = 0.8;
+    view.draw(b, null);
+    assert(
+      active().length > 0 && active().every((mesh) => mesh.metadata.mode === 1),
+      'brief smoke tail, not a wreck fire',
+    );
+    b.elapsed = 1.21;
+    view.draw(b, null);
+    assert.equal(active().length, 0);
+    assert.equal(view.explosions.light.intensity, 0);
+    for (const weapon of [3, 5]) {
+      b.explosions = [{ ...hit, weapon }];
+      b.elapsed = 0.08;
+      view.draw(b, null);
+      assert(active().every((mesh) => mesh.metadata.weapon === weapon));
+    }
+    const ages = [0.04, 0.15, 0.4, 0.8, 1.21];
+    b.explosions = Array.from({ length: 32 }, (_, i) => ({
+      ...hit,
+      id: i + 1000,
+    }));
+    for (const age of ages) {
+      b.elapsed = age;
+      view.draw(b, null);
+    }
+    const warmed = [
+      view.meshCount,
+      view.scene.materials.length,
+      view.scene.lights.length,
+    ];
+    for (const age of ages) {
+      b.elapsed = age;
+      view.draw(b, null);
+      assert.deepEqual(
+        [view.meshCount, view.scene.materials.length, view.scene.lights.length],
+        warmed,
+      );
+    }
+    assert(
+      view.explosions.sprites.length <= (quality === 'performance' ? 33 : 119),
+    );
+    assert(view.explosions.sprites.every((mesh) => !mesh.isPickable));
+    view.dispose();
+  }
 });
 await test('mine models show team markers, are reused after EMP and never mutate combat', () => {
   const b = new Battle(0, true, config(), 93);

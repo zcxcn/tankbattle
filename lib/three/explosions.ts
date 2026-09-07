@@ -45,11 +45,16 @@ void main(){
   color=vec3(4.,2.9,1.5);alpha=exp(-d*d*7.)*puff.z*(1.-smoothstep(.6,1.,d));
  }else if(mode<4.5){
   color=vec3(.075,.064,.049);alpha=edge*(.45+n*.55)*puff.z;
- }else{
+ }else if(mode<5.5){
   color=mix(vec3(.25,.215,.17),vec3(.53,.47,.36),n*.65+vUV.y*.25);
   alpha=edge*(.35+n*.65)*puff.z;
+ }else{
+  float core=exp(-p.y*p.y*18.);
+  float taper=1.-smoothstep(.35,1.,abs(p.x));
+  color=mix(vec3(3.,.42,.015),vec3(5.,3.8,1.7),core*(.55+.45*vUV.x));
+  alpha=core*taper*puff.z;
  }
- if(mode<.5 || (mode>1.5 && mode<3.5)) {
+ if(mode<.5 || (mode>1.5 && mode<3.5) || mode>5.5) {
    if(weapon>4.5 && weapon<5.5) color=vec3(color.b*.6,color.r*.8,color.r);
    else if(weapon>2.5 && weapon<3.5) color=vec3(color.r*.68,color.b*.7,color.r);
  }
@@ -159,9 +164,11 @@ export class ExplosionEffects {
       mode === 1 ? size * 1.08 : mode === 5 ? size * 0.38 : size,
       1,
     );
-    mesh.rotation.set(mode === 2 ? Math.PI / 2 : 0, 0, 0);
+    mesh.rotation.set(mode === 2 || mode === 6 ? Math.PI / 2 : 0, 0, 0);
     mesh.billboardMode =
-      mode === 2 ? Mesh.BILLBOARDMODE_NONE : Mesh.BILLBOARDMODE_ALL;
+      mode === 2 || mode === 6
+        ? Mesh.BILLBOARDMODE_NONE
+        : Mesh.BILLBOARDMODE_ALL;
     Object.assign(mesh.metadata, {
       age,
       seed,
@@ -175,25 +182,144 @@ export class ExplosionEffects {
     const slots = Math.max(
       1,
       Math.floor(
-        (lightMode ? 3 : this.quality === 'cinematic' ? 10 : 7) * effectScale,
+        (lightMode ? 3 : this.quality === 'cinematic' ? 10 : 7) *
+          Math.max(0, Math.min(1, effectScale)),
       ),
     );
-    // Prioritize nearby recent explosions; distant shells do not evict a visible blast.
+    // Keep the newest received hits visible even during crowded enemy volleys.
     const visible = b.explosions
       .filter(
         (e) =>
-          time - e.bornAt < (e.kind === 'impact' ? 0.6 : 5.5) &&
+          time - e.bornAt <
+            (e.kind === 'impact' ? (e.playerHit ? 1.2 : 0.6) : 5.5) &&
           Math.hypot(e.x - b.player.x, e.y - b.player.y) <
             (lightMode ? 800 : 1250),
+      )
+      .sort(
+        (a, b) =>
+          Number(!!a.playerHit) - Number(!!b.playerHit) ||
+          a.bornAt - b.bornAt ||
+          a.id - b.id,
       )
       .slice(-slots);
     let spriteCount = 0,
       fragmentCount = 0,
       brightest = 0;
     this.light.intensity = 0;
+    this.light.diffuse.set(1, 0.42, 0.095);
     for (const e of visible) {
       const age = Math.max(0, time - e.bornAt),
         s = e.scale;
+      if (e.kind === 'impact' && e.playerHit) {
+        // A sharp armor strike: bright first, then quickly clear the live tank.
+        const rand = seeded(e.id * 257 + 71);
+        if (age < 0.16)
+          this.puff(
+            spriteCount++,
+            e,
+            age,
+            3,
+            0,
+            0,
+            2.05,
+            (4.2 + age * 27) * s,
+            (1 - age / 0.16) ** 1.4,
+            e.id,
+          );
+        const fireCount = lightMode ? 2 : 3;
+        for (let i = 0; i < fireCount; i++) {
+          const angle = rand() * Math.PI * 2,
+            offset = 5 + rand() * 11,
+            duration = 0.34 + rand() * 0.14;
+          if (age >= duration) continue;
+          const growth = 1 - Math.exp(-age * 18);
+          this.puff(
+            spriteCount++,
+            e,
+            age,
+            0,
+            Math.cos(angle) * offset * growth * s,
+            Math.sin(angle) * offset * growth * s,
+            1.5 + age * 1.8 + i * 0.22,
+            (1.35 + growth * 2.6) * s,
+            Math.min(1, (duration - age) * 4.2) * 0.9,
+            e.id * 3.1 + i * 8.7,
+          );
+        }
+        const sparkCount = lightMode
+          ? 5
+          : this.quality === 'cinematic'
+            ? 12
+            : 9;
+        for (let i = 0; i < sparkCount; i++) {
+          const angle = ((i + rand() * 0.55) / sparkCount) * Math.PI * 2,
+            speed = 85 + rand() * 95,
+            duration = 0.3 + rand() * 0.22,
+            lift = 1.3 + rand() * 2.2;
+          if (age >= duration) continue;
+          const travel = (7 + speed * age) * s,
+            length = (0.6 + speed * 0.006) * s;
+          const index = spriteCount++;
+          this.puff(
+            index,
+            e,
+            age,
+            6,
+            Math.cos(angle) * travel,
+            Math.sin(angle) * travel,
+            Math.max(0.18, 1.7 + lift * age - 4.9 * age * age),
+            length,
+            Math.min(1, (duration - age) * 8),
+            e.id * 11.3 + i,
+          );
+          const spark = this.sprites[index];
+          spark.rotation.z = angle;
+          spark.scaling.y = (0.16 + 0.05 * s) * (1 - (age / duration) * 0.5);
+        }
+        if (age < 0.65)
+          this.puff(
+            spriteCount++,
+            e,
+            age,
+            2,
+            0,
+            0,
+            0.11,
+            (2.8 + Math.sqrt(age) * 14) * s,
+            (1 - age / 0.65) * 0.86,
+            e.id * 4.7,
+          );
+        const smokeCount = lightMode ? 1 : 2;
+        for (let i = 0; i < smokeCount; i++) {
+          const t = age - 0.045 - i * 0.07;
+          if (t < 0 || t >= 1.05) continue;
+          this.puff(
+            spriteCount++,
+            e,
+            t,
+            1,
+            (i === 0 ? -7 : 8) * s + t * 7,
+            (i === 0 ? -4 : 5) * s,
+            1.6 + t * 2.3,
+            (1.8 + Math.sqrt(t) * 2.5) * s,
+            Math.min(1, t * 12) * (1 - t / 1.05) * 0.55,
+            e.id * 7.3 + i * 13.1,
+          );
+        }
+        const energy = Math.max(0, 1 - age / 0.27) ** 2 * s * 1.5;
+        if (!lightMode && energy > brightest) {
+          brightest = energy;
+          this.light.position.copyFrom(worldPosition(e.x, e.y, 3));
+          this.light.intensity = energy * 95;
+          this.light.range = 20 + s * 10;
+          this.light.diffuse.set(
+            e.weapon === 5 ? 0.24 : e.weapon === 3 ? 0.68 : 1,
+            e.weapon === 5 ? 0.75 : e.weapon === 3 ? 0.25 : 0.49,
+            e.weapon === 5 || e.weapon === 3 ? 1 : 0.12,
+          );
+        }
+        continue;
+      }
       if (e.kind === 'impact') {
         if (age < 0.28)
           this.puff(
@@ -384,6 +510,7 @@ export class ExplosionEffects {
         this.light.position.copyFrom(worldPosition(e.x, e.y, 3 * s));
         this.light.intensity = energy * 95;
         this.light.range = 25 + s * 13;
+        this.light.diffuse.set(1, 0.42, 0.095);
       }
     }
     for (let i = spriteCount; i < this.sprites.length; i++)

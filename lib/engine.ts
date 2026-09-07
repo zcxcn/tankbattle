@@ -104,6 +104,8 @@ export type Explosion = Vec & {
   scale: number;
   kind: 'armor' | 'shell' | 'masonry' | 'fuel' | 'impact';
   weapon?: number;
+  /** A received armor hit, with stronger but short-lived visual feedback. */
+  playerHit?: boolean;
 };
 export type Input = {
   x: number;
@@ -907,8 +909,24 @@ export class Battle {
     p.hp = Math.max(0, p.hp - damage);
     p.slow = Math.max(p.slow ?? 0, bullet?.slow ?? 0);
     this.shield = 0.22;
-    this.shake = Math.max(this.shake, 8);
+    this.shake = Math.max(
+      this.shake,
+      sameSalvo ? 8 : bullet?.weapon === 1 ? 10 : 14,
+    );
     this.impact(bullet?.x ?? p.x, bullet?.y ?? p.y, bullet?.weapon ?? 0, 0.65);
+    if (!sameSalvo) {
+      // Keep the original particle burst and its RNG consumption. Only enrich
+      // the visual descriptor, once per volley, without adding splash damage.
+      const hit = this.explosions[this.explosions.length - 1];
+      const dx = hit.x - p.x,
+        dy = hit.y - p.y;
+      const hull = Math.min(1, p.radius / (Math.hypot(dx, dy) || 1));
+      hit.x = p.x + dx * hull;
+      hit.y = p.y + dy * hull;
+      hit.scale =
+        bullet?.weapon === 1 ? 0.9 : 1.2 + Math.min(0.4, damage / 120);
+      hit.playerHit = true;
+    }
     if (!sameSalvo) this.onSound?.('hit', bullet?.weapon ?? 0);
   }
   private impact(x: number, y: number, weapon: number, scale = 0.45) {

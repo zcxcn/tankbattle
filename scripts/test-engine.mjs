@@ -1402,7 +1402,7 @@ test('enemy specialists own seven distinct weapons and player hits emit matching
     assert(b.player.hp < hp);
     assert(
       b.explosions.some(
-        (e) => e.kind === 'impact' && e.weapon === bullet.weapon,
+        (e) => e.kind === 'impact' && e.weapon === bullet.weapon && e.playerHit,
       ),
     );
     assert.equal(b.kills, 0);
@@ -1429,6 +1429,11 @@ test('same shotgun volley aggregates pellets while shields still block subsequen
   }));
   b.step(0.05, idle);
   assert.equal(b.player.hp, hp - 40);
+  assert.equal(
+    b.explosions.filter((e) => e.playerHit).length,
+    1,
+    'one enhanced blast per shotgun volley',
+  );
   b.bullets = [
     { x: 530, y: 500, vx: -1000, vy: 0, damage: 40, enemy: true, life: 1 },
   ];
@@ -1450,6 +1455,43 @@ test('same shotgun volley aggregates pellets while shields still block subsequen
   ];
   b.step(0.01, idle);
   assert.equal(b.player.hp, hp - 40);
+  assert.equal(
+    b.explosions.filter((e) => e.playerHit).length,
+    1,
+    'blocked shots add no damage blast',
+  );
+});
+test('received armor hits stay on the hull, keep damage exact, and do not produce wrecks or extra combat randomness', () => {
+  for (const weapon of [0, 1, 3, 5, 6]) {
+    const b = quiet(0),
+      control = quiet(0);
+    Object.assign(b.player, { x: 500, y: 500 });
+    Object.assign(control.player, { x: 500, y: 500 });
+    const hp = b.player.hp;
+    // A near miss can hurt through splash: the hit should still read on the hull.
+    const shell = { x: 580, y: 520, weapon, slow: 0 };
+    b.playerHit(24, shell);
+    control.impact(shell.x, shell.y, weapon, 0.65);
+    const hit = b.explosions.find((e) => e.playerHit);
+    assert(hit);
+    assert(Math.hypot(hit.x - 500, hit.y - 500) <= b.player.radius + 1e-8);
+    assert(hit.scale > 0.65 && hit.scale <= 1.6);
+    assert.equal(b.player.hp, hp - 24);
+    assert.equal(b.shield, 0.22);
+    assert(b.shake > 8 && b.shake <= 14);
+    assert.equal(b.explosions.length, 1);
+    assert.equal(hit.kind, 'impact');
+    assert.equal(b.kills, 0);
+    assert.equal(
+      b.random(),
+      control.random(),
+      'stronger visuals cannot affect combat RNG',
+    );
+    b.shield = 4;
+    b.playerHit(90, shell);
+    assert.equal(b.player.hp, hp - 24);
+    assert.equal(b.explosions.length, 1);
+  }
 });
 test('music switching on gamepad View uses a release edge and saves validate the selected score', () => {
   const reader = new PadReader();
