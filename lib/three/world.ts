@@ -14,9 +14,9 @@ import {
   TransformNode,
   Vector3,
   VertexData,
+  type Material,
 } from './babylon';
 import { Battle, W, H, ENEMY_GATES, seeded, type Wall } from '../engine';
-import { box } from './tank-model';
 import { type Materials, type Quality, pbr, emissive } from './materials';
 import { buildLivingCover, createNature, natureMaterials } from './nature';
 import { applySurface } from './surface-textures';
@@ -39,11 +39,144 @@ export type World = {
 const skyVertex = `precision highp float;attribute vec3 position;uniform mat4 worldViewProjection;varying vec3 vPosition;void main(){vPosition=position;gl_Position=worldViewProjection*vec4(position,1.);}`;
 const skyFragment = `precision highp float;varying vec3 vPosition;uniform vec3 horizon;uniform vec3 zenith;
 float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1.,0.)),f.x),mix(hash(i+vec2(0.,1.)),hash(i+vec2(1.,1.)),f.x),f.y);}void main(){vec3 d=normalize(vPosition);float h=max(0.,d.y);vec3 col=mix(horizon,zenith,pow(h,.55));float cloud=noise(d.xz/(h+.18)*3.)*.6+noise(d.xz/(h+.18)*8.)*.3+noise(d.xz/(h+.18)*20.)*.1;col=mix(col,col*.55+vec3(.13),smoothstep(.42,.7,cloud)*smoothstep(.0,.18,h)*.65);float sun=pow(max(0.,dot(d,normalize(vec3(-.6,.3,-.7)))),300.);float glow=pow(max(0.,dot(d,normalize(vec3(-.6,.3,-.7)))),9.);col+=vec3(1.,.69,.35)*sun*2.5+vec3(.26,.14,.04)*glow;gl_FragColor=vec4(col,1.);}`;
+type StaticBox = {
+  name: string;
+  size: [number, number, number];
+  position: Vector3;
+  rotation: Vector3;
+  material: Material;
+  tile?: number;
+};
+const pendingBoxes = new WeakMap<TransformNode, StaticBox[]>();
+const unitBox = VertexData.CreateBox({ size: 1 });
+// Keep architectural parts as plain transforms until the parent is complete.
+// Creating/discarding tens of thousands of temporary Babylon meshes blocks the
+// UI and retains their buffers in deferred scene notifications. These parts go
+// straight into the same final material batches without changing their detail.
+function box(
+  _scene: Scene,
+  name: string,
+  size: [number, number, number],
+  at: [number, number, number],
+  material: Material,
+  parent: TransformNode,
+): StaticBox {
+  const part: StaticBox = {
+    name,
+    size,
+    position: new Vector3(...at),
+    rotation: Vector3.Zero(),
+    material,
+  };
+  let parts = pendingBoxes.get(parent);
+  if (!parts) pendingBoxes.set(parent, (parts = []));
+  parts.push(part);
+  return part;
+}
+function flushBoxes(parent: TransformNode, chunks: boolean) {
+  const parts = pendingBoxes.get(parent);
+  if (!parts) return;
+  pendingBoxes.delete(parent);
+  const groups = new Map<string, StaticBox[]>();
+  for (const part of parts) {
+    const chunk = chunks
+      ? Math.floor(part.position.x / 40) +
+        ',' +
+        Math.floor(part.position.z / 40)
+      : 'all';
+    const key = part.material.uniqueId + ':' + chunk;
+    let group = groups.get(key);
+    if (!group) groups.set(key, (group = []));
+    group.push(part);
+  }
+  const basis = unitBox.positions!,
+    baseNormals = unitBox.normals!,
+    baseUV = unitBox.uvs!,
+    baseIndices = unitBox.indices!,
+    vertexCount = basis.length / 3,
+    rotation = Matrix.Identity();
+  for (const [key, group] of groups) {
+    const positions = new Float32Array(group.length * basis.length),
+      normals = new Float32Array(positions.length),
+      uv = new Float32Array(group.length * baseUV.length),
+      indices =
+        group.length * vertexCount > 65535
+          ? new Uint32Array(group.length * baseIndices.length)
+          : new Uint16Array(group.length * baseIndices.length);
+    for (let item = 0; item < group.length; item++) {
+      const part = group[item],
+        offset = item * basis.length;
+      Matrix.RotationYawPitchRollToRef(
+        part.rotation.y,
+        part.rotation.x,
+        part.rotation.z,
+        rotation,
+      );
+      const transform = rotation.m;
+      for (let v = 0; v < vertexCount; v++) {
+        const i = v * 3,
+          x = basis[i] * part.size[0],
+          y = basis[i + 1] * part.size[1],
+          z = basis[i + 2] * part.size[2],
+          nx = baseNormals[i],
+          ny = baseNormals[i + 1],
+          nz = baseNormals[i + 2];
+        positions[offset + i] =
+          x * transform[0] +
+          y * transform[4] +
+          z * transform[8] +
+          part.position.x;
+        positions[offset + i + 1] =
+          x * transform[1] +
+          y * transform[5] +
+          z * transform[9] +
+          part.position.y;
+        positions[offset + i + 2] =
+          x * transform[2] +
+          y * transform[6] +
+          z * transform[10] +
+          part.position.z;
+        normals[offset + i] =
+          nx * transform[0] + ny * transform[4] + nz * transform[8];
+        normals[offset + i + 1] =
+          nx * transform[1] + ny * transform[5] + nz * transform[9];
+        normals[offset + i + 2] =
+          nx * transform[2] + ny * transform[6] + nz * transform[10];
+        const uvIndex = item * baseUV.length + v * 2;
+        if (part.tile) {
+          uv[uvIndex] =
+            (Math.abs(nx) > 0.5 ? z + part.position.z : x + part.position.x) /
+            part.tile;
+          uv[uvIndex + 1] =
+            (Math.abs(ny) > 0.5 ? z + part.position.z : y + part.position.y) /
+            part.tile;
+        } else {
+          uv[uvIndex] = baseUV[v * 2];
+          uv[uvIndex + 1] = baseUV[v * 2 + 1];
+        }
+      }
+      for (let i = 0; i < baseIndices.length; i++)
+        indices[item * baseIndices.length + i] =
+          baseIndices[i] + item * vertexCount;
+    }
+    const mesh = new Mesh(group[0].name + '-batched', parent.getScene()),
+      data = new VertexData();
+    data.positions = positions;
+    data.normals = normals;
+    data.uvs = uv;
+    data.indices = indices;
+    data.applyToMesh(mesh);
+    mesh.parent = parent;
+    mesh.material = group[0].material;
+    mesh.metadata = { staticChunk: key.slice(key.indexOf(':') + 1) };
+  }
+}
 function mergeStatic(parent: TransformNode, chunks = false) {
+  flushBoxes(parent, chunks);
   const groups = new Map<string, Mesh[]>();
   for (const child of parent.getChildMeshes(true)) {
     if (!(child instanceof Mesh) || !child.material) continue;
-    const key = `${child.material.uniqueId}:${chunks ? Math.floor(child.position.x / 40) + ',' + Math.floor(child.position.z / 40) : 'all'}`;
+    const key = `${child.material.uniqueId}:${chunks ? (child.metadata?.staticChunk ?? Math.floor(child.position.x / 40) + ',' + Math.floor(child.position.z / 40)) : 'all'}`;
     const g = groups.get(key) || [];
     g.push(child);
     groups.set(key, g);
@@ -79,20 +212,9 @@ function surfaceBox(
   parent: TransformNode,
   tile = 3,
 ) {
-  const mesh = box(scene, name, size, at, material, parent),
-    positions = mesh.getVerticesData('position')!,
-    normals = mesh.getVerticesData('normal')!,
-    uv: number[] = [];
-  for (let i = 0; i < positions.length; i += 3) {
-    const x = positions[i] + at[0],
-      y = positions[i + 1] + at[1],
-      z = positions[i + 2] + at[2];
-    if (Math.abs(normals[i + 1]) > 0.5) uv.push(x / tile, z / tile);
-    else if (Math.abs(normals[i]) > 0.5) uv.push(z / tile, y / tile);
-    else uv.push(x / tile, y / tile);
-  }
-  mesh.setVerticesData('uv', uv);
-  return mesh;
+  const part = box(scene, name, size, at, material, parent);
+  part.tile = tile;
+  return part;
 }
 export function createWorld(
   scene: Scene,

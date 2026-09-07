@@ -302,10 +302,15 @@ export default function BattleGame({
     clearInput.current = clear;
     const keydown = (event: KeyboardEvent) => {
       const k = event.key.toLowerCase();
+      // Dialogs own their keyboard defaults (including Space on buttons).
+      // Reject inactive combat before preventing browser/UI key handling.
+      if (event.defaultPrevented || b.paused || b.result || !initialized)
+        return;
       if (
-        k !== 'escape' &&
         event.target instanceof Element &&
-        event.target.closest('input, textarea, select')
+        event.target.closest(
+          'input, textarea, select, [contenteditable=""], [contenteditable="true"], [role="dialog"], [role="alertdialog"]',
+        )
       )
         return;
       if (
@@ -348,7 +353,6 @@ export default function BattleGame({
         fullscreen();
         return;
       }
-      if (b.paused || !initialized) return;
       keys.add(k);
       if (!event.repeat && k === ' ') controls.current.dash = true;
       if (!event.repeat && k === 'e') controls.current.emp = true;
@@ -544,7 +548,9 @@ export default function BattleGame({
       }
       r.draw(b, controls.current.aim);
       renderDirty.current = false;
-      if (now > nextHud) {
+      // The finale stops simulation/HUD polling. Publish its final state even
+      // when the decisive hit lands between the usual 100/150 ms updates.
+      if (now > nextHud || b.result) {
         nextHud = now + (mobile ? 150 : 100);
         musicCallback.current(
           b.player.hp / b.player.maxHp < 0.3
