@@ -1,5 +1,13 @@
 # 钢铁余烬 · IRON EMBERS
 
+## 🎮 [点击立即试玩网页版 →](https://zcxcn.github.io/tankbattle/)
+
+**试玩地址：[zcxcn.github.io/tankbattle](https://zcxcn.github.io/tankbattle/)**
+
+无需安装，打开浏览器即可开战。支持键鼠和手柄。
+
+---
+
 项目同时包含使用 Godot 制作的 Windows PC 原生重制版，以及使用 **Babylon.js 9.25** 的网页版 3D 坦克动作游戏。网页版原有代码、部署方式和 Android 基线继续保留。
 
 ## Godot PC 原生重制
