@@ -40,8 +40,80 @@ func _run() -> void:
 	await _frames(5)
 	_check(game.mode == "playing", "start action enters Chapter 01")
 	_check(game.enemies.size() == 7, "mission creates six enemies and Iron Fang")
+	var player_turret := game.player.get_node_or_null("ArmoredModel/TurretPivot") as Node3D
+	var player_recoil := game.player.get_node_or_null("ArmoredModel/TurretPivot/GunRecoil") as Node3D
+	var player_muzzle := game.player.get_node_or_null("ArmoredModel/TurretPivot/GunRecoil/Muzzle") as Marker3D
+	var player_hull := game.player.get_node_or_null("ArmoredModel/Hull") as Node3D
+	_check(
+		player_turret != null and player_recoil != null and player_muzzle != null,
+		"downloaded tank model preserves turret, recoil and muzzle gameplay anchors"
+	)
+	_check(
+		player_hull != null and player_hull.get_meta("source_model", "") == "tank",
+		"player uses the curated animated armored model"
+	)
+	if player_turret != null and player_muzzle != null:
+		var muzzle_direction := (player_muzzle.global_position - player_turret.global_position).normalized()
+		_check(
+			muzzle_direction.dot(-player_turret.global_basis.z) > 0.94,
+			"modeled gun and projectile muzzle share the same forward axis"
+		)
 	var regular: Array = game.enemies.filter(func(tank: TankActor) -> bool: return not tank.is_boss)
 	_check(regular.size() == 6 and not game.boss.active, "boss remains shielded behind the first objective")
+	var model_keys: Dictionary = {}
+	var centered_visuals := true
+	var muzzle_contracts := true
+	var complete_track_sets := true
+	var model_tanks: Array = [game.player]
+	model_tanks.append_array(game.enemies)
+	var required_track_animations := [
+		"TankArmature|Tank_Forward",
+		"TankArmature|Tank_Backwards",
+		"TankArmature|Tank_TurningLeft",
+		"TankArmature|Tank_TurningRight",
+	]
+	for tank: TankActor in model_tanks:
+		var hull := tank.get_node_or_null("ArmoredModel/Hull") as Node3D
+		if hull != null:
+			model_keys[hull.get_meta("source_model", "")] = true
+			centered_visuals = centered_visuals and absf(hull.position.x) < 0.05
+			var animator := hull.get_node_or_null("AnimationPlayer") as AnimationPlayer
+			if animator == null:
+				complete_track_sets = false
+			else:
+				for animation_name: String in required_track_animations:
+					complete_track_sets = complete_track_sets and animator.has_animation(animation_name)
+		else:
+			centered_visuals = false
+			complete_track_sets = false
+		var turret := tank.get_node_or_null("ArmoredModel/TurretPivot") as Node3D
+		var muzzle := tank.get_node_or_null("ArmoredModel/TurretPivot/GunRecoil/Muzzle") as Marker3D
+		if turret == null or muzzle == null:
+			muzzle_contracts = false
+		else:
+			var muzzle_offset := muzzle.global_position - turret.global_position
+			muzzle_contracts = muzzle_contracts and muzzle_offset.length() > 1.4
+			muzzle_contracts = muzzle_contracts and muzzle_offset.normalized().dot(-turret.global_basis.z) > 0.94
+	_check(model_keys.size() == 4, "enemy roster uses all four distinct armored silhouettes")
+	_check(centered_visuals, "all four skinned hulls stay centered on their gameplay collision")
+	_check(muzzle_contracts, "all four modeled guns preserve a forward external muzzle")
+	_check(complete_track_sets, "all four armored silhouettes preserve their complete track animation set")
+	var player_animator := player_hull.get_node_or_null("AnimationPlayer") as AnimationPlayer if player_hull != null else null
+	game.player.velocity = Vector3(0.0, 0.0, -3.0)
+	game.player._update_track_animation()
+	_check(
+		player_animator != null and player_animator.is_playing() and player_animator.current_animation == "TankArmature|Tank_Forward",
+		"vehicle movement drives the imported track skeleton"
+	)
+	game.player.velocity = Vector3.ZERO
+	if player_animator != null:
+		player_animator.pause()
+	var left_rocket_muzzle := game.boss.get_node_or_null("ArmoredModel/TurretPivot/RocketPodLeft/RocketMuzzleLeft") as Marker3D
+	var right_rocket_muzzle := game.boss.get_node_or_null("ArmoredModel/TurretPivot/RocketPodRight/RocketMuzzleRight") as Marker3D
+	_check(
+		left_rocket_muzzle != null and right_rocket_muzzle != null and left_rocket_muzzle.global_position.distance_to(right_rocket_muzzle.global_position) > 2.0,
+		"Iron Fang salvo has distinct left and right rocket launch points"
+	)
 	var clear_spawns := true
 	for tank: TankActor in regular:
 		for cover: Node in get_tree().get_nodes_in_group("destructible_cover"):

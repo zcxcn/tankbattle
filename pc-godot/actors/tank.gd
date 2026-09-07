@@ -7,6 +7,19 @@ signal boss_phase_changed(phase: int)
 
 const TEAM_PLAYER := 0
 const TEAM_ENEMY := 1
+const MODEL_SCALE := 0.35
+const MODEL_SCENES := {
+	"tank": preload("res://assets/models/quaternius/animated_tanks/Tank.glb"),
+	"tank2": preload("res://assets/models/quaternius/animated_tanks/Tank2.glb"),
+	"tank3": preload("res://assets/models/quaternius/animated_tanks/Tank3.glb"),
+	"tank4": preload("res://assets/models/quaternius/animated_tanks/Tank4.glb"),
+}
+const MODEL_SOURCE_ANCHORS := {
+	"tank": Vector3(0.0, -0.012609, -0.07009),
+	"tank2": Vector3(0.0, -0.012609, -0.07009),
+	"tank3": Vector3(0.0, -0.012609, -0.06748),
+	"tank4": Vector3(0.0, -0.012609, -0.05219),
+}
 
 var game: Node
 var team := TEAM_PLAYER
@@ -40,8 +53,11 @@ var ai_state := "spawn"
 
 var _model: Node3D
 var _turret: Node3D
-var _barrel: MeshInstance3D
+var _barrel: Node3D
 var _muzzle: Marker3D
+var _rocket_muzzles: Array[Marker3D] = []
+var _track_animator: AnimationPlayer
+var _track_animation := ""
 var _camera_pivot: Node3D
 var _camera_arm: SpringArm3D
 var camera: Camera3D
@@ -51,7 +67,7 @@ var _salvo_clock := 5.0
 var _charge_clock := 0.0
 var _strafe_sign := 1.0
 var _rng := RandomNumberGenerator.new()
-var _base_barrel_z := -2.25
+var _base_barrel_z := 0.0
 var _recoil := 0.0
 var _last_move := Vector3.FORWARD
 var _camera_shake := 0.0
@@ -77,9 +93,9 @@ func _build_collision() -> void:
 	floor_max_angle = deg_to_rad(48.0)
 	var collider := CollisionShape3D.new()
 	var shape := BoxShape3D.new()
-	shape.size = Vector3(3.25, 1.45, 5.15) * (1.22 if is_boss else 1.0)
+	shape.size = Vector3(3.55, 2.25, 5.25) * (1.22 if is_boss else 1.0)
 	collider.shape = shape
-	collider.position.y = 0.82
+	collider.position.y = 1.14 * (1.22 if is_boss else 1.0)
 	add_child(collider)
 
 
@@ -137,48 +153,179 @@ func _build_model() -> void:
 	_model.name = "ArmoredModel"
 	_model.scale = Vector3.ONE * (1.18 if is_boss else 1.0)
 	add_child(_model)
-	var body_color := Color("526248") if is_player else (Color("703b33") if not is_boss else Color("6f2925"))
-	var armor_mat := ArtFactory.material(body_color, 0.78, 0.34)
-	var edge_mat := ArtFactory.material(body_color.lightened(0.12), 0.72, 0.29)
-	var dark_mat := ArtFactory.material(Color("171b18"), 0.66, 0.53)
-	var steel_mat := ArtFactory.material(Color("697066"), 0.9, 0.25)
-	var accent := ArtFactory.material(Color("45e1e6") if is_player else Color("ff4b3d"), 0.2, 0.26, 4.0)
-	ArtFactory.add_box(_model, "LowerHull", Vector3(0, 0.72, 0.18), Vector3(3.2, 0.72, 5.15), armor_mat)
-	var glacis := ArtFactory.add_box(_model, "Glacis", Vector3(0, 1.16, -1.35), Vector3(2.92, 0.5, 2.15), edge_mat)
-	glacis.rotation.x = deg_to_rad(-8.0)
-	ArtFactory.add_box(_model, "EngineDeck", Vector3(0, 1.1, 1.72), Vector3(2.85, 0.42, 1.28), dark_mat)
-	ArtFactory.add_box(_model, "LeftTrack", Vector3(-1.78, 0.55, 0.15), Vector3(0.46, 0.78, 5.55), dark_mat)
-	ArtFactory.add_box(_model, "RightTrack", Vector3(1.78, 0.55, 0.15), Vector3(0.46, 0.78, 5.55), dark_mat)
-	for side in [-1.0, 1.0]:
-		for z in [-1.9, -0.95, 0.0, 0.95, 1.9]:
-			var wheel := ArtFactory.add_cylinder(_model, "RoadWheel", Vector3(side * 1.82, 0.53, z), 0.43, 0.25, steel_mat, 14)
-			wheel.rotation.z = PI * 0.5
-		for z in [-2.55, -2.3, -2.05, -1.8, -1.55, -1.3, -1.05, -0.8, -0.55, -0.3, -0.05, 0.2, 0.45, 0.7, 0.95, 1.2, 1.45, 1.7, 1.95, 2.2, 2.45]:
-			ArtFactory.add_box(_model, "TrackPad", Vector3(side * 1.8, 0.92, z), Vector3(0.55, 0.08, 0.2), steel_mat)
+	var model_key := _model_key()
+	var scene_resource: PackedScene = MODEL_SCENES.get(model_key) as PackedScene
+	assert(scene_resource != null, "Missing armored vehicle model: %s" % model_key)
+	var imported := scene_resource.instantiate() as Node3D
+	assert(imported != null, "Armored vehicle model is not a Node3D: %s" % model_key)
+	imported.name = "Hull"
+	imported.set_meta("source_model", model_key)
+	var imported_turret := imported.get_node_or_null("Tank_Turret") as MeshInstance3D
+	var imported_gun := imported.get_node_or_null("Tank_Gun") as MeshInstance3D
+	assert(imported_turret != null and imported_gun != null, "Tank model lacks separate turret or gun nodes")
+
+	# The source pack faces -X and is authored at a larger scale. Skinned mesh
+	# AABBs omit the skeleton's inverse-bind transform, so use measured rest-pose
+	# anchors to keep every visible hull centered on its gameplay collision.
+	var source_anchor: Vector3 = MODEL_SOURCE_ANCHORS[model_key]
+	var imported_basis := Basis(Vector3.UP, -PI * 0.5).scaled(Vector3.ONE * MODEL_SCALE)
+	imported.transform = Transform3D(imported_basis, -(imported_basis * source_anchor))
+	_model.add_child(imported)
+
+	var turret_transform := imported.transform * imported_turret.transform
+	var gun_transform := imported.transform * imported_gun.transform
 	_turret = Node3D.new()
 	_turret.name = "TurretPivot"
-	_turret.position.y = 1.48
+	_turret.position = turret_transform.origin
 	_model.add_child(_turret)
-	ArtFactory.add_cylinder(_turret, "TurretRing", Vector3.ZERO, 1.18, 0.48, armor_mat, 20)
-	var turret_shell := ArtFactory.add_box(_turret, "TurretArmor", Vector3(0, 0.34, -0.18), Vector3(2.45, 0.72, 2.2), edge_mat)
-	turret_shell.rotation.x = deg_to_rad(-4.0)
-	_barrel = ArtFactory.add_cylinder(_turret, "Cannon", Vector3(0, 0.38, _base_barrel_z), 0.16 if not is_boss else 0.21, 3.55, steel_mat, 14)
-	_barrel.rotation.x = PI * 0.5
-	ArtFactory.add_cylinder(_turret, "Mantlet", Vector3(0, 0.38, -1.17), 0.42, 0.48, dark_mat, 16).rotation.x = PI * 0.5
+	imported_turret.reparent(_turret, false)
+	imported_turret.transform = Transform3D(turret_transform.basis, Vector3.ZERO)
+
+	_barrel = Node3D.new()
+	_barrel.name = "GunRecoil"
+	_barrel.position = gun_transform.origin - turret_transform.origin
+	_base_barrel_z = _barrel.position.z
+	_turret.add_child(_barrel)
+	imported_gun.reparent(_barrel, false)
+	imported_gun.transform = Transform3D(gun_transform.basis, Vector3.ZERO)
+
 	_muzzle = Marker3D.new()
 	_muzzle.name = "Muzzle"
-	_muzzle.position = Vector3(0, 0.38, -4.08)
-	_turret.add_child(_muzzle)
-	ArtFactory.add_box(_turret, "Optics", Vector3(0.64, 0.93, -0.15), Vector3(0.34, 0.35, 0.52), dark_mat)
-	ArtFactory.add_box(_turret, "IFF", Vector3(-0.62, 0.94, 0.08), Vector3(0.22, 0.22, 0.22), accent)
-	for side in [-1.0, 1.0]:
-		ArtFactory.add_box(_model, "ReactiveArmor", Vector3(side * 1.48, 1.22, -0.35), Vector3(0.22, 0.48, 2.8), edge_mat)
+	_muzzle.position = Vector3(0, 0, _gun_forward_extent(imported_gun) - 0.08)
+	_barrel.add_child(_muzzle)
+
+	_track_animator = imported.get_node_or_null("AnimationPlayer") as AnimationPlayer
+	_configure_track_animations()
+	_tune_imported_materials()
+	_add_vehicle_equipment()
+
+
+func _model_key() -> String:
 	if is_boss:
+		return "tank4"
+	if is_player:
+		return "tank"
+	match archetype:
+		"scout":
+			return "tank2"
+		"heavy":
+			return "tank3"
+		"sniper":
+			return "tank4"
+		_:
+			return "tank"
+
+
+func _gun_forward_extent(gun_mesh: MeshInstance3D) -> float:
+	var bounds := gun_mesh.get_aabb()
+	var forward_extent := 0.0
+	for x in [bounds.position.x, bounds.end.x]:
+		for y in [bounds.position.y, bounds.end.y]:
+			for z in [bounds.position.z, bounds.end.z]:
+				var point := gun_mesh.transform * Vector3(x, y, z)
+				forward_extent = minf(forward_extent, point.z)
+	return minf(-0.6, forward_extent)
+
+
+func _configure_track_animations() -> void:
+	if not is_instance_valid(_track_animator):
+		return
+	for animation_name: StringName in _track_animator.get_animation_list():
+		var animation := _track_animator.get_animation(animation_name)
+		if animation != null:
+			animation.loop_mode = Animation.LOOP_LINEAR
+
+
+func _tune_imported_materials() -> void:
+	var body_color := Color("53624a") if is_player else (Color("783c34") if not is_boss else Color("682a27"))
+	var materials := {
+		"armor": ArtFactory.material(body_color, 0.12, 0.68),
+		"light": ArtFactory.material(body_color.lightened(0.18), 0.16, 0.58),
+		"dark": ArtFactory.material(body_color.darkened(0.28), 0.24, 0.62),
+		"steel": ArtFactory.material(Color("2d312e"), 0.82, 0.42),
+	}
+	for node: Node in _model.find_children("*", "MeshInstance3D", true, false):
+		var mesh_instance := node as MeshInstance3D
+		if mesh_instance.mesh == null:
+			continue
+		for surface in range(mesh_instance.mesh.get_surface_count()):
+			var source_material := mesh_instance.mesh.surface_get_material(surface)
+			var material_name := source_material.resource_name.to_lower() if source_material != null else ""
+			var category := "armor"
+			if mesh_instance.name.begins_with("TrackMesh") or "wheel" in material_name:
+				category = "steel"
+			elif "dark" in material_name or "detail" in material_name:
+				category = "dark"
+			elif "light" in material_name:
+				category = "light"
+			mesh_instance.set_surface_override_material(surface, materials[category])
+
+
+func _add_vehicle_equipment() -> void:
+	var body_color := Color("53624a") if is_player else (Color("783c34") if not is_boss else Color("682a27"))
+	var armor := ArtFactory.material(body_color.darkened(0.04), 0.14, 0.66)
+	var armor_edge := ArtFactory.material(body_color.lightened(0.13), 0.18, 0.54)
+	var steel := ArtFactory.material(Color("242925"), 0.82, 0.39)
+	var soot := ArtFactory.material(Color("111412"), 0.55, 0.78)
+	var glass := ArtFactory.material(Color("4deaf0") if is_player else Color("ff5948"), 0.12, 0.22, 5.0)
+	var lamp := ArtFactory.material(Color("ffe4a1"), 0.08, 0.22, 1.8)
+	var convoy_light := ArtFactory.material(Color("76bbb6") if is_player else Color("a7463d"), 0.1, 0.34, 1.35)
+
+	# Headlights, convoy lights and exhausts make the hull readable in both
+	# close title shots and the tactical camera.
+	for side in [-1.0, 1.0]:
+		ArtFactory.add_box(_model, "Headlamp", Vector3(side * 1.0, 0.64, -2.28), Vector3(0.24, 0.17, 0.08), lamp)
+		ArtFactory.add_box(_model, "LampGuard", Vector3(side * 1.0, 0.64, -2.34), Vector3(0.32, 0.05, 0.035), steel)
+		ArtFactory.add_box(_model, "RearConvoyLight", Vector3(side * 1.0, 0.64, 2.24), Vector3(0.14, 0.11, 0.06), convoy_light)
+		ArtFactory.add_cylinder(_model, "Exhaust", Vector3(side * 1.02, 0.94, 1.9), 0.1, 0.48, soot, 12)
+
+	# Commander cupola, independent optics, smoke launchers and flexible radio
+	# masts add the top-surface detail that dominates this camera angle.
+	ArtFactory.add_cylinder(_turret, "CommanderCupola", Vector3(0.34, 0.52, 0.28), 0.34, 0.16, armor_edge, 20)
+	ArtFactory.add_box(_turret, "GunnerSight", Vector3(0.62, 0.48, -0.32), Vector3(0.25, 0.28, 0.34), steel)
+	ArtFactory.add_box(_turret, "SightGlass", Vector3(0.62, 0.52, -0.51), Vector3(0.14, 0.13, 0.04), glass)
+	for side in [-1.0, 1.0]:
+		var antenna := ArtFactory.add_cylinder(_turret, "RadioAntenna", Vector3(side * 0.68, 1.02, 0.62), 0.018, 1.55 if is_boss else 1.25, steel, 8)
+		antenna.rotation.z = deg_to_rad(side * 4.0)
+		for launcher_index in range(3):
+			var launcher := ArtFactory.add_cylinder(
+				_turret,
+				"SmokeLauncher",
+				Vector3(side * (0.88 + launcher_index * 0.08), 0.25, -0.26 + launcher_index * 0.23),
+				0.075,
+				0.42,
+				soot,
+				10
+			)
+			launcher.rotation_degrees = Vector3(58.0, 0.0, side * 18.0)
+
+	ArtFactory.add_box(_turret, "TeamIFF", Vector3(-0.48, 0.64, 0.18), Vector3(0.18, 0.18, 0.18), glass)
+	var muzzle_brake := ArtFactory.add_cylinder(_barrel, "MuzzleBrake", Vector3(0, 0, _muzzle.position.z + 0.18), 0.19 if is_boss else 0.14, 0.38, soot, 16)
+	muzzle_brake.rotation.x = PI * 0.5
+
+	if archetype == "heavy" and not is_boss:
 		for side in [-1.0, 1.0]:
-			var pod := ArtFactory.add_box(_turret, "RocketPod", Vector3(side * 1.34, 0.48, 0.2), Vector3(0.55, 0.65, 1.45), dark_mat)
+			for z in [-1.25, -0.42, 0.42, 1.25]:
+				ArtFactory.add_box(_model, "SideArmor", Vector3(side * 1.72, 1.08, z), Vector3(0.18, 0.54, 0.68), armor_edge)
+	elif archetype == "sniper" and not is_boss:
+		var sleeve := ArtFactory.add_cylinder(_barrel, "ThermalSleeve", Vector3(0, 0, _muzzle.position.z * 0.46), 0.18, 1.35, armor, 18)
+		sleeve.rotation.x = PI * 0.5
+
+	if is_boss:
+		ArtFactory.add_box(_turret, "CommandSensor", Vector3(0, 0.86, 0.38), Vector3(0.48, 0.42, 0.52), steel)
+		ArtFactory.add_sphere(_turret, "CommandOptic", Vector3(0, 1.12, 0.38), 0.18, glass, 16)
+		for side in [-1.0, 1.0]:
+			var side_name := "Left" if side < 0.0 else "Right"
+			var pod := ArtFactory.add_box(_turret, "RocketPod" + side_name, Vector3(side * 1.38, 0.34, 0.18), Vector3(0.62, 0.72, 1.52), steel)
 			for row in [-0.18, 0.18]:
-				for z in [-0.35, 0.05, 0.45]:
-					ArtFactory.add_cylinder(pod, "RocketTube", Vector3(row, 0.12, z), 0.11, 0.65, accent, 10).rotation.x = PI * 0.5
+				for z in [-0.44, 0.0, 0.44]:
+					var tube := ArtFactory.add_cylinder(pod, "RocketTube", Vector3(row, 0.06, z), 0.11, 0.68, soot, 12)
+					tube.rotation.x = PI * 0.5
+			var rocket_muzzle := Marker3D.new()
+			rocket_muzzle.name = "RocketMuzzle" + side_name
+			rocket_muzzle.position = Vector3(0.0, 0.06, -0.82)
+			pod.add_child(rocket_muzzle)
+			_rocket_muzzles.append(rocket_muzzle)
 
 
 func _build_camera() -> void:
@@ -211,6 +358,8 @@ func _physics_process(delta: float) -> void:
 	if destroyed or game == null or not game.is_combat_running():
 		if is_instance_valid(_engine_audio):
 			_engine_audio.volume_db = -80.0
+		if is_instance_valid(_track_animator):
+			_track_animator.pause()
 		return
 	reload = maxf(0.0, reload - delta)
 	mine_cooldown = maxf(0.0, mine_cooldown - delta)
@@ -232,6 +381,7 @@ func _physics_process(delta: float) -> void:
 	_apply_gravity(delta)
 	move_and_slide()
 	_update_turret(delta)
+	_update_track_animation()
 	_update_engine_audio()
 
 
@@ -314,15 +464,18 @@ func _update_boss_attack(delta: float, target: TankActor, distance: float) -> vo
 
 
 func _fire_boss_salvo(target: TankActor) -> void:
-	var base := (target.global_position - _muzzle.global_position).normalized()
 	var shots := 3 + boss_phase * 2
 	for index in range(shots):
+		var launch_marker := _rocket_muzzles[index % _rocket_muzzles.size()] if not _rocket_muzzles.is_empty() else _muzzle
+		var launch_position := launch_marker.global_position
+		var base := (target.global_position + Vector3.UP - launch_position).normalized()
 		var spread := deg_to_rad((float(index) - float(shots - 1) * 0.5) * (5.5 - boss_phase))
 		var direction := base.rotated(Vector3.UP, spread)
-		game.spawn_projectile(self, _muzzle.global_position, direction, projectile_damage * 0.72, projectile_speed * 0.9, 3.2, "rocket")
-	game.spawn_muzzle_flash(_muzzle.global_position, Color("ff593d"), 1.6)
-	AudioService.play_3d("cannon", _muzzle.global_position, -1.0, 0.68)
-	AudioService.play_3d("cannon_tail", _muzzle.global_position, -4.5, 0.82)
+		game.spawn_projectile(self, launch_position, direction, projectile_damage * 0.72, projectile_speed * 0.9, 3.2, "rocket")
+		game.spawn_muzzle_flash(launch_position, Color("ff593d"), 0.82)
+	var audio_origin := _rocket_muzzles[0].global_position if not _rocket_muzzles.is_empty() else _muzzle.global_position
+	AudioService.play_3d("cannon", audio_origin, -1.0, 0.68)
+	AudioService.play_3d("cannon_tail", audio_origin, -4.5, 0.82)
 
 
 func _set_planar_velocity(input_direction: Vector3, delta: float, speed: float) -> void:
@@ -379,6 +532,26 @@ func _update_engine_audio() -> void:
 	_engine_audio.pitch_scale = 0.76 + ratio * 0.62
 
 
+func _update_track_animation() -> void:
+	if not is_instance_valid(_track_animator):
+		return
+	var planar_speed := Vector2(velocity.x, velocity.z).length()
+	if planar_speed < 0.25:
+		_track_animator.pause()
+		return
+	var local_velocity := global_basis.inverse() * Vector3(velocity.x, 0, velocity.z)
+	var suffix := "Tank_Forward"
+	if absf(local_velocity.x) > absf(local_velocity.z) * 0.48:
+		suffix = "Tank_TurningRight" if local_velocity.x > 0.0 else "Tank_TurningLeft"
+	elif local_velocity.z > 0.0:
+		suffix = "Tank_Backwards"
+	var requested := "TankArmature|" + suffix
+	if _track_animation != requested or not _track_animator.is_playing():
+		_track_animation = requested
+		_track_animator.play(requested, 0.12)
+	_track_animator.speed_scale = clampf(planar_speed / maxf(move_speed, 0.1), 0.45, 1.7)
+
+
 func try_fire() -> bool:
 	if reload > 0.0 or stunned > 0.0 or destroyed or not active:
 		return false
@@ -388,7 +561,7 @@ func try_fire() -> bool:
 	direction = direction.normalized()
 	game.spawn_projectile(self, _muzzle.global_position, direction, projectile_damage, projectile_speed, 2.1 if is_boss or archetype == "heavy" else 0.0, "cannon")
 	game.spawn_muzzle_flash(_muzzle.global_position, Color("ffcc6d") if team == TEAM_PLAYER else Color("ff5c43"), 1.0 if not is_boss else 1.5)
-	_recoil = 0.7
+	_recoil = 0.46 if is_boss else 0.34
 	add_camera_shake(0.16)
 	var firing_pitch := 1.04 if is_player else (0.72 if is_boss else 0.9)
 	AudioService.play_3d("cannon", _muzzle.global_position, -3.0 if not is_boss else -1.0, firing_pitch)
