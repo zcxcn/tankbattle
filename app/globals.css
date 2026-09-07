@@ -261,7 +261,7 @@ h1 span {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: 61% 55%;
+  object-position: 66% 55%;
   z-index: -3;
   animation: reveal 1.1s ease-out;
 }
@@ -271,7 +271,7 @@ h1 span {
   z-index: -2;
   background:
     linear-gradient(0deg, #10150fee 0%, transparent 25%),
-    linear-gradient(90deg, #0e130dde 0%, #10130d48 47%, transparent 85%),
+    linear-gradient(90deg, #0e130d99 0%, #10130d24 43%, transparent 70%),
     linear-gradient(180deg, #11170c55, transparent 20%);
 }
 .art-topline {

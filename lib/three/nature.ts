@@ -1,35 +1,64 @@
-import { assetUrl } from '../asset-url';
 import {
   Mesh,
   MeshBuilder,
+  RawTexture,
   Scene,
   ShaderMaterial,
-  Texture,
   TransformNode,
   VertexData,
 } from './babylon';
 import { Battle, H, W, seeded, type Wall } from '../engine';
 import { pbr, type Quality } from './materials';
 import { box } from './tank-model';
+import { applySurface } from './surface-textures';
 
 export function natureMaterials(
   scene: Scene,
   assets: boolean,
   quality: Quality,
 ) {
-  const bark = pbr(scene, 'split-tree-bark', '#655641', 0, 0.97);
-  const leaves = pbr(scene, 'sunlit-olive-foliage', '#758757', 0, 0.94);
-  const pine = pbr(scene, 'pine-needle-clusters', '#435b48', 0, 0.96);
-  const stone = pbr(scene, 'weathered-ridge-stone', '#8c8c7b', 0, 0.94);
-  const soil = pbr(scene, 'overgrown-verge-soil', '#a1a285', 0, 0.98);
+  const bark = pbr(scene, 'split-tree-bark', '#b5aa96', 0, 0.97);
+  const leaves = pbr(scene, 'sunlit-olive-foliage', '#788664', 0, 0.94);
+  const pine = pbr(scene, 'pine-needle-clusters', '#566c5a', 0, 0.96);
+  const stone = pbr(scene, 'weathered-ridge-stone', '#acafa6', 0, 0.94);
+  const soil = pbr(scene, 'overgrown-verge-soil', '#b9b99e', 0, 0.98);
   leaves.backFaceCulling = false;
   pine.backFaceCulling = false;
-  if (assets && quality !== 'performance') {
-    const texture = new Texture(assetUrl('/woodland-ground.webp'), scene);
-    texture.anisotropicFilteringLevel = quality === 'cinematic' ? 8 : 4;
-    soil.albedoTexture = texture;
-    stone.albedoTexture = texture;
-    bark.albedoTexture = texture;
+  if (assets) {
+    const mobile = quality === 'performance';
+    applySurface(soil, scene, 'soil', { repeat: 1, mobile });
+    applySurface(stone, scene, 'rock', { repeat: 1, mobile, strength: 0.7 });
+    applySurface(bark, scene, 'bark', { repeat: 2, mobile, strength: 0.8 });
+    // A shared leaf-scale texture breaks up continuous canopy surfaces. It is
+    // procedural and deterministic; no tree creates an individual texture.
+    const size = mobile ? 64 : 128,
+      pixels = new Uint8Array(size * size * 4),
+      random = seeded(91831);
+    for (let y = 0; y < size; y++)
+      for (let x = 0; x < size; x++) {
+        const leaf = Math.max(
+            0,
+            Math.sin(x * 0.68 + Math.sin(y * 0.47)) *
+              Math.cos(y * 0.9 + x * 0.21),
+          ),
+          shadow = 0.49 + leaf * 0.45 + random() * 0.06,
+          at = (y * size + x) * 4;
+        pixels[at] = Math.round(shadow * 236);
+        pixels[at + 1] = Math.round(shadow * 255);
+        pixels[at + 2] = Math.round(shadow * 211);
+        pixels[at + 3] = 255;
+      }
+    const foliage = RawTexture.CreateRGBATexture(
+      pixels,
+      size,
+      size,
+      scene,
+      true,
+      false,
+    );
+    foliage.name = 'clustered-leaf-micro-colour';
+    foliage.uScale = foliage.vScale = 2;
+    leaves.albedoTexture = pine.albedoTexture = foliage;
   }
   return { bark, leaves, pine, stone, soil };
 }
@@ -56,12 +85,13 @@ function crown(
   for (let i = 0; i < vertices.length; i += 3) {
     const shade =
       0.74 + 0.24 * Math.sin(vertices[i] * 13 + vertices[i + 2] * 9 + seed);
-    const jitter = 0.85 + shade * 0.22;
+    const jitter =
+      0.83 + shade * 0.2 + 0.055 * Math.sin(vertices[i + 1] * 7 + seed * 2);
     vertices[i] *= jitter;
     vertices[i + 1] *= jitter;
     vertices[i + 2] *= jitter;
-    const light = 0.63 + 0.22 * (vertices[i + 1] + 1) + shade * 0.12;
-    colors.push(light, light, light * 0.94, 1);
+    const light = 0.62 + 0.18 * (vertices[i + 1] + 1) + shade * 0.1;
+    colors.push(light * 0.96, light, light * 0.9, 1);
   }
   // Built-in sphere indices retain Babylon's winding even in a RH scene.
   VertexData.ComputeNormals(vertices, mesh.getIndices()!, normals);
@@ -70,6 +100,7 @@ function crown(
   mesh.setVerticesData('color', colors);
   mesh.position.set(at[0], at[1], at[2]);
   mesh.scaling.set(scale[0], scale[1], scale[2]);
+  mesh.rotation.y = seed * 1.7;
   mesh.material = material;
   mesh.parent = parent;
   mesh.isPickable = false;
@@ -137,14 +168,37 @@ export function buildLivingCover(
   trunk.material = materials.bark;
   trunk.parent = solid;
   trunk.isPickable = false;
-  const clumps = low ? 5 : evergreen ? 12 : 11;
+  // Buttress roots keep tall trunks anchored to the ground and break the
+  // perfectly cylindrical silhouette without extending the colliding trunk.
+  for (let root = 0; root < (low ? 3 : 5); root++) {
+    const angle = (root * Math.PI * 2) / (low ? 3 : 5),
+      rootMesh = MeshBuilder.CreateCylinder(
+        'tree-buttress-root',
+        {
+          height: height * 0.19,
+          diameterBottom: width * 0.36,
+          diameterTop: 0.07,
+          tessellation: 5,
+        },
+        scene,
+      );
+    rootMesh.position.set(
+      Math.cos(angle) * width * 0.28,
+      height * 0.08,
+      Math.sin(angle) * width * 0.28,
+    );
+    rootMesh.rotation.set(Math.sin(angle) * 0.27, 0, -Math.cos(angle) * 0.27);
+    rootMesh.material = materials.bark;
+    rootMesh.parent = solid;
+  }
+  const clumps = low ? 6 : evergreen ? 14 : 12;
   for (let i = 0; i < clumps; i++) {
     const angle = i * 2.4 + rand() * 0.4;
     const tier = i / clumps;
-    const spread = evergreen ? (1 - tier) * 2.1 : 1.2 + rand() * 0.85;
+    const spread = evergreen ? (1 - tier) * 2.3 : 1.1 + rand() * 1.12;
     const y = evergreen
       ? height * (0.36 + tier * 0.58)
-      : height * (0.66 + rand() * 0.24);
+      : height * (0.55 + rand() * 0.38);
     const branch = MeshBuilder.CreateCylinder(
       'tree-branch',
       {
@@ -169,14 +223,43 @@ export function buildLivingCover(
       evergreen ? 'pine-bough' : 'broadleaf-canopy',
       [Math.cos(angle) * spread, y, Math.sin(angle) * spread],
       evergreen
-        ? [1.2 - tier * 0.5, 0.68, 1.2 - tier * 0.5]
-        : [1.3, 1 + rand() * 0.4, 1.35],
+        ? [1.12 - tier * 0.63, 0.3 + tier * 0.16, 1.12 - tier * 0.63]
+        : [0.8 + rand() * 0.2, 0.6 + rand() * 0.6, 0.83 + rand() * 0.22],
       i + index,
       evergreen ? materials.pine : materials.leaves,
       solid,
       low,
     );
+    if (!low) {
+      const twigAngle = angle + (i % 2 ? 0.58 : -0.58),
+        reach = spread + (evergreen ? 0.55 : 0.65);
+      crown(
+        scene,
+        evergreen ? 'pine-bough-tip' : 'broadleaf-canopy-offshoot',
+        [
+          Math.cos(twigAngle) * reach,
+          y + (evergreen ? -0.08 : 0.23),
+          Math.sin(twigAngle) * reach,
+        ],
+        evergreen ? [0.47, 0.21, 0.47] : [0.58, 0.48 + rand() * 0.22, 0.56],
+        index + i * 3.1,
+        evergreen ? materials.pine : materials.leaves,
+        solid,
+        false,
+      );
+    }
   }
+  if (evergreen)
+    crown(
+      scene,
+      'pine-bough-terminal-leader',
+      [0.03, height * 0.97, -0.02],
+      [0.3, 0.62, 0.3],
+      index + 31,
+      materials.pine,
+      solid,
+      low,
+    );
   const stump = MeshBuilder.CreateCylinder(
     'shattered-tree-stump',
     {

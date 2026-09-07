@@ -4,6 +4,7 @@ import {
   MeshBuilder,
   Scene,
   TransformNode,
+  Vector3,
   VertexData,
   type Material,
 } from './babylon';
@@ -51,10 +52,11 @@ function cylinder(
   material: Material,
   parent: TransformNode,
   rotationZ = 0,
+  tessellation = 16,
 ) {
   const m = MeshBuilder.CreateCylinder(
     name,
-    { diameter: radius * 2, height, tessellation: 16 },
+    { diameter: radius * 2, height, tessellation },
     scene,
   );
   m.position.set(...(at as [number, number, number]));
@@ -77,45 +79,146 @@ function armoredHull(
   const mesh = new Mesh(name, scene);
   const w = width / 2,
     l = length / 2;
-  const vertices = [
-    [-w, low, -l],
-    [w, low, -l],
-    [w, low, l],
-    [-w, low, l],
-    [-w * 0.83, high, -l * 0.87],
-    [w * 0.83, high, -l * 0.87],
-    [w * 0.76, high, l * 0.58],
-    [-w * 0.76, high, l * 0.58],
+  // Chamfer the corner plates instead of stretching a box into a wedge. The
+  // turret keeps its broad front cheeks, while the hull has a long glacis.
+  const turret = name === 'angular-turret';
+  const footprint = [
+    [-0.69, -1],
+    [0.69, -1],
+    [1, -0.7],
+    [1, 0.58],
+    [0.66, 1],
+    [-0.66, 1],
+    [-1, 0.58],
+    [-1, -0.7],
   ];
-  const faces = [
-    [0, 1, 2, 3],
-    [4, 7, 6, 5],
-    [0, 4, 5, 1],
-    [1, 5, 6, 2],
-    [2, 6, 7, 3],
-    [3, 7, 4, 0],
+  const roof = turret
+    ? [
+        [-0.59, -0.9],
+        [0.59, -0.9],
+        [0.77, -0.62],
+        [0.75, 0.42],
+        [0.48, 0.75],
+        [-0.48, 0.75],
+        [-0.75, 0.42],
+        [-0.77, -0.62],
+      ]
+    : [
+        [-0.62, -0.88],
+        [0.62, -0.88],
+        [0.83, -0.68],
+        [0.76, 0.35],
+        [0.58, 0.6],
+        [-0.58, 0.6],
+        [-0.76, 0.35],
+        [-0.83, -0.68],
+      ];
+  const vertices = [
+    ...footprint.map(([x, z]) => [x * w, low, z * l]),
+    ...roof.map(([x, z]) => [x * w, high, z * l]),
+  ];
+  const faces: number[][] = [
+    [0, 1, 2, 3, 4, 5, 6, 7],
+    [15, 14, 13, 12, 11, 10, 9, 8],
+    ...footprint.map((_, i) => [i, i + 8, ((i + 1) % 8) + 8, (i + 1) % 8]),
   ];
   const positions: number[] = [],
     indices: number[] = [],
     uvs: number[] = [];
   for (const face of faces) {
     const offset = positions.length / 3;
-    for (const i of face) positions.push(...vertices[i]);
-    uvs.push(0, 0, 1, 0, 1, 1, 0, 1);
-    indices.push(
-      offset,
-      offset + 1,
-      offset + 2,
-      offset,
-      offset + 2,
-      offset + 3,
-    );
+    const origin = Vector3.FromArray(vertices[face[0]]);
+    const uAxis = Vector3.FromArray(vertices[face[1]])
+      .subtract(origin)
+      .normalize();
+    const last = Vector3.FromArray(vertices[face.at(-1)!]).subtract(origin);
+    const vAxis = last
+      .subtract(uAxis.scale(Vector3.Dot(last, uAxis)))
+      .normalize();
+    for (let j = 0; j < face.length; j++) {
+      const vertex = vertices[face[j]];
+      positions.push(...vertex);
+      // Two world units per texture repeat on every facet, including bevels.
+      // Orthogonal planar axes keep paint grain and scratches undistorted.
+      const at = Vector3.FromArray(vertex).subtract(origin);
+      uvs.push(Vector3.Dot(at, uAxis) / 2, Vector3.Dot(at, vAxis) / 2);
+    }
+    for (let i = 1; i < face.length - 1; i++)
+      indices.push(offset, offset + i, offset + i + 1);
   }
   const normals: number[] = [];
   VertexData.ComputeNormals(positions, indices, normals, {
     useRightHandedSystem: scene.useRightHandedSystem,
   });
   const data = new VertexData();
+  Object.assign(data, { positions, indices, normals, uvs });
+  data.applyToMesh(mesh);
+  mesh.material = material;
+  mesh.parent = parent;
+  mesh.isPickable = false;
+  mesh.receiveShadows = true;
+  return mesh;
+}
+function trackBelt(
+  scene: Scene,
+  material: Material,
+  parent: TransformNode,
+  x: number,
+  length: number,
+  lowDetail: boolean,
+) {
+  // A hollow capsule follows the sprocket/idler, leaving the suspension open.
+  const segments = lowDetail ? 6 : 12;
+  const perimeter: [number, number][] = [];
+  for (const end of [1, -1])
+    for (let i = 0; i <= segments; i++) {
+      const a = (i / segments) * Math.PI;
+      perimeter.push([end * Math.cos(a), end * Math.sin(a)]);
+    }
+  const positions: number[] = [],
+    indices: number[] = [],
+    uvs: number[] = [];
+  const vertices = (index: number, radius: number, side: number) => {
+    const [y, z] = perimeter[index];
+    const end = index <= segments ? 1 : -1;
+    return [x + side * 0.39, 0.64 + y * radius, end * length + z * radius];
+  };
+  const quad = (points: number[][]) => {
+    const start = positions.length / 3;
+    for (const point of points) positions.push(...point);
+    uvs.push(0, 0, 1, 0, 1, 1, 0, 1);
+    indices.push(start, start + 1, start + 2, start, start + 2, start + 3);
+  };
+  for (let i = 0; i < perimeter.length; i++) {
+    const j = (i + 1) % perimeter.length;
+    quad([
+      vertices(i, 0.5, -1),
+      vertices(j, 0.5, -1),
+      vertices(j, 0.5, 1),
+      vertices(i, 0.5, 1),
+    ]);
+    quad([
+      vertices(i, 0.42, 1),
+      vertices(j, 0.42, 1),
+      vertices(j, 0.42, -1),
+      vertices(i, 0.42, -1),
+    ]);
+    for (const side of [-1, 1]) {
+      const face = [
+        vertices(i, 0.42, side),
+        vertices(j, 0.42, side),
+        vertices(j, 0.5, side),
+        vertices(i, 0.5, side),
+      ];
+      quad(side === 1 ? face.reverse() : face);
+    }
+  }
+  const mesh = new Mesh('continuous-rounded-track-belt', scene);
+  const data = new VertexData(),
+    normals: number[] = [];
+  VertexData.ComputeNormals(positions, indices, normals, {
+    useRightHandedSystem: scene.useRightHandedSystem,
+  });
   Object.assign(data, { positions, indices, normals, uvs });
   data.applyToMesh(mesh);
   mesh.material = material;
@@ -181,6 +284,17 @@ export function buildTank(
   if (grownArmor) {
     grownArmor.albedoTexture = mats.armor.albedoTexture;
     grownArmor.bumpTexture = mats.armor.bumpTexture;
+    grownArmor.metallicTexture = mats.armor.metallicTexture;
+    grownArmor.useRoughnessFromMetallicTextureAlpha =
+      mats.armor.useRoughnessFromMetallicTextureAlpha;
+    grownArmor.useRoughnessFromMetallicTextureGreen =
+      mats.armor.useRoughnessFromMetallicTextureGreen;
+    grownArmor.useMetallnessFromMetallicTextureBlue =
+      mats.armor.useMetallnessFromMetallicTextureBlue;
+    grownArmor.useAmbientOcclusionFromMetallicTextureRed =
+      mats.armor.useAmbientOcclusionFromMetallicTextureRed;
+    grownArmor.invertNormalMapX = mats.armor.invertNormalMapX;
+    grownArmor.invertNormalMapY = mats.armor.invertNormalMapY;
     owned.push(grownArmor);
   }
   const accent = growth
@@ -217,7 +331,7 @@ export function buildTank(
     scene,
     'engine-deck',
     [2.7 * wide, 0.1, 1.7],
-    [0, 1.65, -1.6 * long],
+    [0, 1.77, -1.6 * long],
     mats.steel,
     body,
   );
@@ -226,52 +340,120 @@ export function buildTank(
       scene,
       'cooling-louver',
       [2.55 * wide, 0.075, 0.045],
-      [0, 1.72, -2.27 * long + i * 0.135],
+      [0, 1.85, -2.27 * long + i * 0.135],
       armor,
       body,
     );
   for (const side of [-1, 1]) {
+    trackBelt(
+      scene,
+      mats.rubber,
+      body,
+      side * 1.67 * wide,
+      2.45 * long,
+      lowDetail,
+    );
+    // Thin fenders sit above the running gear instead of a solid rubber box.
     box(
       scene,
-      'track-housing',
-      [0.79, 0.95, 5.35 * long],
-      [side * 1.66 * wide, 0.65, 0],
-      mats.rubber,
+      'track-fender',
+      [0.87, 0.085, 5.05 * long],
+      [side * 1.66 * wide, 1.24, 0],
+      armor,
       body,
     );
     for (let i = 0; i < (lowDetail ? 4 : 7); i++) {
-      const z = (-2.1 + i * (lowDetail ? 1.4 : 0.7)) * long;
+      const z = (-1.98 + i * (lowDetail ? 1.32 : 0.66)) * long;
       cylinder(
         scene,
-        'road-wheel',
-        0.45,
-        0.23,
-        [side * 1.99 * wide, 0.62, z],
+        'rubber-road-wheel-tire',
+        0.4,
+        0.2,
+        [side * 1.96 * wide, 0.61, z],
+        mats.rubber,
+        body,
+        Math.PI / 2,
+      );
+      cylinder(
+        scene,
+        'road-wheel-disc',
+        0.32,
+        0.25,
+        [side * 1.98 * wide, 0.61, z],
+        armor,
+        body,
+        Math.PI / 2,
+      );
+      if (!lowDetail) {
+        cylinder(
+          scene,
+          'hub-bolt',
+          0.11,
+          0.27,
+          [side * 1.99 * wide, 0.61, z],
+          mats.steel,
+          body,
+          Math.PI / 2,
+        );
+        // Recessed wheel holes read as a stamped disc at play distance.
+        for (let hole = 0; hole < 4; hole++) {
+          const a = (hole * Math.PI) / 2 + Math.PI / 4;
+          cylinder(
+            scene,
+            'road-wheel-recess',
+            0.055,
+            0.016,
+            [
+              side * (1.98 * wide + 0.132),
+              0.61 + Math.cos(a) * 0.22,
+              z + Math.sin(a) * 0.22,
+            ],
+            mats.rubber,
+            body,
+            Math.PI / 2,
+            8,
+          );
+        }
+      }
+    }
+    for (const end of [-1, 1]) {
+      cylinder(
+        scene,
+        end === 1 ? 'front-idler-wheel' : 'drive-sprocket',
+        0.37,
+        0.2,
+        [side * 1.98 * wide, 0.65, end * 2.45 * long],
         mats.steel,
         body,
         Math.PI / 2,
       );
       cylinder(
         scene,
-        'wheel-hub',
-        0.22,
-        0.25,
-        [side * 2.01 * wide, 0.62, z],
+        'idler-bearing-cap',
+        0.16,
+        0.26,
+        [side * 1.99 * wide, 0.65, end * 2.45 * long],
         armor,
         body,
         Math.PI / 2,
       );
       if (!lowDetail)
-        cylinder(
-          scene,
-          'hub-bolt',
-          0.07,
-          0.27,
-          [side * 2.02 * wide, 0.62, z],
-          mats.edges,
-          body,
-          Math.PI / 2,
-        );
+        for (let tooth = 0; tooth < 10; tooth++) {
+          const a = (tooth * Math.PI) / 5;
+          const cog = box(
+            scene,
+            'sprocket-tooth',
+            [0.13, 0.11, 0.09],
+            [
+              side * 1.98 * wide,
+              0.65 + Math.cos(a) * 0.37,
+              end * 2.45 * long + Math.sin(a) * 0.37,
+            ],
+            mats.steel,
+            body,
+          );
+          cog.rotation.x = a;
+        }
     }
     for (let i = 0; i < (lowDetail ? 10 : 22); i++) {
       const z = (-2.52 + i * (lowDetail ? 0.56 : 0.24)) * long;
@@ -302,6 +484,14 @@ export function buildTank(
         body,
       );
       panel.rotation.z = side * 0.07;
+      box(
+        scene,
+        'skirt-top-hinge',
+        [0.16, 0.075, 0.29],
+        [side * 2.08 * wide, 1.75, (-1.92 + i * 0.94) * long],
+        mats.steel,
+        body,
+      );
       box(
         scene,
         'skirt-fastener',
@@ -336,6 +526,23 @@ export function buildTank(
       [0.24, 0.15, 0.025],
       [side * 1.34 * wide, 1.4, 2.345 * long],
       enemy ? mats.red : mats.lamp,
+      body,
+    );
+    for (const edge of [-1, 1])
+      box(
+        scene,
+        'headlight-protective-guard',
+        [0.045, 0.34, 0.12],
+        [side * 1.34 * wide + edge * 0.19, 1.44, 2.36 * long],
+        armor,
+        body,
+      );
+    box(
+      scene,
+      'headlight-guard-bridge',
+      [0.42, 0.045, 0.12],
+      [side * 1.34 * wide, 1.62, 2.36 * long],
+      armor,
       body,
     );
     box(
@@ -400,6 +607,42 @@ export function buildTank(
   cylinder(scene, 'hatch-cover', 0.35, 0.1, [-0.5, 1.09, -0.2], armor, turret);
   box(
     scene,
+    'hatch-hinge',
+    [0.29, 0.11, 0.12],
+    [-0.5, 1.14, -0.55],
+    mats.steel,
+    turret,
+  );
+  for (const x of [-0.64, -0.36])
+    box(
+      scene,
+      'hatch-handle-foot',
+      [0.035, 0.075, 0.035],
+      [x, 1.18, -0.15],
+      mats.steel,
+      turret,
+    );
+  box(
+    scene,
+    'hatch-grab-handle',
+    [0.315, 0.035, 0.035],
+    [-0.5, 1.22, -0.15],
+    mats.steel,
+    turret,
+  );
+  for (const angle of [-0.9, 0, 0.9]) {
+    const slit = box(
+      scene,
+      'cupola-vision-block',
+      [0.18, 0.085, 0.055],
+      [-0.5 + Math.sin(angle) * 0.38, 1, -0.2 + Math.cos(angle) * 0.38],
+      mats.glass,
+      turret,
+    );
+    slit.rotation.y = angle;
+  }
+  box(
+    scene,
     'gunner-optic',
     [0.46, 0.23, 0.38],
     [0.52, 1.01, 0.2],
@@ -414,7 +657,37 @@ export function buildTank(
     enemy ? mats.red : mats.glass,
     turret,
   );
-  box(scene, 'gun-mantlet', [0.83, 0.68, 0.63], [0, 0.45, 1.09], armor, turret);
+  const mantlet = armoredHull(
+    scene,
+    'cast-gun-mantlet',
+    1.03,
+    0.79,
+    0.13,
+    0.86,
+    turret,
+    armor,
+  );
+  mantlet.position.z = 1.12;
+  const trunnion = cylinder(
+    scene,
+    'mantlet-trunnion',
+    0.31,
+    0.25,
+    [0, 0.5, 1.48],
+    mats.steel,
+    turret,
+  );
+  trunnion.rotation.x = Math.PI / 2;
+  const coax = cylinder(
+    scene,
+    'coaxial-gun-recess',
+    0.085,
+    0.035,
+    [0.4, 0.45, 1.5],
+    mats.rubber,
+    turret,
+  );
+  coax.rotation.x = Math.PI / 2;
   const gun = cylinder(
     scene,
     'main-cannon',
@@ -783,6 +1056,22 @@ export function buildTank(
       armor,
       body,
     );
+    box(
+      scene,
+      'stowage-lid-seam',
+      [0.7, 0.032, 0.74],
+      [side * 1.08, 1.99, -2.02 * long],
+      mats.steel,
+      body,
+    );
+    box(
+      scene,
+      'stowage-lid',
+      [0.7, 0.06, 0.74],
+      [side * 1.08, 2.035, -2.02 * long],
+      armor,
+      body,
+    );
     for (let i = 0; i < 3; i++)
       box(
         scene,
@@ -802,16 +1091,46 @@ export function buildTank(
           mats.steel,
           body,
         );
-      const cable = cylinder(
+      const cable = MeshBuilder.CreateTube(
+        'looped-towing-cable',
+        {
+          path: [
+            new Vector3(side * 1.35 * wide, 1.79, 0.55),
+            new Vector3(side * 1.57 * wide, 1.83, 0.4),
+            new Vector3(side * 1.61 * wide, 1.83, -0.15),
+            new Vector3(side * 1.61 * wide, 1.83, -1.2),
+            new Vector3(side * 1.51 * wide, 1.86, -1.53),
+            new Vector3(side * 1.32 * wide, 1.86, -1.61),
+            new Vector3(side * 1.2 * wide, 1.83, -1.38),
+            new Vector3(side * 1.23 * wide, 1.8, -0.98),
+          ],
+          radius: 0.038,
+          tessellation: 6,
+        },
         scene,
-        'towing-cable',
-        0.04,
-        2.55,
-        [side * 1.37 * wide, 1.78, -0.7],
-        mats.edges,
-        body,
       );
-      cable.rotation.x = Math.PI / 2;
+      cable.material = mats.edges;
+      cable.parent = body;
+      cable.isPickable = false;
+      cable.receiveShadows = true;
+      for (const z of [-0.2, -0.95])
+        box(
+          scene,
+          'cable-retaining-clip',
+          [0.18, 0.06, 0.09],
+          [side * 1.61 * wide, 1.88, z],
+          mats.steel,
+          body,
+        );
+      for (let i = 0; i < 4; i++)
+        box(
+          scene,
+          'turret-roof-weld',
+          [0.18, 0.018, 0.024],
+          [side * (0.12 + i * 0.2), 0.923, -1.04],
+          mats.steel,
+          turret,
+        );
     }
   }
   const extractor = cylinder(

@@ -13,11 +13,13 @@ import {
   ShadowGenerator,
   TransformNode,
   Vector3,
+  VertexData,
 } from './babylon';
 import { Battle, W, H, ENEMY_GATES, seeded, type Wall } from '../engine';
 import { box } from './tank-model';
 import { type Materials, type Quality, pbr, emissive } from './materials';
 import { buildLivingCover, createNature, natureMaterials } from './nature';
+import { applySurface } from './surface-textures';
 export const UNIT = 0.1;
 export const worldPosition = (x: number, y: number, height = 0) =>
   new Vector3((x - W / 2) * UNIT, height, (y - H / 2) * UNIT);
@@ -66,6 +68,32 @@ function mergeStatic(parent: TransformNode, chunks = false) {
   }
   return result;
 }
+// Box defaults stretch one image across every face. Metric UVs keep masonry,
+// road aggregate and roofing the same apparent size on long and short surfaces.
+function surfaceBox(
+  scene: Scene,
+  name: string,
+  size: [number, number, number],
+  at: [number, number, number],
+  material: ReturnType<typeof pbr>,
+  parent: TransformNode,
+  tile = 3,
+) {
+  const mesh = box(scene, name, size, at, material, parent),
+    positions = mesh.getVerticesData('position')!,
+    normals = mesh.getVerticesData('normal')!,
+    uv: number[] = [];
+  for (let i = 0; i < positions.length; i += 3) {
+    const x = positions[i] + at[0],
+      y = positions[i + 1] + at[1],
+      z = positions[i + 2] + at[2];
+    if (Math.abs(normals[i + 1]) > 0.5) uv.push(x / tile, z / tile);
+    else if (Math.abs(normals[i]) > 0.5) uv.push(z / tile, y / tile);
+    else uv.push(x / tile, y / tile);
+  }
+  mesh.setVerticesData('uv', uv);
+  return mesh;
+}
 export function createWorld(
   scene: Scene,
   b: Battle,
@@ -82,34 +110,35 @@ export function createWorld(
     >();
   const naturalMaterials = natureMaterials(scene, assets, quality);
   const themes = [
-    ['#939481', '#363f3f', '#f9d39b'],
-    ['#81989d', '#253c4e', '#b4d5e6'],
-    ['#ab9480', '#474644', '#ffce8c'],
-    ['#89968d', '#313f40', '#e6d3a2'],
-    ['#888291', '#303341', '#efb986'],
-    ['#c5997d', '#43444b', '#ffb973'],
+    ['#a5aaa5', '#485b68', '#fff0d3'],
+    ['#96a6ae', '#364c60', '#d3e5f1'],
+    ['#aea59b', '#53606a', '#ffe8c5'],
+    ['#a0aaa5', '#425864', '#eaf0df'],
+    ['#a2a1ac', '#454b60', '#f5ddc9'],
+    ['#b6a397', '#535767', '#ffe0b4'],
   ][b.mission % 6];
   scene.clearColor = Color4.FromHexString(themes[1] + 'ff');
   scene.fogMode = Scene.FOGMODE_EXP2;
-  scene.fogDensity = 0.004;
-  scene.fogColor = Color3.FromHexString(themes[0]).scale(0.7);
-  scene.ambientColor = new Color3(0.12, 0.14, 0.14);
+  scene.fogDensity = 0.0035;
+  scene.fogColor = Color3.FromHexString(themes[0]).scale(0.86);
+  scene.ambientColor = new Color3(0.1, 0.12, 0.14);
   const ambient = new HemisphericLight(
     'overcast-sky-light',
     new Vector3(0.2, 1, 0.1),
     scene,
   );
-  ambient.intensity = 0.62;
-  ambient.diffuse = new Color3(0.8, 0.87, 1);
-  ambient.groundColor = new Color3(0.19, 0.2, 0.17);
+  ambient.intensity = 0.72;
+  ambient.diffuse = new Color3(0.85, 0.91, 1);
+  ambient.groundColor = new Color3(0.25, 0.23, 0.19);
   const sun = new DirectionalLight(
     'late-afternoon-sun',
-    new Vector3(0.65, -1, 0.65),
+    new Vector3(0.55, -1, 0.72),
     scene,
   );
   sun.position.set(-110, 150, -110);
   sun.diffuse = Color3.FromHexString(themes[2]);
-  sun.intensity = 3;
+  // A broad daylight key preserves scanned surface colour instead of clipping it.
+  sun.intensity = 2.15;
   sun.autoUpdateExtends = false;
   sun.orthoLeft = -(W + H) * UNIT * 0.48;
   sun.orthoRight = (W + H) * UNIT * 0.48;
@@ -134,7 +163,7 @@ export function createWorld(
       assetUrl('/environment.env'),
       scene,
     );
-    scene.environmentIntensity = 0.5;
+    scene.environmentIntensity = 0.65;
     const sky = MeshBuilder.CreateSphere(
       'atmospheric-sky',
       { diameter: 900, segments: 24, sideOrientation: Mesh.BACKSIDE },
@@ -165,11 +194,42 @@ export function createWorld(
   ground.material = m.ground;
   ground.receiveShadows = true;
   ground.isPickable = true;
-  const asphalt = pbr(scene, 'wet-road', '#303936', 0.24, 0.47),
-    puddle = pbr(scene, 'shallow-puddles', '#28342e', 0.65, 0.16),
-    windowMat = pbr(scene, 'abandoned-windows', '#202b2b', 0.45, 0.34),
-    roof = pbr(scene, 'warehouse-roof', '#4c5352', 0.65, 0.65),
-    roadPaint = pbr(scene, 'worn-road-lines', '#b6ab78', 0.03, 0.9);
+  const asphalt = pbr(scene, 'wet-road', '#d2d7d5', 0.02, 0.9),
+    puddle = pbr(scene, 'shallow-puddles', '#303b40', 0.12, 0.18),
+    windowMat = pbr(scene, 'abandoned-windows', '#243b44', 0.35, 0.24),
+    windowDust = pbr(scene, 'dusty-window-glass', '#415456', 0.2, 0.51),
+    roof = pbr(scene, 'warehouse-roof', '#919493', 0.62, 0.63),
+    roofFelt = pbr(scene, 'office-roof-felt', '#676863', 0.03, 0.93),
+    facadeTrim = pbr(scene, 'aged-limestone-trim', '#b4b3a7', 0.03, 0.88),
+    shutter = pbr(scene, 'zinc-shutter-panels', '#6e7a78', 0.55, 0.66),
+    grime = pbr(scene, 'damp-building-plinth', '#51574c', 0, 0.98),
+    tar = pbr(scene, 'sealed-asphalt-fissures', '#222725', 0.01, 0.8),
+    roadPaint = pbr(scene, 'worn-road-lines', '#c4bd9b', 0.03, 0.94);
+  if (assets) {
+    applySurface(asphalt, scene, 'asphalt', {
+      repeat: 1,
+      mobile: quality === 'performance',
+    });
+    applySurface(roof, scene, 'roof', {
+      repeat: 1,
+      mobile: quality === 'performance',
+    });
+    applySurface(roofFelt, scene, 'asphalt', {
+      repeat: 1,
+      mobile: quality === 'performance',
+      strength: 0.45,
+    });
+    applySurface(facadeTrim, scene, 'concrete', {
+      repeat: 1,
+      mobile: quality === 'performance',
+      strength: 0.45,
+    });
+    applySurface(shutter, scene, 'paintedMetal', {
+      repeat: 1,
+      mobile: quality === 'performance',
+      strength: 0.45,
+    });
+  }
   const hazardPaint = pbr(
     scene,
     'perimeter-warning-yellow',
@@ -200,13 +260,14 @@ export function createWorld(
     elevation = 0.026,
   ) => {
     const p = worldPosition(x + w / 2, y + h / 2, elevation);
-    return box(
+    return surfaceBox(
       scene,
       name,
       [w * UNIT, 0.012, h * UNIT],
       [p.x, p.y, p.z],
       material,
       staticRoot,
+      5,
     );
   };
   // A connected street network, intersections, crosswalks and loading aprons.
@@ -214,6 +275,41 @@ export function createWorld(
     stamp('street-asphalt', road.x, road.y, road.w, road.h, asphalt);
     const vertical = road.h > road.w;
     const length = vertical ? road.h : road.w;
+    // Flush shoulders and drains convey scale without creating unseen obstacles.
+    for (const side of [0, 1]) {
+      stamp(
+        'concrete-road-gutter',
+        road.x + (vertical ? side * (road.w - 3) : 0),
+        road.y + (vertical ? 0 : side * (road.h - 3)),
+        vertical ? 3 : road.w,
+        vertical ? road.h : 3,
+        m.concrete,
+        0.036,
+      );
+      for (let t = 85; t < length; t += 155) {
+        const dx = road.x + (vertical ? (side ? road.w - 9 : 4) : t),
+          dy = road.y + (vertical ? t : side ? road.h - 9 : 4);
+        stamp(
+          'storm-drain-recess',
+          dx,
+          dy,
+          vertical ? 5 : 11,
+          vertical ? 11 : 5,
+          tar,
+          0.043,
+        );
+        for (let rib = 0; rib < 5; rib++)
+          stamp(
+            'storm-drain-grating',
+            dx + (vertical ? 0 : rib * 2.2),
+            dy + (vertical ? rib * 2.2 : 0),
+            vertical ? 5 : 0.7,
+            vertical ? 0.7 : 5,
+            m.steel,
+            0.049,
+          );
+      }
+    }
     for (let t = 24; t < length; t += 58) {
       const x = vertical ? road.x + road.w / 2 : t;
       const y = vertical ? t : road.y + road.h / 2;
@@ -282,19 +378,65 @@ export function createWorld(
       stamp('loading-bay-stop', x, w.y + w.h + 44, 30, 1.2, roadPaint, 0.05);
     }
   }
-  for (let i = 0; i < (quality === 'performance' ? 14 : 28); i++) {
+  for (let i = 0; i < (quality === 'performance' ? 16 : 40); i++) {
     const road = b.roads[i % b.roads.length];
     const x = road.x + rand() * road.w,
       y = road.y + rand() * road.h;
-    stamp(
-      'road-repair-patch',
-      x,
-      y,
-      12 + rand() * 28,
-      8 + rand() * 20,
-      puddle,
-      0.043,
+    const center = worldPosition(x, y, 0.043),
+      radiusX = Math.min(1.5 + rand() * 2.3, road.w * UNIT * 0.3),
+      radiusZ = Math.min(0.6 + rand() * 1.1, road.h * UNIT * 0.3),
+      positions = [center.x, center.y, center.z],
+      uvs = [center.x / 4, center.z / 4],
+      indices: number[] = [];
+    for (let vertex = 0; vertex < 9; vertex++) {
+      const angle = (vertex / 9) * Math.PI * 2,
+        roughEdge = 0.74 + rand() * 0.26,
+        px = Math.max(
+          (road.x - W / 2) * UNIT,
+          Math.min(
+            (road.x + road.w - W / 2) * UNIT,
+            center.x + Math.cos(angle) * radiusX * roughEdge,
+          ),
+        ),
+        pz = Math.max(
+          (road.y - H / 2) * UNIT,
+          Math.min(
+            (road.y + road.h - H / 2) * UNIT,
+            center.z + Math.sin(angle) * radiusZ * roughEdge,
+          ),
+        );
+      positions.push(px, center.y, pz);
+      uvs.push(px / 4, pz / 4);
+      indices.push(0, ((vertex + 1) % 9) + 1, vertex + 1);
+    }
+    const patch = new Mesh('irregular-road-repair', scene),
+      vertices = new VertexData();
+    vertices.positions = positions;
+    vertices.indices = indices;
+    vertices.normals = Array.from({ length: positions.length }, (_, at) =>
+      at % 3 === 1 ? 1 : 0,
     );
+    vertices.uvs = uvs;
+    vertices.applyToMesh(patch);
+    patch.material = i % 5 === 0 ? puddle : grime;
+    patch.parent = staticRoot;
+    // Thin wandering tar repairs break up the broad uniform road plane.
+    for (
+      let segment = 0;
+      segment < (quality === 'performance' ? 2 : 4);
+      segment++
+    ) {
+      const crack = stamp(
+        'asphalt-repaired-crack',
+        x + segment * 8,
+        y + Math.sin(segment * 1.7 + i) * 4,
+        8.5,
+        0.45,
+        tar,
+        0.048,
+      );
+      crack.rotation.y = (rand() - 0.5) * 0.7;
+    }
   }
   // The industrial skyline is outside the playable perimeter, never invisible cover.
   for (let i = 0; i < 13; i++) {
@@ -444,69 +586,620 @@ export function createWorld(
     }
     if (w.kind === 'warehouse' || w.kind === 'office') {
       const office = w.kind === 'office';
-      box(
+      const facade = office ? m.concrete : m.brick;
+      // Solid interior backing sits behind the facade: panes really sit in
+      // shaded recesses, while the architectural footprint remains collision.
+      surfaceBox(
         scene,
-        office ? 'office-block' : 'warehouse-block',
-        [width, height, depth],
+        office ? 'office-interior-core' : 'warehouse-interior-core',
+        [width - 0.4, height, depth - 0.4],
         [0, height / 2, 0],
-        office ? m.concrete : m.brick,
+        facade,
         solid,
       );
-      box(
+      surfaceBox(
         scene,
-        'building-roof',
-        [width + 0.12, 0.22, depth + 0.12],
-        [0, height + 0.1, 0],
-        roof,
+        'weathered-building-foundation',
+        [width, 0.44, depth],
+        [0, 0.22, 0],
+        grime,
         solid,
       );
-      for (const side of [-1, 1]) {
-        if (office) {
-          for (let floor = 1.9; floor < height - 0.5; floor += 2.6)
-            for (let x = -width / 2 + 1; x < width / 2 - 0.5; x += 2)
-              box(
-                scene,
-                'office-window',
-                [1.15, 1.3, 0.035],
-                [x, floor, side * (depth / 2 + 0.024)],
-                windowMat,
-                solid,
+      for (const acrossX of [true, false]) {
+        const span = acrossX ? width : depth,
+          halfDepth = (acrossX ? depth : width) / 2;
+        for (const side of [-1, 1]) {
+          const face = (
+            name: string,
+            length: number,
+            tall: number,
+            thickness: number,
+            at: number,
+            y: number,
+            inset: number,
+            material: ReturnType<typeof pbr>,
+          ) =>
+            surfaceBox(
+              scene,
+              name,
+              acrossX ? [length, tall, thickness] : [thickness, tall, length],
+              acrossX
+                ? [at, y, side * (halfDepth + inset)]
+                : [side * (halfDepth + inset), y, at],
+              material,
+              solid,
+            );
+          if (office) {
+            const bays = Math.max(1, Math.floor(span / 2.15)),
+              pitch = span / bays,
+              floors = Math.max(1, Math.floor(height / 2.45)),
+              storey = height / floors;
+            for (let floor = 0; floor < floors; floor++) {
+              const bottom = floor * storey;
+              face(
+                'office-spandrel-band',
+                span,
+                0.73,
+                0.22,
+                0,
+                bottom + 0.365,
+                -0.11,
+                facade,
               );
-        } else {
-          box(
+              face(
+                'cast-concrete-floor-edge',
+                span,
+                0.16,
+                0.27,
+                0,
+                bottom + 0.72,
+                -0.015,
+                facadeTrim,
+              );
+              for (let bay = 0; bay < bays; bay++) {
+                const at = -span / 2 + (bay + 0.5) * pitch,
+                  windowHeight = storey - 1.0,
+                  centerY = bottom + 0.82 + windowHeight / 2;
+                face(
+                  'deep-window-reveal',
+                  pitch - 0.29,
+                  windowHeight + 0.14,
+                  0.06,
+                  at,
+                  centerY,
+                  -0.145,
+                  m.rubber,
+                );
+                face(
+                  'recessed-office-window',
+                  pitch - 0.44,
+                  windowHeight,
+                  0.032,
+                  at,
+                  centerY,
+                  -0.109,
+                  (bay + floor + wallViews.size) % 4 === 0
+                    ? windowDust
+                    : windowMat,
+                );
+                face(
+                  'window-stone-sill',
+                  pitch - 0.21,
+                  0.13,
+                  0.33,
+                  at,
+                  bottom + 0.76,
+                  -0.005,
+                  facadeTrim,
+                );
+                face(
+                  'window-upper-lintel',
+                  pitch,
+                  0.23,
+                  0.2,
+                  at,
+                  bottom + storey - 0.115,
+                  -0.1,
+                  facade,
+                );
+                face(
+                  'window-vertical-mullion',
+                  0.055,
+                  windowHeight,
+                  0.07,
+                  at,
+                  centerY,
+                  -0.068,
+                  shutter,
+                );
+                if (quality !== 'performance')
+                  face(
+                    'window-transom-bar',
+                    pitch - 0.43,
+                    0.05,
+                    0.07,
+                    at,
+                    centerY + windowHeight * 0.18,
+                    -0.068,
+                    shutter,
+                  );
+              }
+            }
+            for (let bay = 0; bay <= bays; bay++)
+              face(
+                'masonry-facade-pier',
+                0.26,
+                height,
+                0.23,
+                Math.max(
+                  -span / 2 + 0.13,
+                  Math.min(span / 2 - 0.13, -span / 2 + bay * pitch),
+                ),
+                height / 2,
+                -0.115,
+                facade,
+              );
+            if (acrossX && side === -1) {
+              face(
+                'office-entrance-reveal',
+                1.6,
+                2.3,
+                0.04,
+                0,
+                1.15,
+                0.083,
+                m.rubber,
+              );
+              face(
+                'office-steel-door',
+                1.37,
+                2.12,
+                0.035,
+                0,
+                1.13,
+                0.109,
+                shutter,
+              );
+              face(
+                'office-door-glazing',
+                0.92,
+                0.72,
+                0.036,
+                0,
+                1.57,
+                0.132,
+                windowMat,
+              );
+              face(
+                'office-door-push-bar',
+                0.9,
+                0.055,
+                0.08,
+                0,
+                0.99,
+                0.17,
+                m.edges,
+              );
+              face(
+                'office-entry-weatherhood',
+                2.1,
+                0.12,
+                0.62,
+                0,
+                2.4,
+                0.2,
+                roof,
+              );
+            }
+          } else if (acrossX) {
+            const doorWidth = Math.min(4.6, width * 0.66),
+              wing = (span - doorWidth) / 2,
+              lintelHeight = height - 2.9;
+            for (const edge of [-1, 1]) {
+              face(
+                'warehouse-brick-door-wing',
+                wing,
+                height,
+                0.21,
+                edge * (doorWidth / 2 + wing / 2),
+                height / 2,
+                -0.105,
+                facade,
+              );
+              face(
+                'loading-portal-jamb',
+                0.19,
+                2.92,
+                0.32,
+                edge * (doorWidth / 2 - 0.08),
+                1.46,
+                -0.02,
+                facadeTrim,
+              );
+            }
+            face(
+              'warehouse-brick-lintel',
+              doorWidth,
+              lintelHeight,
+              0.21,
+              0,
+              2.9 + lintelHeight / 2,
+              -0.105,
+              facade,
+            );
+            face(
+              'loading-door-dark-reveal',
+              doorWidth - 0.3,
+              2.82,
+              0.04,
+              0,
+              1.44,
+              -0.144,
+              m.rubber,
+            );
+            face(
+              'recessed-loading-shutter',
+              doorWidth - 0.43,
+              2.7,
+              0.05,
+              0,
+              1.42,
+              -0.108,
+              shutter,
+            );
+            for (
+              let rib = 0.3;
+              rib < 2.75;
+              rib += quality === 'performance' ? 0.43 : 0.24
+            )
+              face(
+                'shutter-rolled-steel-seam',
+                doorWidth - 0.44,
+                0.036,
+                0.045,
+                0,
+                rib,
+                -0.064,
+                m.steel,
+              );
+            face(
+              'loading-canopy',
+              doorWidth + 0.35,
+              0.13,
+              0.84,
+              0,
+              3.05,
+              0.26,
+              roof,
+            );
+            face(
+              'warehouse-clerestory-recess',
+              width * 0.73,
+              0.46,
+              0.04,
+              0,
+              height - 0.41,
+              0.065,
+              m.rubber,
+            );
+            face(
+              'warehouse-clerestory-glazing',
+              width * 0.71,
+              0.35,
+              0.032,
+              0,
+              height - 0.41,
+              0.091,
+              windowDust,
+            );
+            for (
+              let mullion = -width * 0.32;
+              mullion < width * 0.35;
+              mullion += 1.1
+            )
+              face(
+                'clerestory-steel-mullion',
+                0.055,
+                0.39,
+                0.075,
+                mullion,
+                height - 0.41,
+                0.111,
+                shutter,
+              );
+          } else {
+            face(
+              'warehouse-side-brickwork',
+              span,
+              height,
+              0.2,
+              0,
+              height / 2,
+              -0.1,
+              facade,
+            );
+            for (
+              let pilaster = -span / 2 + 0.14;
+              pilaster < span / 2;
+              pilaster += 3.1
+            )
+              face(
+                'warehouse-structural-pilaster',
+                0.24,
+                height,
+                0.29,
+                pilaster,
+                height / 2,
+                -0.005,
+                facadeTrim,
+              );
+            face(
+              'warehouse-side-damp-course',
+              span,
+              0.29,
+              0.035,
+              0,
+              0.23,
+              0.059,
+              grime,
+            );
+          }
+          face(
+            'building-cornice',
+            span,
+            0.19,
+            0.29,
+            0,
+            height - 0.055,
+            -0.005,
+            facadeTrim,
+          );
+          // Narrow rain streaks sit beneath the eaves, away from glass openings.
+          for (
+            let stain = 0;
+            stain < (quality === 'performance' ? 1 : 3);
+            stain++
+          )
+            face(
+              'facade-runoff-stain',
+              0.035 + rand() * 0.045,
+              0.18 + rand() * 0.18,
+              0.012,
+              (rand() - 0.5) * span * 0.78,
+              height - 0.31,
+              0.113,
+              grime,
+            );
+        }
+      }
+      let roofHeight = height + 0.14;
+      if (office) {
+        surfaceBox(
+          scene,
+          'recessed-office-roof',
+          [width, 0.17, depth],
+          [0, roofHeight, 0],
+          roofFelt,
+          solid,
+          4,
+        );
+        for (const side of [-1, 1]) {
+          surfaceBox(
             scene,
-            'loading-shutter',
-            [Math.min(3.8, width * 0.7), 2.8, 0.05],
-            [0, 1.4, side * (depth / 2 + 0.035)],
-            m.steel,
+            'office-roof-parapet',
+            [width, 0.48, 0.19],
+            [0, height + 0.36, side * (depth / 2 - 0.095)],
+            facade,
             solid,
           );
-          box(
+          surfaceBox(
             scene,
-            'loading-canopy',
-            [Math.min(4.2, width * 0.8), 0.13, 0.7],
-            [0, 3, side * (depth / 2 + 0.25)],
-            roof,
+            'office-roof-parapet',
+            [0.19, 0.48, depth - 0.38],
+            [side * (width / 2 - 0.095), height + 0.36, 0],
+            facade,
             solid,
           );
-          box(
+          surfaceBox(
             scene,
-            'clerestory',
-            [width * 0.72, 0.5, 0.035],
-            [0, height - 0.55, side * (depth / 2 + 0.035)],
-            windowMat,
+            'parapet-metal-flashing',
+            [width + 0.06, 0.055, 0.26],
+            [0, height + 0.63, side * (depth / 2 - 0.095)],
+            shutter,
+            solid,
+          );
+          surfaceBox(
+            scene,
+            'parapet-metal-flashing',
+            [0.26, 0.055, depth - 0.26],
+            [side * (width / 2 - 0.095), height + 0.63, 0],
+            shutter,
             solid,
           );
         }
+      } else {
+        const rise = Math.min(0.48, width * 0.07),
+          slope = Math.atan2(rise, width / 2),
+          panelWidth = Math.hypot(width / 2, rise) + 0.12;
+        roofHeight = height + rise + 0.14;
+        for (const side of [-1, 1]) {
+          const gable = new Mesh('warehouse-masonry-gable', scene),
+            shape = new VertexData();
+          shape.positions = [
+            -width / 2,
+            height,
+            (side * depth) / 2,
+            width / 2,
+            height,
+            (side * depth) / 2,
+            0,
+            height + rise + 0.12,
+            (side * depth) / 2,
+          ];
+          shape.indices = side > 0 ? [0, 1, 2] : [2, 1, 0];
+          shape.normals = [0, 0, side, 0, 0, side, 0, 0, side];
+          shape.uvs = [0, 0, width / 3, 0, width / 6, (rise + 0.12) / 3];
+          shape.applyToMesh(gable);
+          gable.material = facade;
+          gable.parent = solid;
+          const panel = surfaceBox(
+            scene,
+            'pitched-standing-seam-roof',
+            [panelWidth, 0.1, depth + 0.22],
+            [(side * width) / 4, height + rise / 2 + 0.12, 0],
+            roof,
+            solid,
+            3,
+          );
+          panel.rotation.z = -side * slope;
+          for (
+            let seam = -depth / 2;
+            seam <= depth / 2;
+            seam += quality === 'performance' ? 1.3 : 0.65
+          ) {
+            const fold = box(
+              scene,
+              'raised-roof-seam',
+              [panelWidth, 0.045, 0.04],
+              [(side * width) / 4, height + rise / 2 + 0.185, seam],
+              shutter,
+              solid,
+            );
+            fold.rotation.z = -side * slope;
+          }
+          box(
+            scene,
+            'warehouse-eaves-gutter',
+            [0.16, 0.15, depth + 0.14],
+            [side * (width / 2 + 0.06), height + 0.045, 0],
+            shutter,
+            solid,
+          );
+        }
+        box(
+          scene,
+          'warehouse-roof-ridge-cap',
+          [0.24, 0.12, depth + 0.22],
+          [0, roofHeight, 0],
+          shutter,
+          solid,
+        );
       }
-      box(
+      for (const side of [-1, 1]) {
+        const downpipe = MeshBuilder.CreateCylinder(
+          'rainwater-downpipe',
+          {
+            height: height - 0.1,
+            diameter: 0.105,
+            tessellation: quality === 'performance' ? 5 : 8,
+          },
+          scene,
+        );
+        downpipe.position.set(
+          side * (width / 2 - 0.3),
+          height / 2,
+          depth / 2 + 0.12,
+        );
+        downpipe.parent = solid;
+        downpipe.material = shutter;
+        for (let clamp = 0.65; clamp < height; clamp += 1.6)
+          box(
+            scene,
+            'downpipe-wall-bracket',
+            [0.17, 0.045, 0.18],
+            [side * (width / 2 - 0.3), clamp, depth / 2 + 0.07],
+            m.steel,
+            solid,
+          );
+      }
+      const ventX = Math.max(0, Math.min(width * 0.2, width / 2 - 0.87)),
+        ventZ = depth * 0.19,
+        roofRise = office ? 0 : Math.min(0.48, width * 0.07),
+        roofAt = (x: number) =>
+          roofHeight - roofRise * Math.min(1, (2 * Math.abs(x)) / width),
+        curbBottom = roofAt(ventX + 0.79) - 0.025,
+        curbHeight = roofHeight + 0.255 - curbBottom;
+      surfaceBox(
         scene,
-        'rooftop-vent',
-        [1.1, 0.45, 1.3],
-        [width * 0.24, height + 0.4, 0],
-        m.steel,
+        'roof-hvac-curb',
+        [1.58, curbHeight, 1.22],
+        [ventX, curbBottom + curbHeight / 2, ventZ],
+        m.rubber,
         solid,
       );
+      surfaceBox(
+        scene,
+        'industrial-rooftop-air-handler',
+        [1.45, 0.72, 1.05],
+        [ventX, roofHeight + 0.54, ventZ],
+        shutter,
+        solid,
+      );
+      for (let louver = 0; louver < 5; louver++)
+        box(
+          scene,
+          'hvac-horizontal-louver',
+          [1.18, 0.036, 0.035],
+          [ventX, roofHeight + 0.31 + louver * 0.1, ventZ + 0.54],
+          m.steel,
+          solid,
+        );
+      const fan = MeshBuilder.CreateCylinder(
+        'rooftop-extractor-fan',
+        {
+          height: 0.055,
+          diameter: 0.62,
+          tessellation: quality === 'performance' ? 10 : 16,
+        },
+        scene,
+      );
+      fan.position.set(ventX, roofHeight + 0.93, ventZ);
+      fan.parent = solid;
+      fan.material = m.steel;
+      for (let blade = 0; blade < 4; blade++) {
+        const guard = box(
+          scene,
+          'vent-fan-grille',
+          [0.57, 0.025, 0.027],
+          [ventX, roofHeight + 0.973, ventZ],
+          shutter,
+          solid,
+        );
+        guard.rotation.y = (blade * Math.PI) / 4;
+      }
+      if (quality !== 'performance') {
+        const ductLength = Math.min(width * 0.27, 2.2);
+        surfaceBox(
+          scene,
+          'roof-service-duct',
+          [ductLength, 0.28, 0.35],
+          [0, roofHeight + 0.23, ventZ],
+          shutter,
+          solid,
+        );
+        for (const side of [-1, 1]) {
+          const x = side * ductLength * 0.36,
+            baseY = roofAt(x) - 0.02,
+            supportHeight = roofHeight + 0.1 - baseY;
+          box(
+            scene,
+            'roof-duct-support',
+            [0.065, supportHeight, 0.42],
+            [x, baseY + supportHeight / 2, ventZ],
+            m.steel,
+            solid,
+          );
+        }
+        const hatch = surfaceBox(
+          scene,
+          'roof-access-hatch',
+          [0.95, 0.16, 1.25],
+          [-width * 0.24, roofAt(-width * 0.24) + 0.08, -depth * 0.19],
+          grime,
+          solid,
+        );
+        if (!office) hatch.rotation.z = Math.atan2(roofRise, width / 2);
+      }
       for (const mesh of mergeStatic(solid)) shadow?.addShadowCaster(mesh);
       rubble.setEnabled(false);
       wallViews.set(w, { solid, rubble });
@@ -678,7 +1371,13 @@ export function createWorld(
     asphalt,
     puddle,
     windowMat,
+    windowDust,
     roof,
+    roofFelt,
+    facadeTrim,
+    shutter,
+    grime,
+    tar,
     roadPaint,
     hazardPaint,
     perimeterMetal,

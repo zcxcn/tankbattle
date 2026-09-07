@@ -6,6 +6,7 @@ import ts from 'typescript';
 import { NullEngine } from '@babylonjs/core/Engines/nullEngine.js';
 import { Vector3, Matrix } from '@babylonjs/core/Maths/math.vector.js';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode.js';
+import { TimingTools } from '@babylonjs/core/Misc/timingTools.js';
 const root = path.resolve('outputs/test-3d');
 await fs.mkdir(path.join(root, 'three'), { recursive: true });
 for (const name of [
@@ -18,6 +19,7 @@ for (const name of [
   'engine',
   'fixed-step',
   'three/babylon',
+  'three/surface-textures',
   'three/materials',
   'three/tank-model',
   'three/world',
@@ -36,6 +38,10 @@ for (const name of [
       },
     })
     .outputText.replace(
+      /import (\w+) from ['"]([^'"]+\.(?:webp|png)\?url)['"];?/g,
+      (_, name, url) => `const ${name} = ${JSON.stringify(url)};`,
+    )
+    .replace(
       /from (['"])(\.{1,2}\/[^'"]+)\1/g,
       (_, q, p) => `from ${q}${p}.js${q}`,
     );
@@ -92,10 +98,16 @@ const r = new Renderer3D(canvas, battle, {
 });
 await r.ready;
 let passed = 0;
-async function test(name, fn) {
-  fn();
-  // Babylon defers readiness/disposal callbacks; let each test release them.
+async function flushSceneWork() {
+  // Scene.addMesh/material/node queues creation notifications that retain even
+  // already-disposed merged source geometry. Drain Babylon's actual timer queue
+  // before building another fixture, just as a browser yields between frames.
+  await new Promise((resolve) => TimingTools.SetImmediate(resolve));
   await new Promise((resolve) => setImmediate(resolve));
+}
+async function test(name, fn) {
+  await fn();
+  await flushSceneWork();
   console.log('PASS ' + name);
   passed++;
 }
@@ -288,7 +300,7 @@ await test('paused fixed clock discards backlog and consumes a skill only once',
   assert.equal(input.emp, false);
   assert(Math.abs(b.empCd - (13 - 5 / 60)) < 1e-6);
 });
-await test('projectile muzzle origin and elevation match normal and siege tank models', () => {
+await test('projectile muzzle origin and elevation match normal and siege tank models', async () => {
   for (const mission of [0, 5]) {
     const b = new Battle(mission, false, config(), 19);
     const testEngine = new NullEngine({
@@ -318,10 +330,11 @@ await test('projectile muzzle origin and elevation match normal and siege tank m
     const start = worldPosition(bullet.x, bullet.y, bullet.height * 0.1);
     assert(Vector3.Distance(muzzle, start) < 0.03);
     view.dispose();
+    await flushSceneWork();
   }
 });
 
-await test('new mission scenery, objectives and convoy stay synchronized without changing simulation', () => {
+await test('new mission scenery, objectives and convoy stay synchronized without changing simulation', async () => {
   for (const mission of [6, 7, 8, 9, 11, 12, 13, 14, 15, 17]) {
     const b = new Battle(mission, false, config(), 7);
     const view = new Renderer3D(canvas, b, {
@@ -384,9 +397,10 @@ await test('new mission scenery, objectives and convoy stay synchronized without
     }
     view.dispose();
     assert(view.scene.isDisposed);
+    await flushSceneWork();
   }
 });
-await test('all 9 enemy variants and 7 equipped weapons have bounded disposable geometry', () => {
+await test('all 9 enemy variants and 7 equipped weapons have bounded disposable geometry', async () => {
   const b = new Battle(0, true, config(), 3);
   b.walls = [];
   b.enemies = [];
@@ -407,6 +421,7 @@ await test('all 9 enemy variants and 7 equipped weapons have bounded disposable 
   for (let i = 0; i < 5; i++) view.draw(b, null);
   assert.equal(view.meshCount, count);
   view.dispose();
+  await flushSceneWork();
   for (let weapon = 0; weapon < WEAPONS.length; weapon++) {
     const a = new Battle(0, false, { ...config(), weapon }, 2);
     a.ammo[weapon] = weapon === 0 ? Infinity : 20;
@@ -422,10 +437,11 @@ await test('all 9 enemy variants and 7 equipped weapons have bounded disposable 
     v.draw(a, null);
     assert(v.models.has(0));
     v.dispose();
+    await flushSceneWork();
   }
 });
 
-await test('30 tank levels share correct muzzle geometry, seven forms change silhouette and release materials', () => {
+await test('30 tank levels share correct muzzle geometry, seven forms change silhouette and release materials', async () => {
   const snapshots = [];
   for (let level = 1; level <= 30; level++) {
     const count = r.scene.materials.length,
@@ -455,6 +471,7 @@ await test('30 tank levels share correct muzzle geometry, seven forms change sil
       'rank materials must not leak',
     );
     assert(r.scene.materials.includes(r.materials.armor));
+    await flushSceneWork();
   }
   assert.equal(new Set(snapshots).size, 7);
   assert(
@@ -499,7 +516,7 @@ await test('live rank changes rebuild the player once, keep enemy models and rel
   );
   view.dispose();
 });
-await test('mobile detail keeps seven evolution forms and muzzle positions with fewer vertices', () => {
+await test('mobile detail keeps seven evolution forms and muzzle positions with fewer vertices', async () => {
   for (const level of [1, 6, 11, 16, 21, 26, 30]) {
     const full = buildTank(r.scene, r.materials, 1, false, false, level, false);
     const light = buildTank(r.scene, r.materials, 1, false, false, level, true);
@@ -510,6 +527,7 @@ await test('mobile detail keeps seven evolution forms and muzzle positions with 
     assert.equal(light.flash.position.y, full.flash.position.y);
     full.dispose();
     light.dispose();
+    await flushSceneWork();
   }
 });
 await test('city building bodies match collision footprints', () => {
@@ -532,7 +550,7 @@ await test('city building bodies match collision footprints', () => {
     assert(Math.abs(box.extendSizeWorld.z * 2 - w.h * 0.1) < 0.01);
   }
 });
-await test('deformed foliage keeps outward normals for sunlit trees and hedges at both detail levels', () => {
+await test('deformed foliage keeps outward normals for sunlit trees and hedges at both detail levels', async () => {
   const materials = natureMaterials(r.scene, false, 'balanced');
   for (const quality of ['balanced', 'performance'])
     for (const index of [0, 1]) {
@@ -574,6 +592,7 @@ await test('deformed foliage keeps outward normals for sunlit trees and hedges a
       }
       solid.dispose();
       rubble.dispose();
+      await flushSceneWork();
     }
   Object.values(materials).forEach((material) => material.dispose());
 });
@@ -843,7 +862,7 @@ await test('projectile history follows each actual shot through deletion, switch
   assert(f.scene.meshes.every((mesh) => !mesh.isEnabled()));
   f.dispose();
 });
-await test('projectile batches and GPU buffers remain fixed across heavy mixed volleys at both detail levels', () => {
+await test('projectile batches and GPU buffers remain fixed across heavy mixed volleys at both detail levels', async () => {
   for (const mobile of [false, true]) {
     const f = projectileFixture(mobile),
       meshes = f.scene.meshes.length,
@@ -869,6 +888,7 @@ await test('projectile batches and GPU buffers remain fixed across heavy mixed v
     assert.equal(f.scene.materials.length, materials);
     assert.equal(f.scene.lights.length, 0);
     f.dispose();
+    await flushSceneWork();
   }
 });
 await test('perimeter armor has no coplanar side triangles overlapping the concrete wall', () => {
@@ -1018,7 +1038,7 @@ await test('weapon impacts use short colored volumes and ground covers every enl
   assert(extents.x > W * 0.05 && extents.z > H * 0.05);
   view.dispose();
 });
-await test('received hits keep their flash, fire and sparks under load, then clear the tank quickly at both quality levels', () => {
+await test('received hits keep their flash, fire and sparks under load, then clear the tank quickly at both quality levels', async () => {
   for (const quality of ['performance', 'balanced']) {
     const b = new Battle(0, true, config(), 85);
     const view = new Renderer3D(canvas, b, {
@@ -1127,6 +1147,7 @@ await test('received hits keep their flash, fire and sparks under load, then cle
     );
     assert(view.explosions.sprites.every((mesh) => !mesh.isPickable));
     view.dispose();
+    await flushSceneWork();
   }
 });
 await test('mine models show team markers, are reused after EMP and never mutate combat', () => {
@@ -1182,3 +1203,6 @@ await test('renderer teardown releases all scene resources and is idempotent', (
   r.dispose();
 });
 console.log(`\n${passed} Babylon.js 3D integration checks passed.`);
+console.log(
+  `Peak resident memory: ${(process.resourceUsage().maxRSS / 1024).toFixed(0)} MiB.`,
+);

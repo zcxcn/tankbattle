@@ -1,0 +1,279 @@
+{
+  "acquired": "2026-09-07",
+  "description": "Web-only local copies of CC0 Poly Haven photographed material maps. No runtime external requests.",
+  "normalConvention": "OpenGL (+Y), sampled as linear data. Babylon PBR invertNormalMapY converts to its default tangent convention.",
+  "assets": [
+    {
+      "id": "asphalt_01",
+      "name": "asphalt",
+      "authors": [
+        "Charlotte Baglioni (photography)",
+        "Dario Barresi (processing)"
+      ],
+      "license": "CC0-1.0",
+      "licenseUrl": "https://polyhaven.com/license",
+      "page": "https://polyhaven.com/a/asphalt_01",
+      "files": [
+        {
+          "file": "asphalt-color.webp",
+          "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/asphalt_01/asphalt_01_diff_1k.jpg",
+          "sourceMd5": "43c88946c38109d77a24456686a376f9",
+          "sourceSha256": "99b6f6bdfbd09279f3f550ac9593336df541aa2319537566eeb3e737d8512010",
+          "sha256": "97227f1469be7685038cc273bc1142c46a31e75ffd870c0e4a9ce5698485cb66",
+          "width": 1024,
+          "height": 1024,
+          "bytes": 157858,
+          "processing": "Resize; WebP q85"
+        },
+        {
+          "file": "asphalt-normal.webp",
+          "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/asphalt_01/asphalt_01_nor_gl_1k.jpg",
+          "sourceMd5": "ff3e4a0fc157cfa014fbcac68e662c38",
+          "sourceSha256": "b745fd20cfb775ae907786ff0ffe200cedf73f3a6ef4e60c637b85b08e0a4f9a",
+          "sha256": "90b585584593614cf9e1feaa57b6ed1181205f70f3a4c35cdc600c6fa8a054a7",
+          "width": 1024,
+          "height": 1024,
+          "bytes": 640084,
+          "processing": "Resize; WebP q95"
+        },
+        {
+          "file": "asphalt-roughness.webp",
+          "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/asphalt_01/asphalt_01_rough_1k.jpg",
+          "sourceMd5": "92ffad35bc543f59ffd9860c53a98214",
+          "sourceSha256": "147891957807bb03cc565c9daa8a16a4af7713449a0f475c638f78f833ad0646",
+          "sha256": "a5ae799f31f9ba9b5372d6712b28546f744af01266c967f4e38141f48cd98170",
+          "width": 512,
+          "height": 512,
+          "bytes": 980,
+          "processing": "Resize; WebP q90"
+        }
+      ]
+    },
+    {
+      "id": "rough_concrete",
+      "name": "concrete",
+      "authors": [
+        "Dimitrios Savva"
+      ],
+      "license": "CC0-1.0",
+      "licenseUrl": "https://polyhaven.com/license",
+      "page": "https://polyhaven.com/a/rough_concrete",
+      "files": [
+        {
+          "file": "concrete-color.webp",
+          "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/rough_concrete/rough_concrete_diff_1k.jpg",
+          "sourceMd5": "82909f2db1e0453500703ae54e806f5c",
+          "sourceSha256": "dd7fc03e152eb8c2fd511248aa2e9bf7428a645bd0e0b74ac1d887ad136cb0bc",
+          "sha256": "6748b3bb86cd633e1b9feb1e15788c73c963287f9fccb356731c63b85b56c167",
+          "width": 1024,
+          "height": 1024,
+          "bytes": 354742,
+          "processing": "Resize; WebP q85"
+        },
+        {
+          "file": "concrete-normal.webp",
+          "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/rough_concrete/rough_concrete_nor_gl_1k.jpg",
+          "sourceMd5": "61f785d44cdbf0b9f3bc68e471177358",
+          "sourceSha256": "54c85854ad5cafb16840df91a605c857bdf3d07fa79f11921c8327fccf6423ae",
+          "sha256": "0b0703bce8ed4fe44b4d3b47a32acb46359af30a1950f459ad1031a1aae32f23",
+          "width": 1024,
+          "height": 1024,
+          "bytes": 720734,
+          "processing": "Resize; WebP q95"
+        },
+        {
+          "file": "concrete-roughness.webp",
+          "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/rough_concrete/rough_concrete_rough_1k.jpg",
+          "sourceMd5": "4b530c64e200c3190f527ccc04a4c919",
+          "sourceSha256": "2d392a3e0d44087ddecc0cd3fd27367a6cc0c16f94bbba2e8fbfbdf77eb105be",
+          "sha256": "7154df5812605f25918768ceef4e4bc0785468e91fedf0cd0c2d83755fd09550",
+          "width": 512,
+          "height": 512,
+          "bytes": 31910,
+          "processing": "Resize; WebP q90"
+        }
+      ]
+    },
+    {
+      "id": "red_brick_03",
+      "name": "brick",
+      "authors": [
+        "Rob Tuytel"
+      ],
+      "license": "CC0-1.0",
+      "licenseUrl": "https://polyhaven.com/license",
+      "page": "https://polyhaven.com/a/red_brick_03",
+      "files": [
+        {
+          "file": "brick-color.webp",
+          "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/red_brick_03/red_brick_03_diff_1k.jpg",
+          "sourceMd5": "d157c6d6dd774762b4269927a87fe9b5",
+          "sourceSha256": "9c58254c099b2d211478f50a427fcdde622af24249ff2e94da41fb836f8c857f",
+          "sha256": "605b6ddf01a9c2fc7f0af27a026f6b416516d6c6d8a1a5b22394918eb2bfc187",
+          "width": 1024,
+          "height": 1024,
+          "bytes": 331136,
+          "processing": "Resize; WebP q85"
+        },
+        {
+          "file": "brick-normal.webp",
+          "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/red_brick_03/red_brick_03_nor_gl_1k.jpg",
+          "sourceMd5": "e89ce432d9160edb7c902f901756865f",
+          "sourceSha256": "9bfd45e24720d851017c1e1678b70219c72239b2ac6b25e11d57d458bdab8503",
+          "sha256": "127a7e29c98b4ebdab44d89b71e06aec7975cca0436f1ceba1c8f27ffcac316c",
+          "width": 1024,
+          "height": 1024,
+          "bytes": 504212,
+          "processing": "Resize; WebP q95"
+        },
+        {
+          "file": "brick-roughness.webp",
+          "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/red_brick_03/red_brick_03_rough_1k.jpg",
+          "sourceMd5": "8f16439361c5fe27f9df03be279ce8c9",
+          "sourceSha256": "cd865623c1422926848024e877103e9dfe857b2ca8221fce49264b74c9ff48b1",
+          "sha256": "efb76b2bb5477807cf793ead256e26457735363c16f7bf2de3707ed118bab2c5",
+          "width": 512,
+          "height": 512,
+          "bytes": 31896,
+          "processing": "Resize; WebP q90"
+        }
+      ]
+    },
+    {
+      "id": "rusty_metal_02",
+      "name": "painted-metal",
+      "authors": [
+        "Rob Tuytel"
+      ],
+      "license": "CC0-1.0",
+      "licenseUrl": "https://polyhaven.com/license",
+      "page": "https://polyhaven.com/a/rusty_metal_02",
+      "files": [
+        {
+          "file": "painted-metal-color.webp",
+          "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/rusty_metal_02/rusty_metal_02_diff_1k.jpg",
+          "sourceMd5": "476bff9959bc727bd4b83c0a9ac4aeaa",
+          "sourceSha256": "adaf094391518b6afe787a123942110aa88ef521c844f970b124420f5ed5d3d9",
+          "sha256": "42b0af564ab906ab760ebf4c2849031fc8985b556d31a61112269e79476a18b1",
+          "width": 1024,
+          "height": 1024,
+          "bytes": 81518,
+          "processing": "Grayscale; linear 0.62 * luminance + 93; resize; WebP q85"
+        },
+        {
+          "file": "painted-metal-normal.webp",
+          "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/rusty_metal_02/rusty_metal_02_nor_gl_1k.jpg",
+          "sourceMd5": "8d6dc7e26f2708ec59e2a739711c612b",
+          "sourceSha256": "995197a62cac6fbb000e6e6591a3330a3b77ef069c4ac58f505b586b9bdbd97b",
+          "sha256": "46fecba6d4490d8a740a4092aec5c0aa59c9fa0d79f756260062648da2a89121",
+          "width": 1024,
+          "height": 1024,
+          "bytes": 237158,
+          "processing": "Resize; WebP q95"
+        },
+        {
+          "file": "painted-metal-roughness.webp",
+          "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/rusty_metal_02/rusty_metal_02_rough_1k.jpg",
+          "sourceMd5": "75551ad404e29489f9b75876da95a13a",
+          "sourceSha256": "178deb5896232f0498555676e55a3be1d6d197e2211d8d17cb8386a868bfd54a",
+          "sha256": "97ac6e29ef5de2ddf5f18963c653f854ded7f149c459b0aa67e1b9e0b41f5bb8",
+          "width": 512,
+          "height": 512,
+          "bytes": 20712,
+          "processing": "Resize; WebP q90"
+        }
+      ]
+    },
+    {
+      "id": "forest_ground_04",
+      "name": "soil",
+      "authors": [
+        "Rob Tuytel (photography, processing)",
+        "Rico Cilliers (minor adjustment)"
+      ],
+      "license": "CC0-1.0",
+      "licenseUrl": "https://polyhaven.com/license",
+      "page": "https://polyhaven.com/a/forest_ground_04",
+      "files": [
+        {
+          "file": "soil-color.webp",
+          "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/forest_ground_04/forest_ground_04_diff_1k.jpg",
+          "sourceMd5": "6ad9df4d731a238299806f739a26af83",
+          "sourceSha256": "50a4dda30875020c64385261aa7e00e2155b592302fa6794165f58fae73cbd2c",
+          "sha256": "879cc76806855a5b558a27971b9c7b48825179755ac518752c4abd0f1ee14ae8",
+          "width": 1024,
+          "height": 1024,
+          "bytes": 373530,
+          "processing": "Resize; WebP q85"
+        },
+        {
+          "file": "soil-normal.webp",
+          "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/forest_ground_04/forest_ground_04_nor_gl_1k.jpg",
+          "sourceMd5": "a010a0802c2d9a930c6f00d3b1f196d2",
+          "sourceSha256": "9c3a0200e02ce40edffbbf9f5f623ef08ea9b1b7812b556182ec978f88887151",
+          "sha256": "3cd85e6bd67ef91574777fb9b732892afd46539262f98d05cb1b5cd35856e18d",
+          "width": 1024,
+          "height": 1024,
+          "bytes": 644288,
+          "processing": "Resize; WebP q95"
+        },
+        {
+          "file": "soil-roughness.webp",
+          "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/forest_ground_04/forest_ground_04_rough_1k.jpg",
+          "sourceMd5": "b5c7ba5c16f00261e9a765d52cf7e0ac",
+          "sourceSha256": "89d4d50395eb92824a64132c4bc8a5a09009071e0b325ab66dc3104c7a3090ed",
+          "sha256": "f560dca6d62fe41177994ab1fd4f8184d1d52597924d5b5bac73551652b1b750",
+          "width": 512,
+          "height": 512,
+          "bytes": 47704,
+          "processing": "Resize; WebP q90"
+        }
+      ]
+    },
+    {
+      "id": "bark_brown_02",
+      "name": "bark",
+      "authors": [
+        "Rob Tuytel"
+      ],
+      "license": "CC0-1.0",
+      "licenseUrl": "https://polyhaven.com/license",
+      "page": "https://polyhaven.com/a/bark_brown_02",
+      "files": [
+        {
+          "file": "bark-color.webp",
+          "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/bark_brown_02/bark_brown_02_diff_1k.jpg",
+          "sourceMd5": "6669cca520594bdca19f94084984ab72",
+          "sourceSha256": "920fa0bed0c9d78c1d530e99795113afd532d7db746de440f4a85d7c83ed0f1a",
+          "sha256": "eddead12764719a882dd1e2e58b6051fa1c202b7618c5a59ab0b7e9c40596b34",
+          "width": 512,
+          "height": 512,
+          "bytes": 89512,
+          "processing": "Resize; WebP q85"
+        },
+        {
+          "file": "bark-normal.webp",
+          "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/bark_brown_02/bark_brown_02_nor_gl_1k.jpg",
+          "sourceMd5": "1cad3fe0349a44df2d4d1c2859c79920",
+          "sourceSha256": "0d5e691e8ad8bcd093a3587887fda2a6b4a948b5708a4f256f7919584c6eb857",
+          "sha256": "0dc8597db459c418dc4dd8249c2cf1345928f5ca7bbb29503afdc7578fe39dba",
+          "width": 512,
+          "height": 512,
+          "bytes": 156626,
+          "processing": "Resize; WebP q95"
+        },
+        {
+          "file": "bark-roughness.webp",
+          "sourceUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/bark_brown_02/bark_brown_02_rough_1k.jpg",
+          "sourceMd5": "bbcde696e5b9418cdcb2abe638965417",
+          "sourceSha256": "68125592de36e15bae7aa6db85c4d135aeb7e5653199ba226483a70f6d69837d",
+          "sha256": "54a349333afe1b8b4470b23bfdecc185579d79ade0484eb0613e6b57602abdab",
+          "width": 512,
+          "height": 512,
+          "bytes": 37456,
+          "processing": "Resize; WebP q90"
+        }
+      ]
+    }
+  ]
+}

@@ -18,5 +18,6 @@ export default defineConfig({
     emptyOutDir: true,
     target: 'chrome100',
     sourcemap: false,
+    assetsInlineLimit: 0,
   },
 });

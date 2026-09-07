@@ -212,8 +212,8 @@ export class Renderer3D {
     scene.imageProcessingConfiguration.toneMappingEnabled = true;
     scene.imageProcessingConfiguration.toneMappingType =
       ImageProcessingConfiguration.TONEMAPPING_ACES;
-    scene.imageProcessingConfiguration.exposure = 1.12;
-    scene.imageProcessingConfiguration.contrast = 1.12;
+    scene.imageProcessingConfiguration.exposure = 1.08;
+    scene.imageProcessingConfiguration.contrast = 1.08;
     if (!headless && this.quality !== 'performance' && !this.mobile) {
       const pipe = (this.pipeline = new DefaultRenderingPipeline(
         'cinematic-image-pipeline',
@@ -224,15 +224,15 @@ export class Renderer3D {
       pipe.fxaaEnabled = true;
       pipe.samples = this.quality === 'cinematic' ? 4 : 1;
       pipe.bloomEnabled = true;
-      pipe.bloomThreshold = 1;
-      pipe.bloomWeight = 0.27;
+      pipe.bloomThreshold = 1.35;
+      pipe.bloomWeight = 0.16;
       pipe.bloomKernel = 40;
       pipe.imageProcessingEnabled = true;
       scene.imageProcessingConfiguration.toneMappingEnabled = true;
       scene.imageProcessingConfiguration.toneMappingType =
         ImageProcessingConfiguration.TONEMAPPING_ACES;
-      scene.imageProcessingConfiguration.exposure = 1.12;
-      scene.imageProcessingConfiguration.contrast = 1.16;
+      scene.imageProcessingConfiguration.exposure = 1.08;
+      scene.imageProcessingConfiguration.contrast = 1.08;
       pipe.sharpenEnabled = this.quality === 'cinematic';
       if (pipe.sharpenEnabled) {
         pipe.sharpen.edgeAmount = 0.16;

@@ -54,6 +54,34 @@ for (const mount of ['/', base]) {
   assert.equal(assetModule.assetUrl('/'), mount);
 }
 const assets = await fs.readdir(path.join(root, 'assets'));
+const surfaceFiles = (await fs.readdir('web/assets/surfaces')).filter((file) =>
+  file.endsWith('.webp'),
+);
+const visualFiles = [
+  'web/assets/iron-embers-cover.png',
+  ...surfaceFiles.map((file) => 'web/assets/surfaces/' + file),
+];
+let visualBytes = 0;
+const publishedVisuals = [];
+for (const file of visualFiles) {
+  const ext = path.extname(file);
+  const id = path.basename(file, ext);
+  const published = assets.filter(
+    (asset) => asset.startsWith(id + '-') && asset.endsWith(ext),
+  );
+  assert.equal(published.length, 1, 'one hashed visual asset: ' + id);
+  const source = await fs.readFile(file);
+  visualBytes += source.length;
+  assert.deepEqual(
+    await fs.readFile(path.join(root, 'assets', published[0])),
+    source,
+  );
+  publishedVisuals.push(base + 'assets/' + published[0]);
+}
+assert(
+  visualBytes < 8 * 1024 * 1024,
+  'new visual assets must stay below 8 MiB',
+);
 const radioFiles = (await fs.readdir('web/audio/radio')).filter((file) =>
   file.endsWith('.wav'),
 );
@@ -70,10 +98,13 @@ for (const file of radioFiles) {
 }
 let cssCount = 0,
   jsCount = 0;
+let jsContent = '';
 for (const file of assets) {
+  if (!file.endsWith('.js') && !file.endsWith('.css')) continue;
   const content = await fs.readFile(path.join(root, 'assets', file), 'utf8');
   if (file.endsWith('.js')) {
     jsCount++;
+    jsContent += content;
     for (const match of content.matchAll(
       /(?:from|import\()\s*["'](\.\/[^"']+\.js)["']/g,
     )) {
@@ -93,7 +124,12 @@ for (const file of assets) {
   }
 }
 assert(cssCount > 0 && jsCount > 0);
+for (const url of publishedVisuals)
+  assert(
+    jsContent.includes(url),
+    'visual asset must use the Pages base URL: ' + url,
+  );
 assert(!(await fs.stat(path.join(root, '.openai')).catch(() => null)));
 console.log(
-  `Pages verified: ${required.length} required assets, ${radioFiles.length} English voice clips, ${jsCount} JS chunks, ${cssCount} stylesheets; root and /tankbattle/ asset URLs pass.`,
+  `Pages verified: ${required.length} required assets, ${radioFiles.length} English voice clips, ${visualFiles.length} new visual assets (${(visualBytes / 1048576).toFixed(2)} MiB), ${jsCount} JS chunks, ${cssCount} stylesheets; root and /tankbattle/ asset URLs pass.`,
 );

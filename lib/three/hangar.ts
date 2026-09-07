@@ -48,7 +48,7 @@ export class Hangar {
     scene.useRightHandedSystem = true;
     scene.clearColor = new Color4(0.055, 0.069, 0.058, 1);
     scene.fogMode = Scene.FOGMODE_EXP2;
-    scene.fogDensity = 0.025;
+    scene.fogDensity = 0.014;
     scene.fogColor = new Color3(0.045, 0.061, 0.049);
     scene.skipPointerMovePicking = true;
     this.camera = new UniversalCamera(
@@ -73,7 +73,7 @@ export class Hangar {
       new Vector3(0, 1, 0),
       scene,
     );
-    ambient.intensity = 0.3;
+    ambient.intensity = 0.42;
     ambient.diffuse = new Color3(0.64, 0.72, 0.77);
     ambient.groundColor = new Color3(0.2, 0.22, 0.18);
     const key = new DirectionalLight(
@@ -82,8 +82,8 @@ export class Hangar {
       scene,
     );
     key.position.set(7, 13, 7);
-    key.intensity = 3.5;
-    key.diffuse = new Color3(1, 0.85, 0.61);
+    key.intensity = 2.2;
+    key.diffuse = new Color3(1, 0.93, 0.81);
     this.shadow = new ShadowGenerator(1024, key);
     this.shadow.useBlurExponentialShadowMap = true;
     this.shadow.blurKernel = 20;
@@ -95,7 +95,7 @@ export class Hangar {
       scene,
     );
     rim.diffuse = new Color3(0.4, 0.65, 0.72);
-    rim.intensity = 95;
+    rim.intensity = 65;
     rim.range = 20;
     const floor = MeshBuilder.CreateGround(
       'workshop-floor',
@@ -185,6 +185,11 @@ export class Hangar {
     this.model.body.rotation.y = -0.48;
     this.model.turret.rotation.y = -0.76;
     for (const mesh of this.model.meshes) this.shadow.addShadowCaster(mesh);
+    scene.imageProcessingConfiguration.toneMappingEnabled = true;
+    scene.imageProcessingConfiguration.toneMappingType =
+      ImageProcessingConfiguration.TONEMAPPING_ACES;
+    scene.imageProcessingConfiguration.exposure = 1.12;
+    scene.imageProcessingConfiguration.contrast = 1.08;
     if (!this.mobile) {
       const pipe = new DefaultRenderingPipeline(
         'garage-tonemapping',
@@ -194,13 +199,8 @@ export class Hangar {
       );
       pipe.fxaaEnabled = true;
       pipe.bloomEnabled = true;
-      pipe.bloomWeight = 0.2;
-      pipe.bloomThreshold = 1.1;
-      scene.imageProcessingConfiguration.toneMappingEnabled = true;
-      scene.imageProcessingConfiguration.toneMappingType =
-        ImageProcessingConfiguration.TONEMAPPING_ACES;
-      scene.imageProcessingConfiguration.exposure = 1.25;
-      scene.imageProcessingConfiguration.contrast = 1.18;
+      pipe.bloomWeight = 0.12;
+      pipe.bloomThreshold = 1.5;
     }
     if (this.mobile) key.shadowEnabled = false;
     void scene.whenReadyAsync().then(() => {

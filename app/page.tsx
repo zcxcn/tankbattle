@@ -1,5 +1,6 @@
 'use client';
 import { assetUrl } from '@/lib/asset-url';
+import battlefieldCover from '../web/assets/iron-embers-cover.png?url';
 import { isMobileDevice, deviceState } from '@/lib/performance';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
@@ -468,13 +469,9 @@ export default function Home() {
             <section className="mission-layout">
               <div className="keyart">
                 <img
-                  src={assetUrl('/keyart.png')}
-                  alt="黄昏废墟中整装待发的主战坦克"
-                />
-                <HangarScene
-                  chassis={save.chassis}
-                  level={career.level}
-                  disabled={!!run}
+                  src={battlefieldCover}
+                  alt="工业废墟中披着磨损装甲、驶过破碎路面的主战坦克"
+                  fetchPriority="high"
                 />
                 <div className="keyart-shade" />
                 <div className="art-topline">
@@ -639,7 +636,7 @@ export default function Home() {
                     }
                   >
                     <div className={'chapter-image scene-' + (i % 6)}>
-                      <img src={assetUrl('/keyart.png')} alt="" />
+                      <img src={battlefieldCover} alt="" loading="lazy" />
                       <span className="chapter-index">
                         {String(i + 1).padStart(2, '0')}
                       </span>
@@ -673,7 +670,7 @@ export default function Home() {
         {tab === 'garage' && (
           <section className="garage-layout">
             <div className="garage-showcase">
-              <img src={assetUrl('/keyart.png')} alt="当前装甲底盘展示" />
+              <img src={battlefieldCover} alt="当前装甲底盘展示" />
               <HangarScene
                 chassis={save.chassis}
                 level={preview.level}
