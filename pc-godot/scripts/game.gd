@@ -72,8 +72,8 @@ func _connect_ui_signal(signal_name: StringName, target: Callable) -> void:
 func _show_title_tank() -> void:
 	_clear_combat_nodes()
 	_build_arena()
-	player = _spawn_tank("CommandTank", Vector3(9.0, 0.05, 44.5), TankActor.TEAM_PLAYER, true, false, "line")
-	player.rotation.y = PI - 0.48
+	player = _spawn_tank("CommandTank", Vector3(7.0, 0.05, 44.5), TankActor.TEAM_PLAYER, true, false, "line")
+	player.rotation.y = PI - 0.05
 	player.active = false
 	_build_title_shot()
 	objective = "灰中点火 / CHAPTER 01"
@@ -91,16 +91,16 @@ func _build_title_shot() -> void:
 	showcase_camera.fov = 47.0
 	showcase_camera.near = 0.08
 	showcase_camera.far = 260.0
-	showcase_camera.position = Vector3(0.0, 5.6, 59.5)
+	showcase_camera.position = Vector3(1.0, 3.6, 53.0)
 	_title_rig.add_child(showcase_camera)
-	showcase_camera.look_at(Vector3(0.0, 1.25, 40.5), Vector3.UP)
+	showcase_camera.look_at(Vector3(5.5, 1.2, 43.7), Vector3.UP)
 	showcase_camera.current = true
 
 	var key_light := SpotLight3D.new()
 	key_light.name = "ArmorKeyLight"
 	key_light.position = Vector3(4.0, 10.5, 51.0)
 	key_light.light_color = Color("ffd5aa")
-	key_light.light_energy = 10.0
+	key_light.light_energy = 6.0
 	key_light.spot_range = 28.0
 	key_light.spot_angle = 38.0
 	key_light.shadow_enabled = true
@@ -111,7 +111,7 @@ func _build_title_shot() -> void:
 	rim_light.name = "ArmorRimLight"
 	rim_light.position = Vector3(14.0, 3.2, 38.0)
 	rim_light.light_color = Color("53cbd2")
-	rim_light.light_energy = 4.8
+	rim_light.light_energy = 2.2
 	rim_light.omni_range = 13.0
 	rim_light.shadow_enabled = false
 	_title_rig.add_child(rim_light)

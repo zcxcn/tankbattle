@@ -1,0 +1,19 @@
+Challenger 2 - Shooting Range by Tom Zimmermann (tomm8)
+https://sketchfab.com/3d-models/challenger-2-shooting-range-e70234f6d695467499abc56646ab3e66
+https://sketchfab.com/tomm8
+
+Licensed under Creative Commons Attribution 4.0 International (CC BY 4.0):
+https://creativecommons.org/licenses/by/4.0/
+
+Modifications for TankBattle / Iron Embers:
+- removed the shooting-range diorama
+- baked source transforms and converted to metric Godot +Y up / -Z forward orientation
+- centered and grounded the vehicle
+- regrouped the body, turret and gun and added articulation pivots and a muzzle locator
+- consolidated geometry into three meshes while retaining all source triangles and PBR textures
+
+Source SHA-256:
+2C364CFAD08B978AF26E64339FA77FD535614E0029F7AF2B84CD62CF97DCA5D0
+
+Normalized derivative SHA-256:
+DD2B79E777F4C234C15A45AFE83F42A29BC2B4ADE13FDF4558E0AFC746BFA8B4

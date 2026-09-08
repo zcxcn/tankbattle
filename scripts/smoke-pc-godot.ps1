@@ -51,14 +51,20 @@ if ([string]::IsNullOrWhiteSpace($ArtifactDirectory)) {
 $ArtifactDirectory = (Resolve-Path -LiteralPath $ArtifactDirectory).Path
 
 if ([string]::IsNullOrWhiteSpace($ArchivePath)) {
-    $ArchivePath = Join-Path $repositoryRoot "outputs/pc-godot/Iron-Embers-Windows-x86_64-0.1.0.zip"
+    $ArchivePath = Join-Path $repositoryRoot "outputs/pc-godot/Iron-Embers-Windows-x86_64-0.2.0.zip"
 }
 $ArchivePath = (Resolve-Path -LiteralPath $ArchivePath).Path
 
 $executablePath = Join-Path $ArtifactDirectory "IronEmbers.exe"
 $pckPath = Join-Path $ArtifactDirectory "IronEmbers.pck"
 $manifestPath = Join-Path $ArtifactDirectory "build-manifest.json"
-foreach ($requiredPath in @($executablePath, $pckPath, $manifestPath)) {
+$requiredCreditPaths = @(
+    "credits/THIRD_PARTY_ASSETS.md"
+    "credits/models/challenger2/SOURCE_LICENSE.txt"
+    "credits/models/kf51/SOURCE_LICENSE.txt"
+    "credits/models/kv2/SOURCE_LICENSE.txt"
+) | ForEach-Object { Join-Path $ArtifactDirectory $_ }
+foreach ($requiredPath in @($executablePath, $pckPath, $manifestPath) + $requiredCreditPaths) {
     if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) {
         throw "Required packaged file is missing: $requiredPath"
     }
@@ -77,8 +83,8 @@ $expectedVersionFields = [ordered]@{
     ProductName = "Iron Embers"
     CompanyName = "Iron Embers Studio"
     FileDescription = "Iron Embers — Native PC Tank Combat"
-    FileVersion = "0.1.0.0"
-    ProductVersion = "0.1.0.0"
+    FileVersion = "0.2.0.0"
+    ProductVersion = "0.2.0.0"
 }
 foreach ($entry in $expectedVersionFields.GetEnumerator()) {
     if ([string]$versionInfo.($entry.Key) -ne [string]$entry.Value) {

@@ -1,0 +1,44 @@
+[remap]
+
+importer="texture"
+type="CompressedTexture2D"
+uid="uid://crm83vsewlxey"
+path.bptc="res://.godot/imported/challenger2_Image_5.png-e1d3f1ae04aca675fb6b46b74ae4e1f5.bptc.ctex"
+metadata={
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
+}
+generator_parameters={
+"md5": "c9dd4a18d1057e5bbef24fd8fdffc5c7"
+}
+
+[deps]
+
+source_file="res://assets/models/realistic/challenger2/challenger2_Image_5.png"
+dest_files=["res://.godot/imported/challenger2_Image_5.png-e1d3f1ae04aca675fb6b46b74ae4e1f5.bptc.ctex"]
+
+[params]
+
+compress/mode=2
+compress/high_quality=true
+compress/lossy_quality=0.7
+compress/uastc_level=0
+compress/rdo_quality_loss=0.0
+compress/hdr_compression=1
+compress/normal_map=0
+compress/channel_pack=0
+mipmaps/generate=true
+mipmaps/limit=-1
+roughness/mode=0
+roughness/src_normal=""
+process/channel_remap/red=0
+process/channel_remap/green=1
+process/channel_remap/blue=2
+process/channel_remap/alpha=3
+process/fix_alpha_border=true
+process/premult_alpha=false
+process/normal_map_invert_y=false
+process/hdr_as_srgb=false
+process/hdr_clamp_exposure=false
+process/size_limit=0
+detect_3d/compress_to=1

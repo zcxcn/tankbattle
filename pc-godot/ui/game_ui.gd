@@ -133,7 +133,7 @@ func _build_title_layer() -> void:
 
 	var safe := _new_safe_container(_title_layer)
 	var layout := VBoxContainer.new()
-	layout.add_theme_constant_override(&"separation", 24)
+	layout.add_theme_constant_override(&"separation", 14)
 	safe.add_child(layout)
 
 	var header := HBoxContainer.new()
@@ -159,26 +159,27 @@ func _build_title_layer() -> void:
 	layout.add_child(HSeparator.new())
 
 	var body := HBoxContainer.new()
+	body.name = "TitleBody"
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	body.alignment = BoxContainer.ALIGNMENT_CENTER
-	body.add_theme_constant_override(&"separation", 72)
+	body.add_theme_constant_override(&"separation", 0)
 	layout.add_child(body)
 
 	var command := VBoxContainer.new()
-	command.custom_minimum_size = Vector2(480.0, 0.0)
-	command.alignment = BoxContainer.ALIGNMENT_CENTER
-	command.add_theme_constant_override(&"separation", 13)
+	command.name = "TitleCommand"
+	command.custom_minimum_size = Vector2(520.0, 0.0)
+	command.add_theme_constant_override(&"separation", 8)
 	body.add_child(command)
+	body.add_child(_spacer(true, false))
 	command.add_child(_label("TACTICAL ARMORED COMMAND", &"Kicker"))
 	var game_title := _label("钢铁余烬", &"DisplayTitle")
+	game_title.add_theme_font_size_override(&"font_size", 52)
 	game_title.add_theme_color_override(&"font_color", Color("#f4f1e7"))
 	command.add_child(game_title)
 	var subtitle := _label("从灰烬中点火，驾驶最后的装甲穿过尘湾。", &"Body")
 	subtitle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	subtitle.custom_minimum_size = Vector2(470.0, 54.0)
+	subtitle.custom_minimum_size = Vector2(0.0, 30.0)
 	subtitle.add_theme_color_override(&"font_color", ThemeFactory.MUTED)
 	command.add_child(subtitle)
-	command.add_child(_fixed_spacer(12.0))
 
 	_title_start_button = _button("开始行动", &"PrimaryButton", func() -> void: start_requested.emit())
 	command.add_child(_title_start_button)
@@ -188,44 +189,59 @@ func _build_title_layer() -> void:
 	command.add_child(quit_button)
 	_wire_vertical_focus([_title_start_button, settings_button, quit_button])
 	_focus_targets["title"] = _title_start_button
+	command.add_child(_spacer(false, true))
 
-	var feature := _panel(&"FeaturePanel")
-	feature.custom_minimum_size = Vector2(420.0, 440.0)
-	body.add_child(feature)
+	var feature := _panel(&"HUDPanel")
+	feature.name = "TitleBriefing"
+	command.add_child(feature)
 	var briefing := VBoxContainer.new()
-	briefing.add_theme_constant_override(&"separation", 15)
+	briefing.add_theme_constant_override(&"separation", 6)
 	feature.add_child(briefing)
-	briefing.add_child(_label("首次作战切片", &"Kicker"))
-	briefing.add_child(_label("第 01 章 · 灰中点火", &"ScreenTitle"))
-	var mission := _label("突破黄昏修理厂封锁，歼灭 6 辆敌军，并击毁指挥重坦「铁牙」。", &"Body")
+	var chapter := HBoxContainer.new()
+	briefing.add_child(chapter)
+	chapter.add_child(_label("第 01 章 · 灰中点火", &"HudValue"))
+	chapter.add_child(_spacer(true, false))
+	chapter.add_child(_label("行动简报", &"Kicker"))
+	var mission := _label("突破修理厂封锁，歼灭 6 辆敌军，击毁指挥重坦「铁牙」。", &"Muted")
 	mission.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	mission.custom_minimum_size = Vector2(0.0, 72.0)
 	briefing.add_child(mission)
 	briefing.add_child(HSeparator.new())
-	briefing.add_child(_label("本机作战履历", &"Muted"))
 	var stats := HBoxContainer.new()
 	stats.add_theme_constant_override(&"separation", 10)
 	briefing.add_child(stats)
-	var kills_card := _metric_card("累计击毁")
-	_title_kills = kills_card.get_meta("value") as Label
-	stats.add_child(kills_card)
-	var level_card := _metric_card("坦克等级")
-	_title_level = level_card.get_meta("value") as Label
-	stats.add_child(level_card)
-	var score_card := _metric_card("最高评分")
-	_title_best = score_card.get_meta("value") as Label
-	stats.add_child(score_card)
-	briefing.add_child(_spacer(false, true))
-	var tips := _label("键鼠与标准手柄完整支持\nENTER / A  确认    ESC / B  返回", &"Muted")
+	var stat_values: Array[Label] = []
+	for caption: String in ["累计击毁", "坦克等级", "最高评分"]:
+		var stat := VBoxContainer.new()
+		stat.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		stat.add_theme_constant_override(&"separation", 0)
+		stats.add_child(stat)
+		stat.add_child(_label(caption, &"Micro"))
+		var value := _label("0", &"HudValue")
+		value.add_theme_color_override(&"font_color", ThemeFactory.GOLD)
+		stat.add_child(value)
+		stat_values.append(value)
+	_title_kills = stat_values[0]
+	_title_level = stat_values[1]
+	_title_best = stat_values[2]
+	var tips := _label("键鼠 / 手柄    ENTER / A  确认    ESC / B  返回", &"Micro")
 	tips.add_theme_color_override(&"font_color", ThemeFactory.GREEN)
-	briefing.add_child(tips)
+	command.add_child(tips)
 
 	layout.add_child(HSeparator.new())
 	var footer := HBoxContainer.new()
 	layout.add_child(footer)
-	footer.add_child(_label("BUILD 0.1 · FORWARD+", &"Micro"))
+	footer.add_child(_label("BUILD 0.2 · FORWARD+ / PBR ARMOR", &"Micro"))
 	footer.add_child(_spacer(true, false))
-	footer.add_child(_label("NO RETREAT. ONLY DAWN.", &"Micro"))
+	var asset_credit := _label("3D：tomm8 · GRIP420 / David Falke · Comrade1280 · CC BY 4.0", &"Micro")
+	asset_credit.name = "AssetCredit"
+	asset_credit.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	asset_credit.tooltip_text = (
+		"Challenger 2 - Shooting Range — Tom Zimmermann (tomm8)\n"
+		+ "KF51 Panther — GRIP420 / David Falke\n"
+		+ "KV-2 heavy tank 1940 — Comrade1280\n"
+		+ "完整来源与修改记录：assets/THIRD_PARTY_ASSETS.md"
+	)
+	footer.add_child(asset_credit)
 
 
 func _build_hud_layer() -> void:

@@ -90,6 +90,14 @@ if (-not $SkipTests) {
     Write-Host "Running scene integration tests..."
     & $GodotPath --headless --path $projectRoot "res://tests/integration_scene.tscn" -- --test
     Assert-LastExitCode -Action "Godot integration tests"
+
+    Write-Host "Running imported wheel geometry and motion tests..."
+    & $GodotPath --headless --path $projectRoot --script "res://tests/tracked_drive_test.gd"
+    Assert-LastExitCode -Action "Godot tracked drive tests"
+
+    Write-Host "Running UI construction smoke tests..."
+    & $GodotPath --headless --path $projectRoot --script "res://ui/game_ui_smoke_test.gd" -- --test
+    Assert-LastExitCode -Action "Godot UI smoke tests"
 }
 
 $outputRoot = [System.IO.Path]::GetFullPath((Join-Path $repositoryRoot "outputs/pc-godot"))
@@ -114,7 +122,24 @@ $pckPath = Join-Path $artifactDirectory "IronEmbers.pck"
 Get-RequiredPath -Path $executablePath -Description "Exported executable" | Out-Null
 Get-RequiredPath -Path $pckPath -Description "Exported PCK" | Out-Null
 
-$productVersion = "0.1.0"
+$creditSources = [ordered]@{
+    "THIRD_PARTY_ASSETS.md" = "assets/THIRD_PARTY_ASSETS.md"
+    "models/challenger2/SOURCE_LICENSE.txt" = "assets/models/realistic/challenger2/SOURCE_LICENSE.txt"
+    "models/kf51/SOURCE_LICENSE.txt" = "assets/models/realistic/kf51/SOURCE_LICENSE.txt"
+    "models/kv2/SOURCE_LICENSE.txt" = "assets/models/realistic/kv2/SOURCE_LICENSE.txt"
+}
+$creditsDirectory = Join-Path $artifactDirectory "credits"
+foreach ($credit in $creditSources.GetEnumerator()) {
+    $sourcePath = Get-RequiredPath -Path (Join-Path $projectRoot $credit.Value) -Description "Third-party credit"
+    $destinationPath = Join-Path $creditsDirectory $credit.Key
+    [System.IO.Directory]::CreateDirectory([System.IO.Path]::GetDirectoryName($destinationPath)) | Out-Null
+    Copy-Item -LiteralPath $sourcePath -Destination $destinationPath
+    if (-not (Test-Path -LiteralPath $destinationPath -PathType Leaf) -or (Get-Item -LiteralPath $destinationPath).Length -eq 0) {
+        throw "Third-party credit was not packaged correctly: $destinationPath"
+    }
+}
+
+$productVersion = "0.2.0"
 $manifestPath = Join-Path $artifactDirectory "build-manifest.json"
 $payloadFiles = @(Get-ChildItem -LiteralPath $artifactDirectory -File -Recurse | Sort-Object FullName)
 $manifestFiles = @(

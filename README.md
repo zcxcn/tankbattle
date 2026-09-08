@@ -12,9 +12,16 @@
 
 ## Godot PC 原生重制
 
-`pc-godot/` 是用 **Godot 4.7.2、Forward+ 和 Jolt Physics** 重新制作的原生 PC 游戏，不是网页游戏加桌面外壳。当前可玩首章包含四种 CC0 精制装甲模型、骨骼履带动画、独立炮塔与炮管、工业战场、CC0 PBR 路面、可破坏掩体、分层粒子爆炸、合成瞬态与 CC0 真实户外录音组成的武器音效、固定 60 Hz 战斗逻辑和本机存档。首关需先击毁 6 辆普通敌军，随后攻入 Boss 区击毁“铁牙”；Boss 会在 70% / 35% 装甲阶段强化攻击并召唤护卫。
+`pc-godot/` 是用 **Godot 4.7.2、Forward+ 和 Jolt Physics** 重新制作的原生 PC 游戏，不是网页游戏加桌面外壳。当前可玩首章使用 Challenger 2、KF51 Panther 和 KV-2 三种写实 PBR 装甲模型，单车为 63,016–176,035 三角面，保留颜色、法线、金属/粗糙度和环境遮蔽贴图，并具备独立炮塔、炮管与精确炮口转轴。游戏还包含工业战场、CC0 PBR 路面、可破坏掩体、分层粒子爆炸、合成瞬态与 CC0 真实户外录音组成的武器音效、固定 60 Hz 战斗逻辑和本机存档。首关需先击毁 6 辆普通敌军，随后攻入 Boss 区击毁“铁牙”；Boss 会在 70% / 35% 装甲阶段强化攻击并召唤护卫。模型作者、许可与修改记录见 [`pc-godot/assets/THIRD_PARTY_ASSETS.md`](pc-godot/assets/THIRD_PARTY_ASSETS.md)。
 
 玩家和敌军使用同一套实体地雷系统：地雷经过 1.2 秒布防后才会触发，只攻击敌对车辆，90 秒后失效。玩家的电磁脉冲可安全排除范围内双方地雷，并短暂瘫痪敌军、打断 Boss 攻击准备。
+
+三种车型的实际负重轮按车速和转向差速转动，停车时停止；共享拆分后的网格并保留原始 PBR 材质。当前履带链条仍为静态网格。贴图使用 PC 显存压缩，第三方模型署名与许可随 Windows 成品一同打包在 `credits/` 中。
+
+Godot PC 实际渲染截图（Challenger 2：tomm8，CC BY 4.0；完整来源见上方资产说明）：
+
+![PC 0.2.0 首页](docs/pc-realistic/title.png)
+![Challenger 2 战场近景](docs/pc-realistic/challenger2.png)
 
 键鼠和标准手柄操作：
 
@@ -40,12 +47,13 @@ $godot = (Resolve-Path .\work\tools\godot-4.7.2\editor\Godot_v4.7.2-stable_win64
 # 独立逻辑测试与真实场景集成测试
 & $godot --headless --path .\pc-godot --script res://tests/test_runner.gd -- --test
 & $godot --headless --path .\pc-godot res://tests/integration_scene.tscn -- --test
+& $godot --headless --path .\pc-godot --script res://tests/tracked_drive_test.gd
 
 # 导入资源、运行测试、导出并启动成品冒烟检查
 pwsh -NoProfile -File .\scripts\build-pc-godot.ps1 -Configuration Release
 ```
 
-构建脚本固定校验官方 Godot 可执行文件和模板的 SHA-256；其他位置的同版 console 程序可通过 `-GodotPath <路径>` 指定，Windows 模板仍放在 `work/tools/godot-4.7.2/templates/`。Release 成品位于 `outputs/pc-godot/windows-x86_64/`，可分发压缩包为 `outputs/pc-godot/Iron-Embers-Windows-x86_64-0.1.0.zip`。当前 Windows 可执行文件未做代码签名，首次运行可能显示系统信誉提示。
+构建脚本固定校验官方 Godot 可执行文件和模板的 SHA-256；其他位置的同版 console 程序可通过 `-GodotPath <路径>` 指定，Windows 模板仍放在 `work/tools/godot-4.7.2/templates/`。Release 成品位于 `outputs/pc-godot/windows-x86_64/`，可分发压缩包为 `outputs/pc-godot/Iron-Embers-Windows-x86_64-0.2.0.zip`。当前 Windows 可执行文件未做代码签名，首次运行可能显示系统信誉提示。
 
 本次 PC 重制的源码集中在 `pc-godot/`，构建与验收脚本为 `scripts/build-pc-godot.ps1`、`scripts/smoke-pc-godot.ps1`；`mobile/baseline/` 和 `android/` 未改动。
 

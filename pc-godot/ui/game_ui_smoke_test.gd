@@ -25,6 +25,9 @@ func _run() -> void:
 	root.add_child(ui)
 	await process_frame
 	assert(ui.get_node("TitleLayer").visible)
+	var asset_credit := ui.get_node("TitleLayer").find_child("AssetCredit", true, false) as Label
+	assert(asset_credit != null)
+	assert("tomm8" in asset_credit.text and "Comrade1280" in asset_credit.text and "CC BY 4.0" in asset_credit.text)
 	var render_ui := "--render-ui" in OS.get_cmdline_user_args()
 	var render_directory := OS.get_temp_dir().path_join("iron-embers-ui-test")
 	if render_ui:

@@ -1,0 +1,27 @@
+KF51 Panther by GRIP420
+https://sketchfab.com/3d-models/kf51-panther-505555987f33412e9f510642dbad7acb
+https://sketchfab.com/GRIP420
+
+Licensed under Creative Commons Attribution 4.0 International (CC BY 4.0):
+https://creativecommons.org/licenses/by/4.0/
+
+The uploader credits the model and textures to David Falke:
+https://sketchfab.com/davidfalke
+
+Uploader's additional note: commercial products are allowed with credit; the original model must not be resold as a standalone asset.
+
+Modifications for TankBattle:
+- baked source transforms
+- split connected components and reassigned them to body, turret and gun articulation groups
+- consolidated geometry into eight meshes without changing triangle count
+- uniformly scaled to a 3.70 m body width
+- centered, grounded and rotated to Godot +Y up / -Z forward
+- added Turret, Gun and Muzzle pivot nodes
+
+Source SHA-256:
+839933658A631CF74B61D2DDFD3E21E20186AE9731CF14FEA0D1DD9F7FEE7C24
+
+Normalized derivative SHA-256:
+FA68F18CDBA3C4E0900B36E9E5ED6AE311A5F16E9BB9492911FF1BDC8C06732B
+
+Official API metadata captured 2026-09-07 is preserved in source_sketchfab_metadata.json.

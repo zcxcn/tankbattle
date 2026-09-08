@@ -1,0 +1,18 @@
+Model Information:
+* title:	KV-2 heavy tank 1940
+* source:	https://sketchfab.com/3d-models/kv-2-heavy-tank-1940-ba8b84d78c0a42038cf2eaa4210ef296
+* author:	Comrade1280 (https://sketchfab.com/comrade1280)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "KV-2 heavy tank 1940" (https://sketchfab.com/3d-models/kv-2-heavy-tank-1940-ba8b84d78c0a42038cf2eaa4210ef296) by Comrade1280 (https://sketchfab.com/comrade1280) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+
+Modifications for TankBattle / Iron Embers:
+- removed the display floor and converted to metric Godot +Y up / -Z forward
+- centered and grounded the tank
+- separated body, wheels, tracks, turret and gun; added articulation pivots and a muzzle locator
+- reduced 583,381 source triangles to 176,035
+- resized 4K texture maps to 2K while retaining all four original PBR material sets
