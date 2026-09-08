@@ -16,6 +16,7 @@ import {
   ImageProcessingConfiguration,
   MeshBuilder,
   TransformNode,
+  type Mesh,
 } from './babylon';
 import { buildTank, box, type TankModel } from './tank-model';
 import { createMaterials, pbr, type Materials } from './materials';
@@ -34,6 +35,7 @@ export class Hangar {
   private pacer = new FramePacer();
   private chassis: number;
   private level: number;
+  private contact: Mesh;
   constructor(canvas: HTMLCanvasElement, chassis: number, level = 1) {
     this.chassis = chassis;
     this.level = level;
@@ -43,7 +45,7 @@ export class Hangar {
       { powerPreference: 'low-power', preserveDrawingBuffer: false },
       false,
     );
-    this.engine.setHardwareScalingLevel(1.2);
+    this.engine.setHardwareScalingLevel(this.mobile ? 1.2 : 1);
     const scene = (this.scene = new Scene(this.engine));
     scene.useRightHandedSystem = true;
     scene.clearColor = new Color4(0.055, 0.069, 0.058, 1);
@@ -73,7 +75,7 @@ export class Hangar {
       new Vector3(0, 1, 0),
       scene,
     );
-    ambient.intensity = 0.42;
+    ambient.intensity = 0.5;
     ambient.diffuse = new Color3(0.64, 0.72, 0.77);
     ambient.groundColor = new Color3(0.2, 0.22, 0.18);
     const key = new DirectionalLight(
@@ -82,13 +84,18 @@ export class Hangar {
       scene,
     );
     key.position.set(7, 13, 7);
-    key.intensity = 2.2;
+    key.intensity = 2.65;
     key.diffuse = new Color3(1, 0.93, 0.81);
     this.shadow = new ShadowGenerator(1024, key);
-    this.shadow.useBlurExponentialShadowMap = true;
-    this.shadow.blurKernel = 20;
+    key.autoUpdateExtends = false;
+    key.orthoLeft = key.orthoBottom = -12;
+    key.orthoRight = key.orthoTop = 12;
+    key.shadowMinZ = 1;
+    key.shadowMaxZ = 45;
+    this.shadow.usePercentageCloserFiltering = true;
+    this.shadow.filteringQuality = ShadowGenerator.QUALITY_MEDIUM;
     this.shadow.bias = 0.001;
-    this.shadow.normalBias = 0.06;
+    this.shadow.normalBias = 0.025;
     const rim = new PointLight(
       'garage-cool-rim',
       new Vector3(-6, 5, -5),
@@ -184,12 +191,21 @@ export class Hangar {
     this.model.root.scaling.setAll(1.13);
     this.model.body.rotation.y = -0.48;
     this.model.turret.rotation.y = -0.76;
+    this.contact = MeshBuilder.CreateGround(
+      'garage-vehicle-contact',
+      { width: 4.5 * 1.13, height: 5.2 * 1.13 },
+      scene,
+    );
+    this.contact.position.set(0.9, 0.018, 0);
+    this.contact.material = this.materials.contact;
+    this.contact.isPickable = false;
+    this.contact.rotation.y = this.model.body.rotation.y;
     for (const mesh of this.model.meshes) this.shadow.addShadowCaster(mesh);
     scene.imageProcessingConfiguration.toneMappingEnabled = true;
     scene.imageProcessingConfiguration.toneMappingType =
       ImageProcessingConfiguration.TONEMAPPING_ACES;
-    scene.imageProcessingConfiguration.exposure = 1.12;
-    scene.imageProcessingConfiguration.contrast = 1.08;
+    scene.imageProcessingConfiguration.exposure = 1.08;
+    scene.imageProcessingConfiguration.contrast = 1.04;
     if (!this.mobile) {
       const pipe = new DefaultRenderingPipeline(
         'garage-tonemapping',
@@ -224,6 +240,8 @@ export class Hangar {
     );
     this.model.root.position.x = 0.9;
     this.model.root.scaling.setAll(1.13);
+    this.model.body.rotation.y = -0.48;
+    this.model.turret.rotation.y = -0.76;
     for (const mesh of this.model.meshes) this.shadow.addShadowCaster(mesh);
   }
   start() {
@@ -240,6 +258,7 @@ export class Hangar {
       this.dirty = false;
       this.elapsed += Math.min(0.05, this.engine.getDeltaTime() / 1000);
       this.model.body.rotation.y = -0.48 + Math.sin(this.elapsed * 0.13) * 0.13;
+      this.contact.rotation.y = this.model.body.rotation.y;
       this.model.turret.rotation.y =
         -0.76 + Math.sin(this.elapsed * 0.17) * 0.13;
       this.camera.position.x = 8.8 + Math.sin(this.elapsed * 0.09) * 0.35;

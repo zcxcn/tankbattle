@@ -1,4 +1,5 @@
 import { assetUrl } from '../asset-url';
+import { CreateBoxVertexData } from '@babylonjs/core/Meshes/Builders/boxBuilder.js';
 import {
   Matrix,
   Color3,
@@ -11,11 +12,13 @@ import {
   Scene,
   ShaderMaterial,
   ShadowGenerator,
+  StandardMaterial,
   TransformNode,
   Vector3,
   VertexData,
   type Material,
 } from './babylon';
+import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh.js';
 import { Battle, W, H, ENEMY_GATES, seeded, type Wall } from '../engine';
 import { type Materials, type Quality, pbr, emissive } from './materials';
 import { buildLivingCover, createNature, natureMaterials } from './nature';
@@ -35,10 +38,11 @@ export type World = {
   sun: DirectionalLight;
   staticMeshes: Mesh[];
   nature: ReturnType<typeof createNature>;
+  updateShadow(target: Vector3): void;
 };
 const skyVertex = `precision highp float;attribute vec3 position;uniform mat4 worldViewProjection;varying vec3 vPosition;void main(){vPosition=position;gl_Position=worldViewProjection*vec4(position,1.);}`;
-const skyFragment = `precision highp float;varying vec3 vPosition;uniform vec3 horizon;uniform vec3 zenith;
-float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1.,0.)),f.x),mix(hash(i+vec2(0.,1.)),hash(i+vec2(1.,1.)),f.x),f.y);}void main(){vec3 d=normalize(vPosition);float h=max(0.,d.y);vec3 col=mix(horizon,zenith,pow(h,.55));float cloud=noise(d.xz/(h+.18)*3.)*.6+noise(d.xz/(h+.18)*8.)*.3+noise(d.xz/(h+.18)*20.)*.1;col=mix(col,col*.55+vec3(.13),smoothstep(.42,.7,cloud)*smoothstep(.0,.18,h)*.65);float sun=pow(max(0.,dot(d,normalize(vec3(-.6,.3,-.7)))),300.);float glow=pow(max(0.,dot(d,normalize(vec3(-.6,.3,-.7)))),9.);col+=vec3(1.,.69,.35)*sun*2.5+vec3(.26,.14,.04)*glow;gl_FragColor=vec4(col,1.);}`;
+const skyFragment = `precision highp float;varying vec3 vPosition;uniform vec3 horizon;uniform vec3 zenith;uniform vec3 sunDirection;
+float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1.,0.)),f.x),mix(hash(i+vec2(0.,1.)),hash(i+vec2(1.,1.)),f.x),f.y);}void main(){vec3 d=normalize(vPosition);float h=max(0.,d.y);vec3 col=mix(horizon,zenith,pow(h,.55));float cloud=noise(d.xz/(h+.18)*3.)*.6+noise(d.xz/(h+.18)*8.)*.3+noise(d.xz/(h+.18)*20.)*.1;col=mix(col,col*.55+vec3(.13),smoothstep(.42,.7,cloud)*smoothstep(.0,.18,h)*.65);float sun=pow(max(0.,dot(d,sunDirection)),300.);float glow=pow(max(0.,dot(d,sunDirection)),9.);col+=vec3(1.,.69,.35)*sun*2.5+vec3(.26,.14,.04)*glow;gl_FragColor=vec4(col,1.);}`;
 type StaticBox = {
   name: string;
   size: [number, number, number];
@@ -48,7 +52,7 @@ type StaticBox = {
   tile?: number;
 };
 const pendingBoxes = new WeakMap<TransformNode, StaticBox[]>();
-const unitBox = VertexData.CreateBox({ size: 1 });
+const unitBox = CreateBoxVertexData({ size: 1 });
 // Keep architectural parts as plain transforms until the parent is complete.
 // Creating/discarding tens of thousands of temporary Babylon meshes blocks the
 // UI and retains their buffers in deferred scene notifications. These parts go
@@ -183,6 +187,7 @@ function mergeStatic(parent: TransformNode, chunks = false) {
   }
   const result: Mesh[] = [];
   for (const list of groups.values()) {
+    const vertexAlpha = list.some(mesh => mesh.hasVertexAlpha);
     const mesh =
       list.length > 1
         ? Mesh.MergeMeshes(list, true, true, undefined, false, false)
@@ -193,6 +198,7 @@ function mergeStatic(parent: TransformNode, chunks = false) {
           Matrix.Invert(parent.computeWorldMatrix(true)),
         );
       mesh.parent = parent;
+      mesh.hasVertexAlpha = vertexAlpha;
       mesh.isPickable = false;
       mesh.receiveShadows = true;
       mesh.freezeWorldMatrix();
@@ -215,6 +221,158 @@ function surfaceBox(
   const part = box(scene, name, size, at, material, parent);
   part.tile = tile;
   return part;
+}
+
+// A feathered ground ring is visible at the wall foot even on the mobile
+// budget. Its centre remains empty: aprons retain their concrete surface.
+function contactRing(
+  scene: Scene,
+  parent: TransformNode,
+  material: StandardMaterial,
+  x: number,
+  z: number,
+  width: number,
+  depth: number,
+) {
+  const positions: number[] = [],
+    colors: number[] = [],
+    indices: number[] = [];
+  for (const padding of [-0.04, 0.25, 1.1]) {
+    const halfX = width / 2 + padding,
+      halfZ = depth / 2 + padding,
+      bevel = Math.max(0.035, padding * 0.6);
+    for (const [px, pz] of [
+      [-halfX + bevel, -halfZ],
+      [halfX - bevel, -halfZ],
+      [halfX, -halfZ + bevel],
+      [halfX, halfZ - bevel],
+      [halfX - bevel, halfZ],
+      [-halfX + bevel, halfZ],
+      [-halfX, halfZ - bevel],
+      [-halfX, -halfZ + bevel],
+    ]) {
+      positions.push(x + px, 0.071, z + pz);
+      colors.push(1, 1, 1, padding < 0 ? 0.38 : padding < 1 ? 0.17 : 0);
+    }
+  }
+  for (let ring = 0; ring < 2; ring++)
+    for (let i = 0; i < 8; i++) {
+      const a = ring * 8 + i,
+        next = ring * 8 + ((i + 1) % 8);
+      indices.push(a, next + 8, next, a, a + 8, next + 8);
+    }
+  const mesh = new Mesh('feathered-building-contact', scene),
+    data = new VertexData();
+  data.positions = positions;
+  data.normals = positions.map((_, index) => (index % 3 === 1 ? 1 : 0));
+  data.colors = colors;
+  data.indices = indices;
+  data.applyToMesh(mesh);
+  mesh.material = material;
+  mesh.parent = parent;
+  mesh.hasVertexAlpha = true;
+  mesh.metadata = {
+    staticChunk: Math.floor(x / 40) + ',' + Math.floor(z / 40),
+  };
+}
+
+function localSunShadows(
+  scene: Scene,
+  sun: DirectionalLight,
+  shadow: ShadowGenerator | null,
+  roofCeiling: number,
+) {
+  const forward = sun.direction.normalizeToNew(),
+    right = Vector3.Cross(Vector3.Up(), forward).normalize(),
+    up = Vector3.Cross(forward, right).normalize(),
+    inverse = Matrix.Identity(),
+    clip = Vector3.Zero(),
+    far = Vector3.Zero(),
+    point = Vector3.Zero(),
+    localCasters: AbstractMesh[] = [];
+  let centerX = 0,
+    centerY = 0,
+    halfX = 64,
+    halfY = 64;
+  const map = shadow?.getShadowMap();
+  if (map) {
+    // Keep the original list so runtime tank spawns/removals and destructible
+    // wall state continue to work. Only the shadow pass receives the short list.
+    map.getCustomRenderList = (_face, renderList, length) => {
+      localCasters.length = 0;
+      if (!renderList) return null;
+      for (let i = 0; i < length; i++) {
+        const mesh = renderList[i];
+        if (!mesh.isEnabled() || !mesh.isVisible) continue;
+        mesh.computeWorldMatrix();
+        const bound = mesh.getBoundingInfo().boundingSphere,
+          radius = bound.radiusWorld,
+          center = bound.centerWorld;
+        if (
+          Math.abs(Vector3.Dot(center, right) - centerX) <= halfX + radius &&
+          Math.abs(Vector3.Dot(center, up) - centerY) <= halfY + radius
+        )
+          localCasters.push(mesh);
+      }
+      return localCasters;
+    };
+    scene.onDisposeObservable.addOnce(() => {
+      localCasters.length = 0;
+    });
+  }
+  return (target: Vector3) => {
+    const camera = scene.activeCamera;
+    if (!camera) return;
+    camera
+      .getViewMatrix(true)
+      .multiplyToRef(camera.getProjectionMatrix(true), inverse);
+    inverse.invert();
+    let minX = Infinity,
+      maxX = -Infinity,
+      minY = Infinity,
+      maxY = -Infinity;
+    // The camera matrix includes portrait aspect, both camera modes, zoom, and
+    // recoil. Ground plus the highest roof bounds all visible solid receivers.
+    for (const sx of [-1, 1])
+      for (const sy of [-1, 1]) {
+        clip.set(sx, sy, 1);
+        Vector3.TransformCoordinatesToRef(clip, inverse, far);
+        for (const elevation of [
+          0,
+          Math.min(roofCeiling, camera.globalPosition.y - 1),
+        ]) {
+          const t =
+            (elevation - camera.globalPosition.y) /
+            (far.y - camera.globalPosition.y);
+          if (!Number.isFinite(t) || t <= 0) continue;
+          Vector3.LerpToRef(camera.globalPosition, far, t, point);
+          const px = Vector3.Dot(point, right),
+            py = Vector3.Dot(point, up);
+          minX = Math.min(minX, px);
+          maxX = Math.max(maxX, px);
+          minY = Math.min(minY, py);
+          maxY = Math.max(maxY, py);
+        }
+      }
+    if (!Number.isFinite(minX)) return;
+    halfX = Math.max(24, Math.ceil(((maxX - minX) / 2 + 8) / 8) * 8);
+    halfY = Math.max(24, Math.ceil(((maxY - minY) / 2 + 8) / 8) * 8);
+    const resolution = map?.getSize().width ?? 1024,
+      texelX = (2 * halfX) / resolution,
+      texelY = (2 * halfY) / resolution;
+    centerX = Math.round((minX + maxX) / 2 / texelX) * texelX;
+    centerY = Math.round((minY + maxY) / 2 / texelY) * texelY;
+    const depth = Vector3.Dot(target, forward) - 170;
+    sun.position.set(
+      right.x * centerX + up.x * centerY + forward.x * depth,
+      right.y * centerX + up.y * centerY + forward.y * depth,
+      right.z * centerX + up.z * centerY + forward.z * depth,
+    );
+    sun.orthoLeft = -halfX;
+    sun.orthoRight = halfX;
+    sun.orthoBottom = -halfY;
+    sun.orthoTop = halfY;
+  };
 }
 export function createWorld(
   scene: Scene,
@@ -249,8 +407,8 @@ export function createWorld(
     new Vector3(0.2, 1, 0.1),
     scene,
   );
-  ambient.intensity = 0.72;
-  ambient.diffuse = new Color3(0.85, 0.91, 1);
+  ambient.intensity = 0.58;
+  ambient.diffuse = new Color3(0.8, 0.88, 1);
   ambient.groundColor = new Color3(0.25, 0.23, 0.19);
   const sun = new DirectionalLight(
     'late-afternoon-sun',
@@ -260,14 +418,14 @@ export function createWorld(
   sun.position.set(-110, 150, -110);
   sun.diffuse = Color3.FromHexString(themes[2]);
   // A broad daylight key preserves scanned surface colour instead of clipping it.
-  sun.intensity = 2.15;
+  sun.intensity = 2.05;
   sun.autoUpdateExtends = false;
   sun.orthoLeft = -(W + H) * UNIT * 0.48;
   sun.orthoRight = (W + H) * UNIT * 0.48;
   sun.orthoTop = (W + H) * UNIT * 0.4;
   sun.orthoBottom = -(W + H) * UNIT * 0.4;
   sun.shadowMinZ = 1;
-  sun.shadowMaxZ = 750;
+  sun.shadowMaxZ = 350;
   let shadow: ShadowGenerator | null = null;
   if (!headless && quality !== 'performance') {
     shadow = new ShadowGenerator(quality === 'cinematic' ? 2048 : 1024, sun);
@@ -276,16 +434,22 @@ export function createWorld(
       quality === 'cinematic'
         ? ShadowGenerator.QUALITY_HIGH
         : ShadowGenerator.QUALITY_LOW;
-    shadow.bias = 0.0012;
-    shadow.normalBias = 0.06;
-    shadow.darkness = 0.22;
+    shadow.bias = 0.00045;
+    shadow.normalBias = 0.035;
+    shadow.darkness = 0.12;
   }
+  const updateShadow = localSunShadows(
+    scene,
+    sun,
+    shadow,
+    Math.max(10, ...b.walls.map((w) => (w.height ?? 2) + 3)),
+  );
   if (!headless) {
     scene.environmentTexture = CubeTexture.CreateFromPrefilteredData(
       assetUrl('/environment.env'),
       scene,
     );
-    scene.environmentIntensity = 0.65;
+    scene.environmentIntensity = 0.58;
     const sky = MeshBuilder.CreateSphere(
       'atmospheric-sky',
       { diameter: 900, segments: 24, sideOrientation: Mesh.BACKSIDE },
@@ -297,11 +461,12 @@ export function createWorld(
       { vertexSource: skyVertex, fragmentSource: skyFragment },
       {
         attributes: ['position'],
-        uniforms: ['worldViewProjection', 'horizon', 'zenith'],
+        uniforms: ['worldViewProjection', 'horizon', 'zenith', 'sunDirection'],
       },
     );
     skyMat.setColor3('horizon', Color3.FromHexString(themes[0]));
     skyMat.setColor3('zenith', Color3.FromHexString(themes[1]));
+    skyMat.setVector3('sunDirection', sun.direction.negate().normalize());
     skyMat.backFaceCulling = false;
     skyMat.disableDepthWrite = true;
     sky.material = skyMat;
@@ -316,10 +481,17 @@ export function createWorld(
   ground.material = m.ground;
   ground.receiveShadows = true;
   ground.isPickable = true;
+  const groundUV = ground.getVerticesData('uv')!;
+  for (let i = 0; i < groundUV.length; i += 2) {
+    groundUV[i] *= (W * UNIT + 140) / 100;
+    groundUV[i + 1] *= (H * UNIT + 140) / 100;
+  }
+  // This material is shared with the 60 m hangar. Resize UVs, not its textures.
+  ground.setVerticesData('uv', groundUV);
   const asphalt = pbr(scene, 'wet-road', '#d2d7d5', 0.02, 0.9),
     puddle = pbr(scene, 'shallow-puddles', '#303b40', 0.12, 0.18),
-    windowMat = pbr(scene, 'abandoned-windows', '#243b44', 0.35, 0.24),
-    windowDust = pbr(scene, 'dusty-window-glass', '#415456', 0.2, 0.51),
+    windowMat = pbr(scene, 'abandoned-windows', '#243b44', 0.04, 0.2),
+    windowDust = pbr(scene, 'dusty-window-glass', '#415456', 0.02, 0.46),
     roof = pbr(scene, 'warehouse-roof', '#919493', 0.62, 0.63),
     roofFelt = pbr(scene, 'office-roof-felt', '#676863', 0.03, 0.93),
     facadeTrim = pbr(scene, 'aged-limestone-trim', '#b4b3a7', 0.03, 0.88),
@@ -327,6 +499,12 @@ export function createWorld(
     grime = pbr(scene, 'damp-building-plinth', '#51574c', 0, 0.98),
     tar = pbr(scene, 'sealed-asphalt-fissures', '#222725', 0.01, 0.8),
     roadPaint = pbr(scene, 'worn-road-lines', '#c4bd9b', 0.03, 0.94);
+  const contactShade = new StandardMaterial('soft-building-occlusion', scene);
+  contactShade.disableLighting = true;
+  contactShade.emissiveColor = new Color3(0.065, 0.076, 0.079);
+  contactShade.specularColor = Color3.Black();
+  contactShade.transparencyMode = StandardMaterial.MATERIAL_ALPHABLEND;
+  contactShade.backFaceCulling = true;
   if (assets) {
     applySurface(asphalt, scene, 'asphalt', {
       repeat: 1,
@@ -433,8 +611,8 @@ export function createWorld(
       }
     }
     for (let t = 24; t < length; t += 58) {
-      const x = vertical ? road.x + road.w / 2 : t;
-      const y = vertical ? t : road.y + road.h / 2;
+      const x = vertical ? road.x + road.w / 2 : road.x + t;
+      const y = vertical ? road.y + t : road.y + road.h / 2;
       if (
         b.roads.some(
           (other) =>
@@ -455,6 +633,54 @@ export function createWorld(
         roadPaint,
         0.045,
       );
+    }
+    // Cast-iron inspection covers and the cut concrete surrounding them remain
+    // flush: their readable circular scale never invents a gameplay obstacle.
+    for (let t = 160; t < length; t += 430) {
+      const at = worldPosition(
+        road.x + (vertical ? road.w * 0.36 : t),
+        road.y + (vertical ? t : road.h * 0.36),
+        0.061,
+      );
+      surfaceBox(
+        scene,
+        'utility-cover-road-repair',
+        [1.55, 0.018, 1.55],
+        [at.x, 0.045, at.z],
+        grime,
+        staticRoot,
+        2,
+      );
+      const cover = MeshBuilder.CreateCylinder(
+        'cast-iron-street-cover',
+        {
+          diameter: 1.08,
+          height: 0.035,
+          tessellation: quality === 'performance' ? 12 : 20,
+        },
+        scene,
+      );
+      cover.position.copyFrom(at);
+      cover.material = shutter;
+      cover.parent = staticRoot;
+      for (const side of [-1, 1])
+        box(
+          scene,
+          'inspection-cover-lifting-slot',
+          [0.22, 0.008, 0.07],
+          [at.x + side * 0.27, 0.082, at.z],
+          tar,
+          staticRoot,
+        );
+      for (let rib = -2; rib <= 2; rib++)
+        box(
+          scene,
+          'inspection-cover-rib',
+          [0.65, 0.011, 0.027],
+          [at.x, 0.086, at.z + rib * 0.135],
+          m.steel,
+          staticRoot,
+        );
     }
   }
   for (const vertical of b.roads.filter((r) => r.h > r.w)) {
@@ -485,16 +711,40 @@ export function createWorld(
       m.concrete,
       0.05,
     );
-    // Ground-only ambient shadows give mobile objects weight without a shadow pass.
-    stamp(
-      'building-contact-shadow',
-      w.x - 5,
-      w.y - 5,
-      w.w + 22,
-      w.h + 22,
-      asphalt,
-      0.065,
+    const centre = worldPosition(w.x + w.w / 2, w.y + w.h / 2);
+    contactRing(
+      scene,
+      staticRoot,
+      contactShade,
+      centre.x,
+      centre.z,
+      w.w * UNIT,
+      w.h * UNIT,
     );
+    // Expansion joints terminate at the real wall line, leaving the sidewalk
+    // at street level so tanks can still enter every marked service alley.
+    for (let x = w.x - 10; x < w.x + w.w + 10; x += 32)
+      for (const side of [-1, 1])
+        stamp(
+          'apron-concrete-expansion-joint',
+          x,
+          side < 0 ? w.y - 11 : w.y + w.h,
+          0.22,
+          11,
+          grime,
+          0.064,
+        );
+    for (let y = w.y; y < w.y + w.h; y += 32)
+      for (const side of [-1, 1])
+        stamp(
+          'apron-concrete-expansion-joint',
+          side < 0 ? w.x - 11 : w.x + w.w,
+          y,
+          11,
+          0.22,
+          grime,
+          0.064,
+        );
     for (let x = w.x; x < w.x + w.w - 20; x += 35) {
       stamp('loading-bay-line', x, w.y + w.h + 17, 1.2, 27, roadPaint, 0.05);
       stamp('loading-bay-stop', x, w.y + w.h + 44, 30, 1.2, roadPaint, 0.05);
@@ -529,7 +779,7 @@ export function createWorld(
         );
       positions.push(px, center.y, pz);
       uvs.push(px / 4, pz / 4);
-      indices.push(0, ((vertex + 1) % 9) + 1, vertex + 1);
+      indices.push(0, vertex + 1, ((vertex + 1) % 9) + 1);
     }
     const patch = new Mesh('irregular-road-repair', scene),
       vertices = new VertexData();
@@ -709,6 +959,17 @@ export function createWorld(
     if (w.kind === 'warehouse' || w.kind === 'office') {
       const office = w.kind === 'office';
       const facade = office ? m.concrete : m.brick;
+      const architecture =
+        ((Math.round(w.x * 13 + w.y * 7) ^ (b.mission * 31)) >>> 0) % 3;
+      solid.metadata = {
+        architecture: office
+          ? ['terraced-office', 'brick-service-office', 'rooflight-office'][
+              architecture
+            ]
+          : ['multi-span-workshop', 'northlight-factory', 'monitor-warehouse'][
+              architecture
+            ],
+      };
       // Solid interior backing sits behind the facade: panes really sit in
       // shaded recesses, while the architectural footprint remains collision.
       surfaceBox(
@@ -752,7 +1013,10 @@ export function createWorld(
               solid,
             );
           if (office) {
-            const bays = Math.max(1, Math.floor(span / 2.15)),
+            const bays = Math.max(
+                1,
+                Math.floor(span / (architecture === 1 ? 2.7 : 2.15)),
+              ),
               pitch = span / bays,
               floors = Math.max(1, Math.floor(height / 2.45)),
               storey = height / floors;
@@ -766,7 +1030,7 @@ export function createWorld(
                 0,
                 bottom + 0.365,
                 -0.11,
-                facade,
+                architecture === 1 && floor > 0 ? m.brick : facade,
               );
               face(
                 'cast-concrete-floor-edge',
@@ -1094,7 +1358,26 @@ export function createWorld(
             );
         }
       }
-      let roofHeight = height + 0.14;
+      const roofSpans =
+          office || architecture === 2
+            ? 1
+            : Math.max(1, Math.round(width / 11)),
+        roofSpan = width / roofSpans,
+        roofRise = office ? 0 : Math.min(1.35, roofSpan * 0.15),
+        northlight = !office && architecture === 1;
+      const roofAt = (x: number) => {
+        if (office) return height + 0.14;
+        const spanPosition =
+          (Math.max(0, Math.min(width - 0.0001, x + width / 2)) % roofSpan) /
+          roofSpan;
+        return (
+          height +
+          0.14 +
+          roofRise *
+            (northlight ? spanPosition : 1 - Math.abs(2 * spanPosition - 1))
+        );
+      };
+      const roofHeight = height + roofRise + 0.14;
       if (office) {
         surfaceBox(
           scene,
@@ -1139,56 +1422,313 @@ export function createWorld(
             solid,
           );
         }
-      } else {
-        const rise = Math.min(0.48, width * 0.07),
-          slope = Math.atan2(rise, width / 2),
-          panelWidth = Math.hypot(width / 2, rise) + 0.12;
-        roofHeight = height + rise + 0.14;
+        // A substantial set-back service floor changes the skyline from the
+        // combat camera. The occupied ground floor still meets all four walls.
+        const coreWidth = Math.min(
+            width * (architecture === 0 ? 0.48 : 0.34),
+            10,
+          ),
+          coreDepth = Math.min(depth * 0.44, 7),
+          coreX = -width * 0.2,
+          coreZ = -depth * 0.19,
+          coreHeight = architecture === 0 ? 2.1 : 1.55,
+          coreTop = roofHeight + 0.1 + coreHeight;
+        surfaceBox(
+          scene,
+          'setback-office-service-floor',
+          [coreWidth, coreHeight, coreDepth],
+          [coreX, roofHeight + 0.1 + coreHeight / 2, coreZ],
+          architecture === 1 ? m.brick : facade,
+          solid,
+        );
+        surfaceBox(
+          scene,
+          'service-floor-flat-roof',
+          [coreWidth + 0.12, 0.15, coreDepth + 0.12],
+          [coreX, coreTop + 0.025, coreZ],
+          roofFelt,
+          solid,
+          4,
+        );
         for (const side of [-1, 1]) {
-          const gable = new Mesh('warehouse-masonry-gable', scene),
-            shape = new VertexData();
-          shape.positions = [
-            -width / 2,
-            height,
-            (side * depth) / 2,
-            width / 2,
-            height,
-            (side * depth) / 2,
-            0,
-            height + rise + 0.12,
-            (side * depth) / 2,
-          ];
-          shape.indices = side > 0 ? [0, 1, 2] : [2, 1, 0];
-          shape.normals = [0, 0, side, 0, 0, side, 0, 0, side];
-          shape.uvs = [0, 0, width / 3, 0, width / 6, (rise + 0.12) / 3];
-          shape.applyToMesh(gable);
-          gable.material = facade;
-          gable.parent = solid;
-          const panel = surfaceBox(
+          box(
             scene,
-            'pitched-standing-seam-roof',
-            [panelWidth, 0.1, depth + 0.22],
-            [(side * width) / 4, height + rise / 2 + 0.12, 0],
-            roof,
+            'service-floor-metal-coping',
+            [coreWidth + 0.16, 0.11, 0.12],
+            [coreX, coreTop + 0.13, coreZ + side * (coreDepth / 2 + 0.025)],
+            shutter,
             solid,
-            3,
           );
-          panel.rotation.z = -side * slope;
-          for (
-            let seam = -depth / 2;
-            seam <= depth / 2;
-            seam += quality === 'performance' ? 1.3 : 0.65
-          ) {
-            const fold = box(
+          box(
+            scene,
+            'service-floor-metal-coping',
+            [0.12, 0.11, coreDepth],
+            [coreX + side * (coreWidth / 2 + 0.025), coreTop + 0.13, coreZ],
+            shutter,
+            solid,
+          );
+          box(
+            scene,
+            'service-floor-recessed-vent',
+            [coreWidth * 0.7, 0.61, 0.06],
+            [coreX, coreTop - 0.62, coreZ + side * (coreDepth / 2 + 0.017)],
+            m.rubber,
+            solid,
+          );
+          for (let louver = 0; louver < 4; louver++)
+            box(
               scene,
-              'raised-roof-seam',
-              [panelWidth, 0.045, 0.04],
-              [(side * width) / 4, height + rise / 2 + 0.185, seam],
+              'service-floor-vent-louver',
+              [coreWidth * 0.69, 0.075, 0.085],
+              [
+                coreX,
+                coreTop - 0.87 + louver * 0.17,
+                coreZ + side * (coreDepth / 2 + 0.05),
+              ],
               shutter,
               solid,
             );
-            fold.rotation.z = -side * slope;
+        }
+        box(
+          scene,
+          'service-floor-access-door',
+          [0.045, 1.3, 0.78],
+          [
+            coreX + coreWidth / 2 + 0.04,
+            roofHeight + 0.77,
+            coreZ + coreDepth * 0.15,
+          ],
+          shutter,
+          solid,
+        );
+        for (let seam = -width / 2 + 1.6; seam < width / 2; seam += 2.6)
+          box(
+            scene,
+            'roofing-membrane-lap',
+            [0.035, 0.012, depth - 0.42],
+            [seam, roofHeight + 0.095, 0],
+            tar,
+            solid,
+          );
+        // Raised, framed rooflights and concrete maintenance slabs are large
+        // enough to distinguish the roof from a flat rectangular lid.
+        const lightWidth = Math.min(width * 0.22, 3.8),
+          lightDepth = Math.min(depth * 0.28, 3.6),
+          lightX = width * 0.26,
+          lightZ = -depth * 0.22;
+        box(
+          scene,
+          'office-rooflight-curb',
+          [lightWidth + 0.18, 0.32, lightDepth + 0.18],
+          [lightX, roofHeight + 0.21, lightZ],
+          shutter,
+          solid,
+        );
+        const glazing = box(
+          scene,
+          'office-rooflight-glazing',
+          [lightWidth, 0.065, lightDepth],
+          [lightX, roofHeight + 0.4, lightZ],
+          windowMat,
+          solid,
+        );
+        glazing.rotation.x = -0.055;
+        for (
+          let mullion = -lightWidth / 2 + 0.8;
+          mullion < lightWidth / 2;
+          mullion += 0.9
+        ) {
+          const bar = box(
+            scene,
+            'office-rooflight-crossbar',
+            [0.065, 0.07, lightDepth + 0.05],
+            [lightX + mullion, roofHeight + 0.45, lightZ],
+            shutter,
+            solid,
+          );
+          bar.rotation.x = -0.055;
+        }
+        for (let slab = 0; slab < Math.min(7, Math.floor(width / 1.3)); slab++)
+          surfaceBox(
+            scene,
+            'roof-maintenance-walkway',
+            [0.95, 0.055, 0.72],
+            [-width * 0.3 + slab * 1.07, roofHeight + 0.135, depth * 0.3],
+            facadeTrim,
+            solid,
+          );
+      } else {
+        const positions: number[] = [],
+          normals: number[] = [],
+          uvs: number[] = [],
+          indices: number[] = [];
+        for (let span = 0; span < roofSpans; span++) {
+          const left = -width / 2 + span * roofSpan,
+            centre = left + roofSpan / 2;
+          for (const side of [-1, 1]) {
+            const start = positions.length / 3,
+              peak = northlight ? left + roofSpan : centre;
+            positions.push(
+              left,
+              height,
+              (side * depth) / 2,
+              left + roofSpan,
+              height,
+              (side * depth) / 2,
+              peak,
+              roofHeight - 0.02,
+              (side * depth) / 2,
+            );
+            normals.push(0, 0, side, 0, 0, side, 0, 0, side);
+            uvs.push(
+              left / 3,
+              height / 3,
+              (left + roofSpan) / 3,
+              height / 3,
+              peak / 3,
+              (roofHeight - 0.02) / 3,
+            );
+            indices.push(
+              ...(side > 0
+                ? [start + 2, start + 1, start]
+                : [start, start + 1, start + 2]),
+            );
           }
+          for (const side of northlight ? [0] : [-1, 1]) {
+            const run = northlight ? roofSpan : roofSpan / 2,
+              slope = Math.atan2(roofRise, run) * (northlight ? 1 : -side),
+              panelWidth = Math.hypot(run, roofRise) + 0.065,
+              panelX = northlight ? centre : centre + (side * roofSpan) / 4;
+            const panel = surfaceBox(
+              scene,
+              northlight ? 'northlight-sloped-roof' : 'multi-span-pitched-roof',
+              [panelWidth, 0.1, depth + 0.18],
+              [panelX, height + roofRise / 2 + 0.12, 0],
+              roof,
+              solid,
+              3,
+            );
+            panel.rotation.z = slope;
+            for (
+              let seam = -depth / 2;
+              seam <= depth / 2;
+              seam += quality === 'performance' ? 1.5 : 0.8
+            ) {
+              const fold = box(
+                scene,
+                'raised-roof-seam',
+                [panelWidth, 0.042, 0.038],
+                [panelX, height + roofRise / 2 + 0.184, seam],
+                shutter,
+                solid,
+              );
+              fold.rotation.z = slope;
+            }
+          }
+          if (northlight) {
+            const frameX = left + roofSpan - 0.04;
+            box(
+              scene,
+              'northlight-steel-glazing-frame',
+              [0.1, roofRise + 0.12, depth + 0.08],
+              [frameX, height + roofRise / 2 + 0.11, 0],
+              shutter,
+              solid,
+            );
+            box(
+              scene,
+              'north-facing-factory-glazing',
+              [0.045, roofRise - 0.15, depth - 0.17],
+              [frameX + 0.065, height + roofRise / 2 + 0.1, 0],
+              windowDust,
+              solid,
+            );
+            for (let z = -depth / 2 + 1.1; z < depth / 2; z += 1.45)
+              box(
+                scene,
+                'northlight-window-mullion',
+                [0.1, roofRise + 0.05, 0.065],
+                [frameX + 0.085, height + roofRise / 2 + 0.12, z],
+                shutter,
+                solid,
+              );
+            box(
+              scene,
+              'northlight-ridge-flashing',
+              [0.21, 0.075, depth + 0.19],
+              [left + roofSpan - 0.035, roofHeight + 0.02, 0],
+              shutter,
+              solid,
+            );
+          } else {
+            box(
+              scene,
+              'warehouse-roof-ridge-cap',
+              [0.22, 0.12, depth + 0.19],
+              [centre, roofHeight, 0],
+              shutter,
+              solid,
+            );
+            if (architecture === 0) {
+              const lightX = left + roofSpan * 0.26,
+                lightZ = -depth * 0.16,
+                lightWidth = roofSpan * 0.31,
+                lightDepth = depth * 0.42,
+                slope = Math.atan2(roofRise, roofSpan / 2);
+              const curb = box(
+                scene,
+                'workshop-rooflight-curb',
+                [lightWidth + 0.14, 0.15, lightDepth + 0.14],
+                [lightX, roofAt(lightX) + 0.12, lightZ],
+                shutter,
+                solid,
+              );
+              curb.rotation.z = slope;
+              const glazing = box(
+                scene,
+                'workshop-framed-rooflight',
+                [lightWidth, 0.045, lightDepth],
+                [lightX, roofAt(lightX) + 0.22, lightZ],
+                windowDust,
+                solid,
+              );
+              glazing.rotation.z = slope;
+              for (
+                let z = -lightDepth / 2 + 0.9;
+                z < lightDepth / 2;
+                z += 1.1
+              ) {
+                const bar = box(
+                  scene,
+                  'workshop-rooflight-crossbar',
+                  [lightWidth + 0.1, 0.035, 0.055],
+                  [lightX, roofAt(lightX) + 0.26, lightZ + z],
+                  shutter,
+                  solid,
+                );
+                bar.rotation.z = slope;
+              }
+            }
+          }
+          box(
+            scene,
+            'roof-valley-drainage-channel',
+            [0.15, 0.075, depth + 0.18],
+            [left + 0.015, height + 0.125, 0],
+            shutter,
+            solid,
+          );
+        }
+        const gables = new Mesh('warehouse-masonry-gables', scene),
+          shape = new VertexData();
+        shape.positions = positions;
+        shape.normals = normals;
+        shape.uvs = uvs;
+        shape.indices = indices;
+        shape.applyToMesh(gables);
+        gables.material = facade;
+        gables.parent = solid;
+        for (const side of [-1, 1])
           box(
             scene,
             'warehouse-eaves-gutter',
@@ -1197,15 +1737,60 @@ export function createWorld(
             shutter,
             solid,
           );
+        if (architecture === 2) {
+          const monitorWidth = Math.min(4.2, width * 0.32),
+            monitorDepth = depth * 0.61,
+            monitorBottom = roofAt(monitorWidth / 2) - 0.045,
+            monitorTop = roofHeight + 0.85;
+          surfaceBox(
+            scene,
+            'raised-warehouse-roof-monitor',
+            [monitorWidth, monitorTop - monitorBottom, monitorDepth],
+            [0, (monitorTop + monitorBottom) / 2, 0],
+            shutter,
+            solid,
+          );
+          for (const side of [-1, 1]) {
+            box(
+              scene,
+              'monitor-clerestory-glass',
+              [0.035, 0.62, monitorDepth - 0.2],
+              [side * (monitorWidth / 2 + 0.023), roofHeight + 0.42, 0],
+              windowMat,
+              solid,
+            );
+            for (
+              let z = -monitorDepth / 2 + 0.7;
+              z < monitorDepth / 2;
+              z += 1.15
+            )
+              box(
+                scene,
+                'monitor-vertical-steel-frame',
+                [0.08, 0.76, 0.065],
+                [side * (monitorWidth / 2 + 0.04), roofHeight + 0.42, z],
+                shutter,
+                solid,
+              );
+          }
+          surfaceBox(
+            scene,
+            'roof-monitor-overhanging-cap',
+            [monitorWidth + 0.24, 0.13, monitorDepth + 0.22],
+            [0, roofHeight + 0.94, 0],
+            roof,
+            solid,
+          );
+          for (let z = -monitorDepth / 2; z <= monitorDepth / 2; z += 0.85)
+            box(
+              scene,
+              'monitor-cap-standing-seam',
+              [monitorWidth + 0.2, 0.035, 0.035],
+              [0, roofHeight + 1.02, z],
+              shutter,
+              solid,
+            );
         }
-        box(
-          scene,
-          'warehouse-roof-ridge-cap',
-          [0.24, 0.12, depth + 0.22],
-          [0, roofHeight, 0],
-          shutter,
-          solid,
-        );
       }
       for (const side of [-1, 1]) {
         const downpipe = MeshBuilder.CreateCylinder(
@@ -1234,12 +1819,13 @@ export function createWorld(
             solid,
           );
       }
-      const ventX = Math.max(0, Math.min(width * 0.2, width / 2 - 0.87)),
+      const ventX = Math.max(
+          0,
+          Math.min(width * (office ? 0.2 : 0.33), width / 2 - 0.87),
+        ),
         ventZ = depth * 0.19,
-        roofRise = office ? 0 : Math.min(0.48, width * 0.07),
-        roofAt = (x: number) =>
-          roofHeight - roofRise * Math.min(1, (2 * Math.abs(x)) / width),
-        curbBottom = roofAt(ventX + 0.79) - 0.025,
+        curbBottom =
+          Math.min(roofAt(ventX + 0.79), roofAt(ventX - 0.79)) - 0.025,
         curbHeight = roofHeight + 0.255 - curbBottom;
       surfaceBox(
         scene,
@@ -1290,17 +1876,24 @@ export function createWorld(
         guard.rotation.y = (blade * Math.PI) / 4;
       }
       if (quality !== 'performance') {
-        const ductLength = Math.min(width * 0.27, 2.2);
+        const ductStart = office
+            ? 0
+            : architecture === 2
+              ? Math.min(4.2, width * 0.32) / 2
+              : ventX - 2.7,
+          ductEnd = ventX - 0.62,
+          ductLength = Math.max(0.55, ductEnd - ductStart),
+          ductX = ductEnd - ductLength / 2;
         surfaceBox(
           scene,
           'roof-service-duct',
           [ductLength, 0.28, 0.35],
-          [0, roofHeight + 0.23, ventZ],
+          [ductX, roofHeight + 0.23, ventZ],
           shutter,
           solid,
         );
         for (const side of [-1, 1]) {
-          const x = side * ductLength * 0.36,
+          const x = ductX + side * ductLength * 0.36,
             baseY = roofAt(x) - 0.02,
             supportHeight = roofHeight + 0.1 - baseY;
           box(
@@ -1312,15 +1905,20 @@ export function createWorld(
             solid,
           );
         }
+        const hatchX = office ? -width * 0.24 : -width / 2 + roofSpan * 0.77;
         const hatch = surfaceBox(
           scene,
           'roof-access-hatch',
           [0.95, 0.16, 1.25],
-          [-width * 0.24, roofAt(-width * 0.24) + 0.08, -depth * 0.19],
+          [hatchX, roofAt(hatchX) + 0.11, office ? depth * 0.15 : depth * 0.33],
           grime,
           solid,
         );
-        if (!office) hatch.rotation.z = Math.atan2(roofRise, width / 2);
+        if (!office)
+          hatch.rotation.z = Math.atan2(
+            roofAt(hatchX + 0.1) - roofAt(hatchX - 0.1),
+            0.2,
+          );
       }
       for (const mesh of mergeStatic(solid)) shadow?.addShadowCaster(mesh);
       rubble.setEnabled(false);
@@ -1504,7 +2102,16 @@ export function createWorld(
     hazardPaint,
     perimeterMetal,
     perimeterReflector,
+    contactShade,
   ])
     material.freeze();
-  return { ground, walls: wallViews, shadow, sun, staticMeshes, nature };
+  return {
+    ground,
+    walls: wallViews,
+    shadow,
+    sun,
+    staticMeshes,
+    nature,
+    updateShadow,
+  };
 }

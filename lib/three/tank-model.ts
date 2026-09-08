@@ -66,7 +66,64 @@ function cylinder(
   m.isPickable = false;
   return m;
 }
-function armoredHull(
+/** Revolve a closed section around +Z, including real inner walls and shoulders. */
+export function turnedPart(
+  scene: Scene,
+  name: string,
+  section: [number, number][],
+  material: Material,
+  parent: TransformNode,
+  segments = 16,
+) {
+  const positions: number[] = [],
+    normals: number[] = [],
+    uvs: number[] = [],
+    colors: number[] = [],
+    indices: number[] = [];
+  let distance = 0;
+  for (let edge = 0; edge < section.length; edge++) {
+    const [z0, r0] = section[edge],
+      [z1, r1] = section[(edge + 1) % section.length],
+      length = Math.hypot(z1 - z0, r1 - r0);
+    if (length < 1e-6) continue;
+    const start = positions.length / 3,
+      radial = (z1 - z0) / length,
+      axial = (r0 - r1) / length;
+    for (let i = 0; i <= segments; i++) {
+      const a = (i / segments) * Math.PI * 2,
+        c = Math.cos(a),
+        s = Math.sin(a);
+      for (const [z, radius, v] of [
+        [z0, r0, distance],
+        [z1, r1, distance + length],
+      ]) {
+        positions.push(c * radius, s * radius, z);
+        normals.push(c * radial, s * radial, axial);
+        uvs.push((a * Math.max(r0, r1)) / 2, v / 2);
+        // Subtle structural shading; the inner bore receives little sky light.
+        const shade = radial < -0.5 ? 0.52 : 0.94 + s * 0.06;
+        colors.push(shade, shade, shade, 1);
+      }
+      if (i < segments) {
+        const n = start + i * 2;
+        if (scene.useRightHandedSystem)
+          indices.push(n, n + 2, n + 1, n + 1, n + 2, n + 3);
+        else indices.push(n, n + 1, n + 2, n + 1, n + 3, n + 2);
+      }
+    }
+    distance += length;
+  }
+  const mesh = new Mesh(name, scene),
+    data = new VertexData();
+  Object.assign(data, { positions, normals, indices, uvs, colors });
+  data.applyToMesh(mesh);
+  mesh.material = material;
+  mesh.parent = parent;
+  mesh.isPickable = false;
+  mesh.receiveShadows = true;
+  return mesh;
+}
+export function armoredHull(
   scene: Scene,
   name: string,
   width: number,
@@ -81,7 +138,7 @@ function armoredHull(
     l = length / 2;
   // Chamfer the corner plates instead of stretching a box into a wedge. The
   // turret keeps its broad front cheeks, while the hull has a long glacis.
-  const turret = name === 'angular-turret';
+  const turret = name.includes('turret') || name.includes('mantlet');
   const footprint = [
     [-0.69, -1],
     [0.69, -1],
@@ -113,18 +170,45 @@ function armoredHull(
         [-0.76, 0.35],
         [-0.83, -0.68],
       ];
-  const vertices = [
-    ...footprint.map(([x, z]) => [x * w, low, z * l]),
-    ...roof.map(([x, z]) => [x * w, high, z * l]),
+  // A narrow belly, broad shoulder and beveled roof produce a lower glacis and
+  // an upper glacis. The turret has an undercut below its main armor cheeks.
+  const rings = [
+    footprint.map(([x, z]) => [
+      x * w * (turret ? 0.88 : 0.8),
+      low,
+      z * l * 0.94,
+    ]),
+    footprint.map(([x, z]) => [
+      x * w,
+      low + (high - low) * (turret ? 0.22 : 0.38),
+      z * l,
+    ]),
+    roof.map(([x, z]) => [
+      x * w * 1.025,
+      high - (high - low) * 0.07,
+      z * l * 1.025,
+    ]),
+    roof.map(([x, z]) => [x * w, high, z * l]),
   ];
+  const vertices = rings.flat();
   const faces: number[][] = [
     [0, 1, 2, 3, 4, 5, 6, 7],
-    [15, 14, 13, 12, 11, 10, 9, 8],
-    ...footprint.map((_, i) => [i, i + 8, ((i + 1) % 8) + 8, (i + 1) % 8]),
+    [31, 30, 29, 28, 27, 26, 25, 24],
+    ...rings
+      .slice(1)
+      .flatMap((_, ring) =>
+        footprint.map((_, i) => [
+          ring * 8 + i,
+          (ring + 1) * 8 + i,
+          (ring + 1) * 8 + ((i + 1) % 8),
+          ring * 8 + ((i + 1) % 8),
+        ]),
+      ),
   ];
   const positions: number[] = [],
     indices: number[] = [],
-    uvs: number[] = [];
+    uvs: number[] = [],
+    colors: number[] = [];
   for (const face of faces) {
     const offset = positions.length / 3;
     const origin = Vector3.FromArray(vertices[face[0]]);
@@ -142,6 +226,9 @@ function armoredHull(
       // Orthogonal planar axes keep paint grain and scratches undistorted.
       const at = Vector3.FromArray(vertex).subtract(origin);
       uvs.push(Vector3.Dot(at, uAxis) / 2, Vector3.Dot(at, vAxis) / 2);
+      const height = (vertex[1] - low) / (high - low),
+        shade = 0.8 + 0.2 * Math.sqrt(Math.max(0, height));
+      colors.push(shade, shade, shade, 1);
     }
     for (let i = 1; i < face.length - 1; i++)
       indices.push(offset, offset + i, offset + i + 1);
@@ -151,7 +238,7 @@ function armoredHull(
     useRightHandedSystem: scene.useRightHandedSystem,
   });
   const data = new VertexData();
-  Object.assign(data, { positions, indices, normals, uvs });
+  Object.assign(data, { positions, indices, normals, uvs, colors });
   data.applyToMesh(mesh);
   mesh.material = material;
   mesh.parent = parent;
@@ -227,10 +314,16 @@ function trackBelt(
   mesh.receiveShadows = true;
   return mesh;
 }
-function mergeByMaterial(node: TransformNode) {
+export function mergeByMaterial(node: TransformNode) {
   const buckets = new Map<Material, Mesh[]>();
   for (const mesh of node.getChildMeshes(true)) {
     if (!(mesh instanceof Mesh) || !mesh.material) continue;
+    // Merge custom shaded sections and stock details without dropping colors.
+    if (!mesh.isVerticesDataPresent('color'))
+      mesh.setVerticesData(
+        'color',
+        new Float32Array(mesh.getTotalVertices() * 4).fill(1),
+      );
     const list = buckets.get(mesh.material) || [];
     list.push(mesh);
     buckets.set(mesh.material, list);
@@ -362,56 +455,84 @@ export function buildTank(
       armor,
       body,
     );
-    for (let i = 0; i < (lowDetail ? 4 : 7); i++) {
-      const z = (-1.98 + i * (lowDetail ? 1.32 : 0.66)) * long;
-      cylinder(
+    // Six non-intersecting wheels remain in both quality levels. Put their
+    // axles inside the track belt; lower tessellation supplies the mobile LOD.
+    const axleX = side * 1.67 * wide;
+    for (let i = 0; i < 6; i++) {
+      const z = (-1.96 + i * 0.784) * long,
+        radius = 0.37 * long;
+      const tire = turnedPart(
         scene,
-        'rubber-road-wheel-tire',
-        0.4,
-        0.2,
-        [side * 1.96 * wide, 0.61, z],
+        'beveled-road-wheel-tire',
+        [
+          [-0.24, radius * 0.9],
+          [-0.18, radius],
+          [0.2, radius],
+          [0.27, radius * 0.89],
+          [0.27, radius * 0.74],
+          [-0.24, radius * 0.74],
+        ],
         mats.rubber,
         body,
-        Math.PI / 2,
+        lowDetail ? 8 : 16,
       );
-      cylinder(
+      const disc = turnedPart(
         scene,
-        'road-wheel-disc',
-        0.32,
-        0.25,
-        [side * 1.98 * wide, 0.61, z],
+        'dished-road-wheel-disc',
+        [
+          [0.12, radius * 0.74],
+          [0.25, radius * 0.78],
+          [0.28, radius * 0.68],
+          [0.2, radius * 0.34],
+          [0.28, radius * 0.26],
+          [0.12, radius * 0.26],
+        ],
         armor,
         body,
+        lowDetail ? 8 : 16,
+      );
+      for (const part of [tire, disc]) {
+        part.position.set(axleX, 0.61, z);
+        part.rotation.y = (side * Math.PI) / 2;
+      }
+      cylinder(
+        scene,
+        'road-wheel-axle-cap',
+        radius * 0.25,
+        0.095,
+        [axleX + side * 0.28, 0.61, z],
+        mats.steel,
+        body,
         Math.PI / 2,
+        lowDetail ? 6 : 12,
       );
       if (!lowDetail) {
-        cylinder(
+        // Swing arms meet the inboard wheel hubs, instead of floating discs.
+        const arm = box(
           scene,
-          'hub-bolt',
-          0.11,
-          0.27,
-          [side * 1.99 * wide, 0.61, z],
+          'suspension-swing-arm',
+          [0.13, 0.15, 0.52],
+          [axleX - side * 0.2, 0.69, z - 0.16],
           mats.steel,
           body,
-          Math.PI / 2,
         );
-        // Recessed wheel holes read as a stamped disc at play distance.
-        for (let hole = 0; hole < 4; hole++) {
-          const a = (hole * Math.PI) / 2 + Math.PI / 4;
+        arm.rotation.x = -0.35;
+        for (let bolt = 0; bolt < 5; bolt++) {
+          const a = (bolt * Math.PI * 2) / 5;
           cylinder(
             scene,
-            'road-wheel-recess',
-            0.055,
-            0.016,
+            'road-wheel-lug',
+            0.027,
+            0.026,
             [
-              side * (1.98 * wide + 0.132),
-              0.61 + Math.cos(a) * 0.22,
-              z + Math.sin(a) * 0.22,
+              axleX + side * 0.27,
+              0.61 + Math.cos(a) * radius * 0.49,
+              z + Math.sin(a) * radius * 0.49,
             ],
-            mats.rubber,
+            mats.steel,
             body,
             Math.PI / 2,
-            8,
+            6,
           );
         }
       }
@@ -422,7 +543,7 @@ export function buildTank(
         end === 1 ? 'front-idler-wheel' : 'drive-sprocket',
         0.37,
         0.2,
-        [side * 1.98 * wide, 0.65, end * 2.45 * long],
+        [axleX, 0.64, end * 2.45 * long],
         mats.steel,
         body,
         Math.PI / 2,
@@ -432,12 +553,12 @@ export function buildTank(
         'idler-bearing-cap',
         0.16,
         0.26,
-        [side * 1.99 * wide, 0.65, end * 2.45 * long],
+        [axleX + side * 0.12, 0.64, end * 2.45 * long],
         armor,
         body,
         Math.PI / 2,
       );
-      if (!lowDetail)
+      if (!lowDetail && end === -1)
         for (let tooth = 0; tooth < 10; tooth++) {
           const a = (tooth * Math.PI) / 5;
           const cog = box(
@@ -445,8 +566,8 @@ export function buildTank(
             'sprocket-tooth',
             [0.13, 0.11, 0.09],
             [
-              side * 1.98 * wide,
-              0.65 + Math.cos(a) * 0.37,
+              axleX,
+              0.64 + Math.cos(a) * 0.37,
               end * 2.45 * long + Math.sin(a) * 0.37,
             ],
             mats.steel,
@@ -502,15 +623,20 @@ export function buildTank(
       );
     }
     for (let i = 0; i < (stage >= 2 ? 3 : 0); i++) {
+      const plateZ = (1.64 + i * 0.33) * long;
       const plate = box(
         scene,
         'frontal-reactive-armor',
         [0.73 * wide, 0.16, 0.47],
-        [side * 0.85 * wide, 1.7, 1.44 + i * 0.43],
+        [
+          side * 0.74 * wide,
+          1.805 - ((plateZ - 1.635 * long) * 0.626) / long,
+          plateZ,
+        ],
         armor,
         body,
       );
-      plate.rotation.x = -0.19;
+      plate.rotation.x = Math.atan(0.626 / long);
     }
     box(
       scene,
@@ -580,8 +706,8 @@ export function buildTank(
     box(
       scene,
       'rear-turret-basket',
-      [2.05 * wide, 0.42, 0.7],
-      [0, 0.34, -1.65],
+      [2.05 * wide, 0.055, 0.7],
+      [0, 0.16, -1.65],
       mats.steel,
       turret,
     );
@@ -589,11 +715,28 @@ export function buildTank(
       box(
         scene,
         'basket-slat',
-        [0.06, 0.53, 0.9],
-        [(-0.88 + i * 0.35) * wide, 0.34, -1.67],
+        [0.045, 0.42, 0.045],
+        [(-0.88 + i * 0.35) * wide, 0.37, -1.98],
         armor,
         turret,
       );
+    const basketRail = MeshBuilder.CreateTube(
+      'open-stowage-basket-rail',
+      {
+        path: [
+          new Vector3(-1 * wide, 0.59, -1.31),
+          new Vector3(-1 * wide, 0.59, -1.98),
+          new Vector3(1 * wide, 0.59, -1.98),
+          new Vector3(1 * wide, 0.59, -1.31),
+        ],
+        radius: 0.035,
+        tessellation: 6,
+      },
+      scene,
+    );
+    basketRail.material = mats.steel;
+    basketRail.parent = turret;
+    basketRail.isPickable = false;
   }
   cylinder(
     scene,
@@ -688,46 +831,43 @@ export function buildTank(
     turret,
   );
   coax.rotation.x = Math.PI / 2;
-  const gun = cylinder(
+  const caliber = chassis === 2 ? 1.16 : 1;
+  const gun = turnedPart(
     scene,
-    'main-cannon',
-    chassis === 2 ? 0.16 : 0.13,
-    2.65,
-    [0, 0.5, 2.43],
+    'tapered-cannon-open-bore',
+    [
+      [1.36, 0.18],
+      [2.76, 0.15],
+      [3.9, 0.125],
+      [4.06, 0.14],
+      [4.06, 0.095],
+      [3.74, 0.095],
+      [1.36, 0.115],
+    ].map<[number, number]>(([z, radius]) => [z, radius * caliber]),
     mats.steel,
     barrel,
+    lowDetail ? 12 : 24,
   );
-  gun.rotation.x = Math.PI / 2;
-  const sleeve = cylinder(
+  gun.position.y = 0.5;
+  const sleeve = turnedPart(
     scene,
-    'thermal-sleeve',
-    0.19,
-    1.6,
-    [0, 0.5, 1.98],
+    'thermal-jacket-and-fume-extractor',
+    [
+      [1.46, 0.205],
+      [1.53, 0.225],
+      [2.3, 0.225],
+      [2.37, 0.27],
+      [2.65, 0.27],
+      [2.74, 0.19],
+      [2.86, 0.19],
+      [2.86, 0.16],
+      [1.46, 0.18],
+    ],
     armor,
     barrel,
+    lowDetail ? 10 : 20,
   );
-  sleeve.rotation.x = Math.PI / 2;
-  const brake = cylinder(
-    scene,
-    'muzzle-brake',
-    0.22,
-    0.3,
-    [0, 0.5, 3.8],
-    mats.steel,
-    barrel,
-  );
-  brake.rotation.x = Math.PI / 2;
-  const bore = cylinder(
-    scene,
-    'dark-muzzle-bore',
-    0.145,
-    0.012,
-    [0, 0.5, 3.956],
-    mats.rubber,
-    barrel,
-  );
-  bore.rotation.x = Math.PI / 2;
+  sleeve.position.y = 0.5;
   for (const x of stage >= 2 ? [-0.95, 0.95] : []) {
     for (let i = 0; i < 3; i++) {
       const s = cylinder(
@@ -1038,15 +1178,26 @@ export function buildTank(
         mats.mud,
         body,
       );
-      const armorCheek = box(
+    }
+    // Long wedge modules follow the turret shoulder, with a narrow expansion
+    // joint between them instead of a row of disconnected rectangular blocks.
+    for (const [z, length, width] of [
+      [0.43, 1.22, 0.44],
+      [-0.61, 0.76, 0.3],
+    ]) {
+      const cheek = armoredHull(
         scene,
         'spaced-turret-cheek',
-        [0.24, 0.52, 0.35],
-        [side * (1.22 - i * 0.025), 0.5, 0.94 - i * 0.37],
-        armor,
+        width,
+        length,
+        0.16,
+        0.77,
         turret,
+        armor,
       );
-      armorCheek.rotation.z = side * 0.22;
+      cheek.position.set(side * 1.13 * wide, 0, z);
+      cheek.rotation.z = side * 0.09;
+      cheek.rotation.y = side * -0.08;
     }
     box(
       scene,
@@ -1133,39 +1284,22 @@ export function buildTank(
         );
     }
   }
-  const extractor = cylinder(
-    scene,
-    'bore-fume-extractor',
-    0.245,
-    0.43,
-    [0, 0.5, 2.55],
-    armor,
-    barrel,
-  );
-  extractor.rotation.x = Math.PI / 2;
-  for (const z of [1.4, 1.9, 2.3, 2.82]) {
-    const band = cylinder(
+  for (const z of [1.61, 2.19]) {
+    const band = turnedPart(
       scene,
-      'thermal-jacket-band',
-      0.205,
-      0.05,
-      [0, 0.5, z],
+      'thermal-jacket-retaining-band',
+      [
+        [z, 0.23],
+        [z + 0.045, 0.23],
+        [z + 0.045, 0.22],
+        [z, 0.22],
+      ],
       mats.edges,
       barrel,
+      lowDetail ? 10 : 16,
     );
-    band.rotation.x = Math.PI / 2;
+    band.position.y = 0.5;
   }
-  // Hollow forward lip: a real annulus, with the dark bore recessed behind it.
-  const muzzleLip = MeshBuilder.CreateTorus(
-    'hollow-muzzle-lip',
-    { diameter: 0.365, thickness: 0.07, tessellation: 24 },
-    scene,
-  );
-  muzzleLip.parent = barrel;
-  muzzleLip.rotation.x = Math.PI / 2;
-  muzzleLip.position.set(0, 0.5, 4.025);
-  muzzleLip.material = mats.steel;
-  muzzleLip.isPickable = false;
   const bodyMeshes = mergeByMaterial(body),
     turretMeshes = mergeByMaterial(turret),
     barrelMeshes = mergeByMaterial(barrel);

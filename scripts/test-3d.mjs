@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url';
 import ts from 'typescript';
 import { NullEngine } from '@babylonjs/core/Engines/nullEngine.js';
 import { Vector3, Matrix } from '@babylonjs/core/Maths/math.vector.js';
+import { Ray } from '@babylonjs/core/Culling/ray.js';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode.js';
 import { TimingTools } from '@babylonjs/core/Misc/timingTools.js';
 const root = path.resolve('outputs/test-3d');
@@ -253,12 +254,41 @@ await test('destroyed cover swaps to rubble and defeated tanks are removed from 
   assert(view.rubble.isEnabled());
   assert(!r.models.has(e.id));
   assert(!r.scene.meshes.some((m) => m.metadata?.tankId === e.id));
+  assert(!r.scene.meshes.some((m) => m.name === 'tank-contact-' + e.id));
 });
 await test('render mesh pools stop growing for a stable battle state', () => {
   r.draw(battle, null);
   const count = r.meshCount;
   for (let i = 0; i < 20; i++) r.draw(battle, null);
   assert.equal(r.meshCount, count);
+});
+await test('vehicle contact shading follows chassis motion without becoming an aiming target or leaking per frame', () => {
+  const footprints = r.scene.meshes.filter(
+    (m) => m.material === r.materials.contact,
+  );
+  assert.equal(footprints.length, r.models.size);
+  assert(
+    footprints.every((m) => !m.isPickable && m.material.needAlphaBlending()),
+  );
+  const player = footprints.find((m) => m.name === 'tank-contact-0');
+  const oldAngle = battle.player.angle,
+    oldX = battle.player.x;
+  const materials = r.scene.materials.length,
+    textures = r.scene.textures.length;
+  battle.player.angle += 0.6;
+  battle.player.x += 5;
+  r.draw(battle, null);
+  assert(
+    Math.abs(
+      player.position.x - worldPosition(battle.player.x, battle.player.y).x,
+    ) < 1e-6,
+  );
+  assert(Math.abs(player.rotation.y - r.models.get(0).body.rotation.y) < 1e-6);
+  assert.equal(r.scene.materials.length, materials);
+  assert.equal(r.scene.textures.length, textures);
+  battle.player.angle = oldAngle;
+  battle.player.x = oldX;
+  r.draw(battle, null);
 });
 await test('camera toggles and zoom do not change combat state', () => {
   const before = JSON.stringify(battle);
@@ -727,6 +757,35 @@ await test('switching live gun mounts preserves the tank and releases previous a
     if (counts.has(index)) assert.equal(view.meshCount, counts.get(index));
     counts.set(index, view.meshCount);
     assert(view.weaponMount.meshes.every((mesh) => !mesh.isPickable));
+    if (i > 0 && i < WEAPONS.length) {
+      const bore = new Ray(
+        new Vector3(0, 0.5, 4.08),
+        new Vector3(0, 0, -1),
+        0.1,
+      );
+      let muzzle = -Infinity;
+      for (const mesh of view.weaponMount.meshes) {
+        const positions = mesh.getVerticesData('position'),
+          indices = mesh.getIndices();
+        for (let p = 2; p < positions.length; p += 3)
+          muzzle = Math.max(muzzle, positions[p]);
+        for (let triangle = 0; triangle < indices.length; triangle += 3) {
+          const hit = bore.intersectsTriangle(
+            ...[0, 1, 2].map((corner) =>
+              Vector3.FromArray(positions, indices[triangle + corner] * 3),
+            ),
+          );
+          assert(
+            !hit || hit.distance > bore.length,
+            'the firing channel must be open at weapon ' + index,
+          );
+        }
+      }
+      assert(
+        Math.abs(muzzle - 4.06) < 0.001,
+        'visual barrel ends at the shared ballistic muzzle',
+      );
+    }
   }
   view.dispose();
 });

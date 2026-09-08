@@ -1253,8 +1253,8 @@ h1 span {
   inset: 0;
   z-index: -2;
   background:
-    linear-gradient(0deg, #121912 0%, transparent 65%),
-    linear-gradient(90deg, #111a12bb, transparent);
+    linear-gradient(0deg, #121912cc 0%, transparent 36%),
+    linear-gradient(120deg, #111a12b3, transparent 48%);
 }
 .garage-title {
   padding: 30px;

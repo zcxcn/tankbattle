@@ -63,6 +63,7 @@ export class Renderer3D {
   disposed = false;
   ready: Promise<void>;
   private pipeline: DefaultRenderingPipeline | null = null;
+  private contactShadows = new Map<number, Mesh>();
   readonly projectiles: ProjectileEffects;
   private weaponMount: ReturnType<typeof createWeaponMount> | null = null;
   private sparkPool: Mesh[] = [];
@@ -212,8 +213,8 @@ export class Renderer3D {
     scene.imageProcessingConfiguration.toneMappingEnabled = true;
     scene.imageProcessingConfiguration.toneMappingType =
       ImageProcessingConfiguration.TONEMAPPING_ACES;
-    scene.imageProcessingConfiguration.exposure = 1.08;
-    scene.imageProcessingConfiguration.contrast = 1.08;
+    scene.imageProcessingConfiguration.exposure = 1;
+    scene.imageProcessingConfiguration.contrast = 1.04;
     if (!headless && this.quality !== 'performance' && !this.mobile) {
       const pipe = (this.pipeline = new DefaultRenderingPipeline(
         'cinematic-image-pipeline',
@@ -225,21 +226,21 @@ export class Renderer3D {
       pipe.samples = this.quality === 'cinematic' ? 4 : 1;
       pipe.bloomEnabled = true;
       pipe.bloomThreshold = 1.35;
-      pipe.bloomWeight = 0.16;
+      pipe.bloomWeight = 0.1;
       pipe.bloomKernel = 40;
       pipe.imageProcessingEnabled = true;
       scene.imageProcessingConfiguration.toneMappingEnabled = true;
       scene.imageProcessingConfiguration.toneMappingType =
         ImageProcessingConfiguration.TONEMAPPING_ACES;
-      scene.imageProcessingConfiguration.exposure = 1.08;
-      scene.imageProcessingConfiguration.contrast = 1.08;
+      scene.imageProcessingConfiguration.exposure = 1;
+      scene.imageProcessingConfiguration.contrast = 1.04;
       pipe.sharpenEnabled = this.quality === 'cinematic';
       if (pipe.sharpenEnabled) {
         pipe.sharpen.edgeAmount = 0.16;
         pipe.sharpen.colorAmount = 1;
       }
       scene.imageProcessingConfiguration.vignetteEnabled = true;
-      scene.imageProcessingConfiguration.vignetteWeight = 1.35;
+      scene.imageProcessingConfiguration.vignetteWeight = 0.85;
       scene.imageProcessingConfiguration.vignetteStretch = 0.25;
     }
     this.flashLight = new PointLight(
@@ -485,8 +486,8 @@ export class Renderer3D {
     const portrait =
       this.engine.getRenderWidth() / this.engine.getRenderHeight() < 1;
     const height =
-      (this.mode === 'tactical' ? 76 : 32) * (portrait ? 1.24 : 1) * this.zoom;
-    const back = (this.mode === 'tactical' ? 31 : 33) * this.zoom;
+      (this.mode === 'tactical' ? 76 : 29) * (portrait ? 1.24 : 1) * this.zoom;
+    const back = (this.mode === 'tactical' ? 31 : 30) * this.zoom;
     const cameraPos = new Vector3(
       this.cameraTarget.x,
       this.cameraTarget.y + height,
@@ -501,6 +502,7 @@ export class Renderer3D {
     this.camera.computeWorldMatrix();
     this.camera.getViewMatrix(true);
     this.scene.updateTransformMatrix(true);
+    this.world.updateShadow(this.cameraTarget);
   }
   pointer(clientX: number, clientY: number): Vec | null {
     if (this.disposed) return null;
@@ -697,6 +699,21 @@ export class Renderer3D {
         this.world.shadow?.addShadowCaster(mesh);
     }
     model.root.setEnabled(t.hp > 0);
+    let contact = this.contactShadows.get(t.id);
+    if (!contact) {
+      contact = MeshBuilder.CreateGround(
+        'tank-contact-' + t.id,
+        { width: 4.5, height: 5.2 },
+        this.scene,
+      );
+      contact.material = this.materials.contact;
+      contact.isPickable = false;
+      this.contactShadows.set(t.id, contact);
+    }
+    contact.position.copyFrom(worldPosition(t.x, t.y, 0.085));
+    contact.rotation.y = heading(t.angle);
+    contact.scaling.set(t.radius / 20, 1, t.radius / 20);
+    contact.setEnabled(t.hp > 0);
     model.root.position.copyFrom(worldPosition(t.x, t.y));
     model.root.scaling.setAll(t.radius / 20);
     model.body.rotation.y = heading(t.angle);
@@ -771,6 +788,8 @@ export class Renderer3D {
           this.world.shadow?.removeShadowCaster(mesh);
         model.dispose();
         this.models.delete(id);
+        this.contactShadows.get(id)?.dispose();
+        this.contactShadows.delete(id);
         this.healthBars.get(id)?.root.dispose();
         this.healthBars.delete(id);
         this.sniperLines.get(id)?.dispose();
@@ -1066,6 +1085,7 @@ export class Renderer3D {
     this.scene.dispose();
     this.engine.dispose();
     this.models.clear();
+    this.contactShadows.clear();
     this.healthBars.clear();
   }
 }
