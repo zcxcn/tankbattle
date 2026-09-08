@@ -1,0 +1,63 @@
+{
+  "label": "tactical-final",
+  "method": "Deterministic automated playtest of the real 60 Hz Godot/Jolt scene. The same input-action strategy steers, aims, fires and uses EMP in both versions; ordinary starting HP, damage, collision, projectiles and in-game resupply are preserved. No forced damage, invincibility or victory. Opening hold runs up to 30 seconds; street maneuver and boss encounter run up to 90 seconds or player defeat. The boss fixture starts a full-health boss and full-health player at legal arena coordinates and includes normal phase guards. This is automated test evidence, not a human playthrough, a difficulty guarantee or a successful campaign clear.",
+  "results": [
+    {
+      "boss_hp": 780.0,
+      "damage_taken": 231.84,
+      "distance_driven_m": 0.0,
+      "enemy_projectiles": 12,
+      "first_damage_seconds": 4.95,
+      "first_enemy_shot_seconds": 4.48,
+      "healing_received": 0.0,
+      "initial_hp": 240.0,
+      "kills": 0,
+      "max_active_enemies": 2,
+      "max_enemy_cannons_in_one_second": 2,
+      "max_player_speed": 0.0,
+      "outcome": "playing",
+      "player_shots": 0,
+      "remaining_hp": 8.16,
+      "scenario": "opening_hold",
+      "seconds": 30.0
+    },
+    {
+      "boss_hp": 780.0,
+      "damage_taken": 324.0,
+      "distance_driven_m": 131.98,
+      "enemy_projectiles": 11,
+      "first_damage_seconds": 4.53,
+      "first_enemy_shot_seconds": 4.18,
+      "healing_received": 84.0,
+      "initial_hp": 240.0,
+      "kills": 4,
+      "max_active_enemies": 2,
+      "max_enemy_cannons_in_one_second": 2,
+      "max_player_speed": 8.0,
+      "outcome": "lost",
+      "player_shots": 15,
+      "remaining_hp": 0.0,
+      "scenario": "street_maneuver",
+      "seconds": 59.35
+    },
+    {
+      "boss_hp": 68.24,
+      "damage_taken": 240.0,
+      "distance_driven_m": 124.2,
+      "enemy_projectiles": 20,
+      "first_damage_seconds": 6.85,
+      "first_enemy_shot_seconds": 6.38,
+      "healing_received": 0.0,
+      "initial_hp": 240.0,
+      "kills": 1,
+      "max_active_enemies": 2,
+      "max_enemy_cannons_in_one_second": 2,
+      "max_player_speed": 8.0,
+      "outcome": "lost",
+      "player_shots": 17,
+      "remaining_hp": 0.0,
+      "scenario": "boss_encounter",
+      "seconds": 64.08
+    }
+  ]
+}

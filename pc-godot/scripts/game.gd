@@ -27,6 +27,10 @@ var _settings_return_mode := "title"
 var _title_rig: Node3D
 var _cleanup: Array[Dictionary] = []
 var _smoke_test := false
+var _active_encounter := 0
+var _encounter_pause := 0.0
+var _encounter_cleared := false
+const ENCOUNTER_INTERVAL := 5.0
 
 
 func _ready() -> void:
@@ -126,6 +130,9 @@ func start_game() -> void:
 	total_run_kills = 0
 	score = 0
 	play_time = 0.0
+	_active_encounter = 0
+	_encounter_pause = 0.0
+	_encounter_cleared = false
 	pause_reason = "manual"
 	_settings_return_mode = "paused"
 	current_run_id = "%d-%d" % [Time.get_unix_time_from_system(), randi()]
@@ -139,14 +146,15 @@ func start_game() -> void:
 	for index in range(layout.size()):
 		var data: Array = layout[index]
 		var enemy := _spawn_tank("Enemy_%02d" % index, data[0], TankActor.TEAM_ENEMY, false, false, data[1])
+		enemy.set_meta("encounter_index", index >> 1)
 		enemies.append(enemy)
 	boss = _spawn_tank("Boss_IronFang", Vector3(0, 0.05, -54), TankActor.TEAM_ENEMY, false, true, "boss")
 	boss.boss_phase_changed.connect(_on_boss_phase_changed)
 	enemies.append(boss)
 	arena.set_boss_gate_open(false)
 	mode = "playing"
-	objective = "突破工业街区 · 击毁敌军 0 / %d" % target_kills
-	notify("第一章 · 灰中点火\n突破封锁，找到围城指挥车“铁牙”", 4.0)
+	_update_encounter_objective()
+	notify("第一章 · 灰中点火\n敌军分组推进 · 停稳瞄准，装填时退回掩体", 5.0)
 	Input.mouse_mode = Input.MOUSE_MODE_HIDDEN
 	if _smoke_test:
 		get_tree().create_timer(1.5).timeout.connect(_finish_smoke_test)
@@ -220,6 +228,7 @@ func _process(delta: float) -> void:
 	if mode == "playing":
 		play_time += delta
 		_update_mouse_aim()
+		_update_encounters(delta)
 	_update_cleanup(delta)
 	if is_instance_valid(ui) and ui.has_method("update_snapshot"):
 		ui.call("update_snapshot", get_ui_snapshot())
@@ -424,27 +433,79 @@ func _on_tank_destroyed(tank: TankActor, attacker_team: int) -> void:
 	if not tank.counts_for_objective:
 		return
 	mission_kills += 1
-	objective = "突破工业街区 · 击毁敌军 %d / %d" % [mini(mission_kills, target_kills), target_kills]
+	_update_encounter_objective()
 	if mission_kills >= target_kills and is_instance_valid(boss) and not boss.active:
 		_activate_boss()
 
 
 func _activate_boss() -> void:
 	arena.set_boss_gate_open(true)
+	_encounter_pause = 0.0
+	# Chapter transition is a visible, one-time resupply, never regeneration
+	# during a firefight. A battered player can still attempt the boss fight.
+	if is_instance_valid(player) and not player.destroyed:
+		player.hp = maxf(player.hp, player.max_hp * 0.75)
+		player.emp_cooldown = 0.0
 	boss.activate_boss()
 	objective = "最终目标 · 摧毁“铁牙”围城指挥车"
-	notify("警告：铁牙进入战场\n红色预警表示火箭齐射，可用 EMP 打断", 4.5)
+	notify("前线补给：装甲恢复至至少 75%，EMP 就绪\n铁牙出动 · 离开红色射线，或靠近后用 EMP 打断", 5.0)
 
 
 func _on_boss_phase_changed(phase: int) -> void:
 	if mode != "playing" or not is_instance_valid(boss) or boss.hp <= 0.0:
 		return
-	notify("铁牙装甲阶段 %d / 3 · 呼叫护卫" % phase, 3.0)
-	var offsets := [Vector3(-10, 0.05, -48), Vector3(10, 0.05, -48)]
-	for index in range(2):
-		var guard := _spawn_tank("BossGuard_%d_%d" % [phase, index], offsets[index] + Vector3(0, 0, phase * 2.0), TankActor.TEAM_ENEMY, false, false, "scout" if phase == 2 else "heavy")
-		guard.counts_for_objective = false
-		enemies.append(guard)
+	for enemy in enemies:
+		if is_instance_valid(enemy) and not enemy.destroyed and not enemy.is_boss and not enemy.counts_for_objective:
+			notify("铁牙装甲阶段 %d / 3 · 注意火箭预警" % phase, 3.0)
+			return
+	notify("铁牙装甲阶段 %d / 3 · 一辆护卫进入战场" % phase, 3.0)
+	var offset := Vector3(-10 if phase == 2 else 10, 0.05, -48 + phase * 2.0)
+	var guard := _spawn_tank("BossGuard_%d" % phase, offset, TankActor.TEAM_ENEMY, false, false, "scout" if phase == 2 else "line")
+	guard.counts_for_objective = false
+	guard.reload = guard.fire_interval
+	enemies.append(guard)
+
+
+func can_enemy_engage(tank: TankActor) -> bool:
+	return tank.is_boss or not tank.has_meta("encounter_index") or tank.get_meta("alerted", false) or int(tank.get_meta("encounter_index")) <= _active_encounter
+
+
+func alert_enemy(tank: TankActor) -> void:
+	# Reserves can be attacked and will defend themselves. No invisible armor
+	# or damage immunity is used to enforce encounter order.
+	if not can_enemy_engage(tank):
+		tank.set_meta("alerted", true)
+
+
+func _update_encounter_objective() -> void:
+	objective = "工业街区 · 第 %d / 3 组 · 击毁 %d / %d" % [mini(_active_encounter + 1, 3), mini(mission_kills, target_kills), target_kills]
+
+
+func _update_encounters(delta: float) -> void:
+	if not is_instance_valid(boss) or boss.active:
+		return
+	if _encounter_pause > 0.0:
+		_encounter_pause = maxf(0.0, _encounter_pause - delta)
+		objective = "街区已肃清 · %d 秒后下一组接敌" % ceili(_encounter_pause)
+		if _encounter_pause <= 0.0:
+			_active_encounter += 1
+			_encounter_cleared = false
+			_update_encounter_objective()
+			notify("第 %d / 3 组敌军开始推进 · 利用掩体逐辆击破" % (_active_encounter + 1), 3.0)
+		return
+	if _encounter_cleared:
+		return
+	for enemy in enemies:
+		if is_instance_valid(enemy) and not enemy.destroyed and enemy.counts_for_objective and int(enemy.get_meta("encounter_index", -1)) <= _active_encounter:
+			return
+	_encounter_cleared = true
+	if is_instance_valid(player) and not player.destroyed:
+		var repaired := minf(42.0, player.max_hp - player.hp)
+		player.hp = minf(player.max_hp, player.hp + 42.0)
+		player.mine_ammo = mini(6, player.mine_ammo + 1)
+		notify("小队已肃清 · 前线整备\n装甲 +%d · 补充地雷 · 5 秒后下一组推进" % roundi(repaired), 4.5)
+	if _active_encounter < 2:
+		_encounter_pause = ENCOUNTER_INTERVAL
 
 
 func notify(text: String, duration := 2.0) -> void:

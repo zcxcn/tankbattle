@@ -41,11 +41,11 @@ func play_3d(kind: String, world_position: Vector3, volume_db := -5.0, pitch := 
 		"explosion_tail": 3.2,
 	}.get(kind, 0.0) as float
 	if maximum_duration > 0.0:
-		get_tree().create_timer(maximum_duration).timeout.connect(func() -> void:
-			if is_instance_valid(voice):
-				voice.stop()
-				voice.queue_free()
-		)
+		# A short recording can finish before its cutoff. Binding the timer to
+		# the voice cancels it on free, without a lambda capturing a dead node.
+		var cutoff := voice.create_tween()
+		cutoff.tween_interval(maximum_duration)
+		cutoff.tween_callback(voice.queue_free)
 
 
 func play_ui(kind: String, volume_db := -8.0, pitch := 1.0) -> void:

@@ -32,6 +32,7 @@ var _shake_enabled := true
 var _title_layer: Control
 var _hud_layer: Control
 var _battle_overlay: Control
+var _hud_panels: Array[Control] = []
 var _pause_layer: Control
 var _settings_layer: Control
 var _result_layer: Control
@@ -204,7 +205,7 @@ func _build_title_layer() -> void:
 	chapter.add_child(_label("第 01 章 · 灰中点火", &"HudValue"))
 	chapter.add_child(_spacer(true, false))
 	chapter.add_child(_label("行动简报", &"Kicker"))
-	var mission := _label("突破修理厂封锁，歼灭 6 辆敌军，击毁指挥重坦「铁牙」。", &"Muted")
+	var mission := _label("逐组突破修理厂封锁，清除 3 组敌军，击毁指挥重坦「铁牙」。", &"Muted")
 	mission.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	briefing.add_child(mission)
 	briefing.add_child(HSeparator.new())
@@ -232,7 +233,7 @@ func _build_title_layer() -> void:
 	layout.add_child(HSeparator.new())
 	var footer := HBoxContainer.new()
 	layout.add_child(footer)
-	footer.add_child(_label("BUILD 0.2.1 · FORWARD+ / PBR ARMOR", &"Micro"))
+	footer.add_child(_label("BUILD 0.2.2 · FORWARD+ / PBR ARMOR", &"Micro"))
 	footer.add_child(_spacer(true, false))
 	var asset_credit := _label("3D：tomm8 · GRIP420 / David Falke · Comrade1280 · CC BY 4.0", &"Micro")
 	asset_credit.name = "AssetCredit"
@@ -260,6 +261,7 @@ func _build_hud_layer() -> void:
 	layout.add_child(top)
 
 	var player_panel := _panel(&"HUDPanel")
+	_hud_panels.append(player_panel)
 	player_panel.custom_minimum_size = Vector2(330.0, 104.0)
 	top.add_child(player_panel)
 	var player := VBoxContainer.new()
@@ -278,25 +280,30 @@ func _build_hud_layer() -> void:
 	player.add_child(_hud_hp_bar)
 
 	var objective_panel := _panel(&"HUDPanel")
+	objective_panel.name = "CompactObjective"
+	_hud_panels.append(objective_panel)
 	objective_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	objective_panel.custom_minimum_size = Vector2(0.0, 104.0)
+	objective_panel.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	objective_panel.custom_minimum_size = Vector2(0.0, 64.0)
 	top.add_child(objective_panel)
 	var objective_box := VBoxContainer.new()
-	objective_box.add_theme_constant_override(&"separation", 7)
+	objective_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	objective_box.add_theme_constant_override(&"separation", 5)
 	objective_panel.add_child(objective_box)
 	var objective_header := HBoxContainer.new()
 	objective_box.add_child(objective_header)
-	objective_header.add_child(_label("CHAPTER 01 / CURRENT OBJECTIVE", &"Kicker"))
-	objective_header.add_child(_spacer(true, false))
+	_hud_objective = _label("突破封锁", &"HudValue")
+	_hud_objective.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_hud_objective.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	objective_header.add_child(_hud_objective)
 	_hud_kills = _label("0 / 6", &"Muted")
 	objective_header.add_child(_hud_kills)
-	_hud_objective = _label("突破封锁", &"HudValue")
-	_hud_objective.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	objective_box.add_child(_hud_objective)
 	_hud_kill_bar = _progress(&"ObjectiveBar", 6.0)
+	_hud_kill_bar.custom_minimum_size.y = 4.0
 	objective_box.add_child(_hud_kill_bar)
 
 	var score_panel := _panel(&"HUDPanel")
+	_hud_panels.append(score_panel)
 	score_panel.custom_minimum_size = Vector2(230.0, 104.0)
 	top.add_child(score_panel)
 	var score_box := VBoxContainer.new()
@@ -314,6 +321,7 @@ func _build_hud_layer() -> void:
 	layout.add_child(boss_center)
 	boss_center.add_child(_spacer(true, false))
 	_hud_boss_panel = _panel(&"BossPanel")
+	_hud_panels.append(_hud_boss_panel)
 	_hud_boss_panel.custom_minimum_size = Vector2(760.0, 92.0)
 	boss_center.add_child(_hud_boss_panel)
 	boss_center.add_child(_spacer(true, false))
@@ -343,6 +351,7 @@ func _build_hud_layer() -> void:
 	layout.add_child(notice_center)
 	notice_center.add_child(_spacer(true, false))
 	_hud_notice_panel = _panel(&"NoticePanel")
+	_hud_panels.append(_hud_notice_panel)
 	_hud_notice_panel.custom_minimum_size = Vector2(520.0, 0.0)
 	notice_center.add_child(_hud_notice_panel)
 	notice_center.add_child(_spacer(true, false))
@@ -354,12 +363,14 @@ func _build_hud_layer() -> void:
 	bottom.add_theme_constant_override(&"separation", 10)
 	layout.add_child(bottom)
 	var mine_panel := _panel(&"HUDPanel")
+	_hud_panels.append(mine_panel)
 	mine_panel.custom_minimum_size = Vector2(230.0, 72.0)
 	bottom.add_child(mine_panel)
 	_hud_mine = _label("M  地雷 × 6", &"HudValue")
 	mine_panel.add_child(_hud_mine)
 
 	var weapon_panel := _panel(&"HUDPanel")
+	_hud_panels.append(weapon_panel)
 	weapon_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	weapon_panel.custom_minimum_size = Vector2(380.0, 72.0)
 	bottom.add_child(weapon_panel)
@@ -374,12 +385,13 @@ func _build_hud_layer() -> void:
 	weapon_box.add_child(_hud_reload)
 
 	var ability_panel := _panel(&"HUDPanel")
+	_hud_panels.append(ability_panel)
 	ability_panel.custom_minimum_size = Vector2(390.0, 72.0)
 	bottom.add_child(ability_panel)
 	var abilities := HBoxContainer.new()
 	abilities.alignment = BoxContainer.ALIGNMENT_CENTER
 	ability_panel.add_child(abilities)
-	_hud_dash = _label("SPACE 冲刺", &"Muted")
+	_hud_dash = _label("SPACE 短时加速", &"Muted")
 	abilities.add_child(_hud_dash)
 	abilities.add_child(VSeparator.new())
 	_hud_emp = _label("E EMP", &"Muted")
@@ -409,9 +421,13 @@ func _build_pause_layer() -> void:
 	_pause_notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_pause_notice.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(_pause_notice)
-	var controls := _label("WASD / 左摇杆：移动    鼠标 / 右摇杆：瞄准\n左键 / RT：开火    C / Y：切换镜头\nM / R3：布雷    E / RB：脉冲排雷    空格 / LB：冲刺", &"Muted")
+	var controls := _label("WASD / 左摇杆：移动    鼠标 / 右摇杆：瞄准\n左键 / RT：开火    C / Y：切换镜头\nM / R3：布雷    E / RB：脉冲排雷    空格 / LB：短时加速", &"Muted")
 	controls.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(controls)
+	var tactics := _label("停稳瞄准，开炮后退回掩体；清空一组可获得整备补给。", &"Muted")
+	tactics.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	tactics.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(tactics)
 	box.add_child(HSeparator.new())
 	var resume_button := _button("继续行动", &"PrimaryButton", func() -> void: resume_requested.emit())
 	box.add_child(resume_button)
@@ -629,7 +645,14 @@ func _update_hud() -> void:
 		" · %.1fs" % mine_cooldown if mine_cooldown > 0.01 else "",
 	]
 	_hud_emp.text = _cooldown_text("E  EMP", _float_value("emp_cooldown", 0.0))
-	_hud_dash.text = _cooldown_text("SPACE  冲刺", _float_value("dash_cooldown", 0.0))
+	_hud_dash.text = _cooldown_text("SPACE  短时加速", _float_value("dash_cooldown", 0.0))
+	var regions: Array[Rect2] = []
+	for panel: Control in _hud_panels:
+		if panel.is_visible_in_tree():
+			var region := panel.get_global_rect()
+			region.position -= _battle_overlay.global_position
+			regions.append(region)
+	_battle_overlay.set_hud_regions(regions)
 
 
 func _update_settings() -> void:

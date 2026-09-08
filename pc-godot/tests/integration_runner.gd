@@ -67,6 +67,9 @@ func _check_scaled_ai_and_obstructed_barrel() -> void:
 		var saved_salvo := tank._salvo_clock
 		var saved_charge := tank._charge_clock
 		var saved_warning := tank.boss_warning
+		var saved_alerted: bool = tank.get_meta("alerted", false)
+		var saved_aim_hold := tank._aim_hold_time
+		var saved_observation_clock := tank._observation_clock
 		_clear_test_projectiles()
 		tank.global_transform = Transform3D(Basis.IDENTITY, Vector3(300.0, 5.0, 0.0))
 		turret.rotation = Vector3.ZERO
@@ -75,8 +78,15 @@ func _check_scaled_ai_and_obstructed_barrel() -> void:
 		tank._salvo_clock = 99.0
 		tank._charge_clock = 0.0
 		tank.boss_warning = false
+		tank.set_meta("alerted", true)
+		tank._aim_hold_time = 0.0
+		tank._observation_clock = 0.0
+		tank.velocity = Vector3.ZERO
 		await _frames(2)
-		tank._ai_control(0.0)
+		# Keep the scaled-model ballistic check while letting the crew complete
+		# its new continuous settled-aim interval before expecting a shot.
+		for aim_tick in range(ceili(tank.aim_acquire_time * 60.0) + 2):
+			tank._ai_control(1.0 / 60.0)
 		var fired := false
 		for projectile: Node in get_tree().get_nodes_in_group("projectiles"):
 			if projectile is IronProjectile and (projectile as IronProjectile).owner_tank == tank:
@@ -94,6 +104,9 @@ func _check_scaled_ai_and_obstructed_barrel() -> void:
 		tank._salvo_clock = saved_salvo
 		tank._charge_clock = saved_charge
 		tank.boss_warning = saved_warning
+		tank.set_meta("alerted", saved_alerted)
+		tank._aim_hold_time = saved_aim_hold
+		tank._observation_clock = saved_observation_clock
 
 	# Place thin cover between the gun pivot and its muzzle, entirely outside
 	# the vehicle hull. A shell must stop here instead of appearing beyond it.

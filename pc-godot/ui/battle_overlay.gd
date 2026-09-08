@@ -6,6 +6,7 @@ const FRIENDLY := Color("72e1df")
 const HOSTILE := Color("ef7665")
 const AMBER := Color("e9bf70")
 var snapshot: Dictionary = {}
+var hud_regions: Array[Rect2] = []
 
 func _init() -> void:
 	name = "BattleOverlay"
@@ -15,6 +16,10 @@ func _init() -> void:
 func update_snapshot(value: Dictionary) -> void:
 	snapshot = value
 	visible = bool(value.get("tactical_visible", false)) and value.get("mode", "") == "playing"
+	queue_redraw()
+
+func set_hud_regions(regions: Array[Rect2]) -> void:
+	hud_regions = regions
 	queue_redraw()
 
 func map_rect() -> Rect2:
@@ -29,6 +34,7 @@ func map_position(world: Vector2) -> Vector2:
 func _draw() -> void:
 	if not visible:
 		return
+	_draw_enemy_markers()
 	_draw_radar()
 	var aim: Vector2 = snapshot.get("aim_screen", Vector2.ZERO)
 	var impact: Vector2 = snapshot.get("impact_screen", Vector2.ZERO)
@@ -51,6 +57,57 @@ func _draw() -> void:
 		draw_arc(impact, 10.0, -PI * 0.5, -PI * 0.5 + TAU * (1.0 - fraction), 32, AMBER, 2.0, true)
 	var caption := "受阻" if blocked else ("装填 %.1fs" % reload if reload > 0.01 else "%dm" % roundi(float(snapshot.get("aim_distance", 0.0))))
 	_text(impact + Vector2(15, 5), caption, color, 14)
+
+func _draw_enemy_markers() -> void:
+	for marker: Dictionary in snapshot.get("enemy_markers", []):
+		var source: Vector2 = marker["screen"]
+		var at := marker_position(source)
+		if at == Vector2.INF:
+			continue
+		if at.distance_squared_to(source) > 9.0:
+			draw_line(source, at, Color("bdb89b88"), 1.0, true)
+		var health := clampf(float(marker.get("health", 1.0)), 0.0, 1.0)
+		if health < 0.999:
+			var bar := Rect2(at - Vector2(26, 2), Vector2(52, 4))
+			draw_rect(bar.grow(2), Color("0a100ddd"))
+			draw_rect(bar, Color("45322d"))
+			draw_rect(Rect2(bar.position, Vector2(bar.size.x * health, bar.size.y)), HOSTILE)
+		var aiming := clampf(float(marker.get("aiming", 0.0)), 0.0, 1.0)
+		if aiming > 0.08:
+			var warning := at + Vector2(0, -13)
+			draw_circle(warning, 6.5, Color("0a100ddd"))
+			draw_arc(warning, 5.0, -PI * 0.5, -PI * 0.5 + TAU * aiming, 24, AMBER, 1.8, true)
+			_text(warning + Vector2(10, 4), "瞄准", AMBER, 11)
+
+func marker_position(source: Vector2) -> Vector2:
+	# Move only the small vehicle label. The aiming reticle remains at its real
+	# world projection; a thin leader line keeps any shifted label unambiguous.
+	var bounds := Rect2(Vector2(18, 18), size - Vector2(36, 36))
+	var obstacles: Array[Rect2] = hud_regions.duplicate()
+	var radar := map_rect()
+	obstacles.append(Rect2(radar.position - Vector2(10, 30), radar.size + Vector2(20, 53)))
+	var candidates: Array[Vector2] = [source]
+	for region: Rect2 in obstacles:
+		candidates.append(Vector2(source.x, region.end.y + 26.0))
+		candidates.append(Vector2(source.x, region.position.y - 13.0))
+		candidates.append(Vector2(region.position.x - 52.0, source.y))
+		candidates.append(Vector2(region.end.x + 35.0, source.y))
+	var best := Vector2.INF
+	var best_distance := INF
+	for candidate: Vector2 in candidates:
+		var label_rect := Rect2(candidate - Vector2(30, 21), Vector2(77, 29))
+		if not bounds.encloses(label_rect):
+			continue
+		var clear := true
+		for region: Rect2 in obstacles:
+			if region.grow(3.0).intersects(label_rect):
+				clear = false
+				break
+		var distance := candidate.distance_squared_to(source)
+		if clear and distance < best_distance:
+			best = candidate
+			best_distance = distance
+	return best
 
 func _draw_radar() -> void:
 	var rect := map_rect()

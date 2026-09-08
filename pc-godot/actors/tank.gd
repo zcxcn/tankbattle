@@ -35,12 +35,14 @@ var display_name := "主战坦克"
 var max_hp := 240.0
 var hp := 240.0
 var armor := 0.08
-var move_speed := 13.5
-var acceleration := 28.0
-var turn_speed := 5.8
+var move_speed := 8.0
+var acceleration := 10.0
+var turn_speed := 1.05
+var turret_turn_speed := 1.35
 var projectile_speed := 66.0
-var projectile_damage := 42.0
-var fire_interval := 0.92
+var projectile_damage := 62.0
+var fire_interval := 2.9
+var aim_acquire_time := 1.25
 var mine_ammo := 6
 var mine_cooldown := 0.0
 var emp_cooldown := 0.0
@@ -68,9 +70,17 @@ var camera: Camera3D
 var _engine_audio: AudioStreamPlayer3D
 var _ai_clock := 0.0
 var _salvo_clock := 5.0
+var _ai_mine_clock := 10.0
 var _charge_clock := 0.0
+var _salvo_recovery := 0.0
+var _aim_hold_time := 0.0
+var _observation_clock := 0.0
+var _observed_target_position := Vector3.ZERO
+var _observed_target_velocity := Vector3.ZERO
+var _dash_remaining := 0.0
 var _salvo_aim_point := Vector3.ZERO
 var _salvo_target_locked := false
+var _salvo_shot_count := 3
 var _salvo_telegraph: MeshInstance3D
 var _strafe_sign := 1.0
 var _rng := RandomNumberGenerator.new()
@@ -113,14 +123,21 @@ func _apply_role_stats() -> void:
 	if is_player:
 		display_name = "灰狼主战坦克"
 		return
+	acceleration = 6.5
+	turn_speed = 0.75
+	turret_turn_speed = 0.85
 	if is_boss:
 		display_name = "铁牙 · 围城指挥车"
-		max_hp = 1050.0
+		max_hp = 780.0
 		hp = max_hp
-		armor = 0.22
-		move_speed = 8.4
-		projectile_damage = 48.0
-		fire_interval = 1.12
+		armor = 0.18
+		move_speed = 4.3
+		acceleration = 4.5
+		turn_speed = 0.52
+		turret_turn_speed = 0.65
+		projectile_damage = 32.0
+		fire_interval = 5.4
+		aim_acquire_time = 1.5
 		projectile_speed = 54.0
 		active = false
 		counts_for_objective = false
@@ -129,32 +146,39 @@ func _apply_role_stats() -> void:
 		"scout":
 			display_name = "游骑侦察车"
 			max_hp = 86.0
-			move_speed = 14.5
-			fire_interval = 0.78
-			projectile_damage = 22.0
+			move_speed = 7.2
+			fire_interval = 4.2
+			projectile_damage = 18.0
+			aim_acquire_time = 1.1
 		"heavy":
 			display_name = "磐石重装车"
 			max_hp = 185.0
 			armor = 0.18
-			move_speed = 7.2
-			fire_interval = 1.65
-			projectile_damage = 55.0
+			move_speed = 4.2
+			acceleration = 4.8
+			turn_speed = 0.58
+			turret_turn_speed = 0.72
+			fire_interval = 5.8
+			projectile_damage = 38.0
+			aim_acquire_time = 1.45
 		"sniper":
 			display_name = "长枪猎歼车"
 			max_hp = 105.0
-			move_speed = 8.5
-			fire_interval = 2.0
-			projectile_damage = 67.0
+			move_speed = 4.8
+			fire_interval = 6.0
+			projectile_damage = 44.0
+			aim_acquire_time = 1.6
 			projectile_speed = 86.0
 		_:
 			display_name = "灰烬线列车"
 			max_hp = 125.0
-			move_speed = 10.2
-			fire_interval = 1.28
-			projectile_damage = 31.0
+			move_speed = 5.6
+			fire_interval = 4.8
+			projectile_damage = 24.0
 	hp = max_hp
 	_ai_clock = _rng.randf_range(0.3, 1.2)
-	_salvo_clock = _rng.randf_range(4.0, 7.0)
+	_ai_mine_clock = _rng.randf_range(10.0, 15.0)
+	reload = _rng.randf_range(1.8, 3.2)
 	_strafe_sign = -1.0 if _rng.randi() % 2 == 0 else 1.0
 
 
@@ -256,13 +280,13 @@ func _build_camera() -> void:
 	add_child(_camera_pivot)
 	# Controls use world axes. Keep the view on those same axes as the hull turns.
 	_camera_pivot.top_level = true
-	_camera_base_position = Vector3(0, 1.2, 1.5)
+	_camera_base_position = Vector3(0, 1.2, -3.0)
 	_camera_pivot.global_transform = Transform3D(Basis.IDENTITY, global_position + _camera_base_position)
 	_camera_arm = SpringArm3D.new()
-	_camera_arm.spring_length = 21.5
+	_camera_arm.spring_length = 26.5
 	_camera_arm.margin = 0.35
 	_camera_arm.collision_mask = 1
-	_camera_arm.rotation_degrees = Vector3(-49.0, 0, 0)
+	_camera_arm.rotation_degrees = Vector3(-52.0, 0, 0)
 	_camera_pivot.add_child(_camera_arm)
 	camera = Camera3D.new()
 	camera.name = "BattleCamera"
@@ -301,6 +325,7 @@ func _physics_process(delta: float) -> void:
 	mine_cooldown = maxf(0.0, mine_cooldown - delta)
 	emp_cooldown = maxf(0.0, emp_cooldown - delta)
 	dash_cooldown = maxf(0.0, dash_cooldown - delta)
+	_dash_remaining = maxf(0.0, _dash_remaining - delta)
 	stunned = maxf(0.0, stunned - delta)
 	invulnerable = maxf(0.0, invulnerable - delta)
 	_recoil = move_toward(_recoil, 0.0, delta * 4.5)
@@ -312,6 +337,8 @@ func _physics_process(delta: float) -> void:
 		else:
 			_ai_control(delta)
 	else:
+		_aim_hold_time = 0.0
+		_observation_clock = 0.0
 		velocity.x = move_toward(velocity.x, 0.0, acceleration * delta)
 		velocity.z = move_toward(velocity.z, 0.0, acceleration * delta)
 		_update_turret(delta)
@@ -324,7 +351,7 @@ func _physics_process(delta: float) -> void:
 func _player_control(delta: float) -> void:
 	var axis := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 	var desired := Vector3(axis.x, 0, axis.y)
-	_set_planar_velocity(desired, delta, move_speed * (2.15 if invulnerable > 0.0 and dash_cooldown > 3.35 else 1.0))
+	_set_planar_velocity(desired, delta, move_speed * (1.35 if _dash_remaining > 0.0 else 1.0))
 	var pad_aim := Input.get_vector("aim_left", "aim_right", "aim_up", "aim_down")
 	if pad_aim.length() > 0.24:
 		_controller_aim_active = true
@@ -347,33 +374,67 @@ func _player_control(delta: float) -> void:
 func _ai_control(delta: float) -> void:
 	var target: TankActor = game.player
 	if not is_instance_valid(target) or target.destroyed:
+		_aim_hold_time = 0.0
+		return
+	if game.has_method("can_enemy_engage") and not game.can_enemy_engage(self):
+		ai_state = "reserve"
+		_aim_hold_time = 0.0
+		_observation_clock = 0.0
+		_set_planar_velocity(Vector3.ZERO, delta, move_speed)
+		_update_turret(delta)
 		return
 	var delta_to := target.global_position - global_position
+	delta_to.y = 0.0
 	var distance := delta_to.length()
-	var predicted := target.global_position + Vector3(target.velocity.x, 0, target.velocity.z) * clampf(distance / projectile_speed, 0.0, 0.8)
-	aim_point = predicted
+	# Crews correct their aim periodically. A partial lead gives moving targets
+	# room to evade while keeping settled shots dangerous and readable.
+	var visible_target: bool = distance < 62.0 and game.has_line_of_sight(_turret.global_position, target.global_position + Vector3.UP)
+	_observation_clock -= delta
+	if visible_target and _observation_clock <= 0.0:
+		_observed_target_position = target.global_position
+		_observed_target_velocity = Vector3(target.velocity.x, 0.0, target.velocity.z)
+		_observation_clock = _rng.randf_range(0.32, 0.5)
+	if visible_target:
+		aim_point = _observed_target_position + _observed_target_velocity * clampf(distance / projectile_speed, 0.0, 0.65) * 0.3
+	else:
+		_aim_hold_time = 0.0
+		_observation_clock = 0.0
+		aim_point = target.global_position
 	if is_boss:
-		_update_boss_attack(delta, target, distance)
+		_update_boss_attack(delta, target, distance if visible_target else INF)
 		if boss_warning:
+			_aim_hold_time = 0.0
 			aim_point = _salvo_aim_point
+			_set_planar_velocity(Vector3.ZERO, delta, move_speed)
+			_update_turret(delta)
+			return
+		if _salvo_recovery > 0.0:
+			_salvo_recovery = maxf(0.0, _salvo_recovery - delta)
+			_aim_hold_time = 0.0
+			ai_state = "recover"
 			_set_planar_velocity(Vector3.ZERO, delta, move_speed)
 			_update_turret(delta)
 			return
 	_ai_clock -= delta
 	_salvo_clock -= delta
+	_ai_mine_clock -= delta
 	var desired := Vector3.ZERO
-	var ideal := 19.0 if archetype == "scout" else (34.0 if archetype == "sniper" else 25.0)
+	var ideal := 24.0 if archetype == "scout" else (38.0 if archetype == "sniper" else 30.0)
 	if is_boss:
-		ideal = 27.0
-	if distance > ideal + 4.0:
+		ideal = 32.0
+	if not visible_target or distance > ideal + 8.0:
 		ai_state = "navigate"
 		desired = delta_to.normalized()
-	elif distance < ideal - 7.0:
+	elif distance < ideal - 12.0:
 		ai_state = "retreat"
 		desired = -delta_to.normalized()
 	else:
-		ai_state = "strafe"
-		desired = Vector3(-delta_to.z, 0, delta_to.x).normalized() * _strafe_sign
+		# Most crews stop to settle the gun. Scouts can change position while
+		# reloading, then stop before the next shot instead of endlessly orbiting.
+		ai_state = "aim" if reload < 1.4 else "reload"
+		if archetype == "scout" and not is_boss and reload > 2.4:
+			ai_state = "reposition"
+			desired = Vector3(-delta_to.z, 0, delta_to.x).normalized() * _strafe_sign * 0.45
 	if _ai_clock <= 0.0:
 		_ai_clock = _rng.randf_range(0.8, 1.8)
 		if _rng.randf() < 0.3:
@@ -381,13 +442,20 @@ func _ai_control(delta: float) -> void:
 	desired = _avoid_obstacles(desired)
 	_set_planar_velocity(desired, delta, move_speed)
 	_update_turret(delta)
-	if distance < 62.0 and game.has_line_of_sight(_muzzle.global_position, target.global_position + Vector3.UP):
-		var forward := -_turret.global_basis.z.normalized()
-		if forward.dot(delta_to.normalized()) > 0.96:
-			try_fire()
-	if mine_cooldown <= 0.0 and distance > 8.0 and distance < 25.0 and _salvo_clock <= 0.0:
+	var forward := -_turret.global_basis.z.normalized()
+	var aim_delta := aim_point - _turret.global_position
+	aim_delta.y = 0.0
+	var settled := Vector2(velocity.x, velocity.z).length() < 1.1
+	var aligned := aim_delta.length_squared() > 0.05 and forward.dot(aim_delta.normalized()) > cos(deg_to_rad(5.0))
+	if visible_target and aligned and settled and reload <= aim_acquire_time:
+		_aim_hold_time += delta
+		if _aim_hold_time >= aim_acquire_time and try_fire():
+			_aim_hold_time = 0.0
+	else:
+		_aim_hold_time = 0.0
+	if mine_cooldown <= 0.0 and distance > 8.0 and distance < 25.0 and _ai_mine_clock <= 0.0:
 		try_place_mine()
-		_salvo_clock = _rng.randf_range(7.0, 11.0)
+		_ai_mine_clock = _rng.randf_range(12.0, 17.0)
 
 
 func _update_boss_attack(delta: float, target: TankActor, distance: float) -> void:
@@ -398,10 +466,13 @@ func _update_boss_attack(delta: float, target: TankActor, distance: float) -> vo
 			boss_warning = false
 			_fire_boss_salvo(target)
 			_clear_salvo_telegraph()
-			_salvo_clock = 8.0 - boss_phase * 1.15
-	elif _salvo_clock <= 0.0 and distance < 70.0:
-		_charge_clock = 1.55 if boss_phase == 1 else 1.15
+			_salvo_clock = boss_salvo_interval()
+			_salvo_recovery = 3.2
+			reload = maxf(reload, 3.2)
+	elif _salvo_clock <= 0.0 and _salvo_recovery <= 0.0 and distance < 62.0:
+		_charge_clock = boss_telegraph_duration()
 		_salvo_aim_point = target.global_position + Vector3.UP
+		_salvo_shot_count = boss_salvo_count()
 		_salvo_target_locked = true
 		boss_warning = true
 		ai_state = "telegraph"
@@ -410,19 +481,33 @@ func _update_boss_attack(delta: float, target: TankActor, distance: float) -> vo
 
 
 func _fire_boss_salvo(target: TankActor) -> void:
-	var shots := 3 + boss_phase * 2
+	# Damage can advance a Boss phase during the warning. Keep the announced
+	# number of lanes for this volley; the stronger pattern begins next time.
+	var shots := _salvo_shot_count if _salvo_target_locked else boss_salvo_count()
 	for index in range(shots):
 		var launch_marker := _rocket_muzzles[index % _rocket_muzzles.size()] if not _rocket_muzzles.is_empty() else _muzzle
 		var target_point := _salvo_aim_point if _salvo_target_locked else target.global_position + Vector3.UP
 		var base := (target_point - launch_marker.global_position).normalized()
-		var spread := deg_to_rad((float(index) - float(shots - 1) * 0.5) * (5.5 - boss_phase))
+		var spread := deg_to_rad((float(index) - float(shots - 1) * 0.5) * 7.0)
 		var direction := base.rotated(Vector3.UP, spread)
-		var launch_position := _launch_weapon(_turret.global_position, launch_marker.global_position, direction, projectile_damage * 0.72, projectile_speed * 0.9, 3.2, "rocket")
+		var launch_position := _launch_weapon(_turret.global_position, launch_marker.global_position, direction, projectile_damage * 0.55, projectile_speed * 0.8, 2.4, "rocket")
 		game.spawn_muzzle_flash(launch_position, Color("ff593d"), 0.82)
 	var audio_origin := _rocket_muzzles[0].global_position if not _rocket_muzzles.is_empty() else _muzzle.global_position
 	AudioService.play_3d("cannon", audio_origin, -1.0, 0.68)
 	AudioService.play_3d("cannon_tail", audio_origin, -4.5, 0.82)
 	_salvo_target_locked = false
+
+
+func boss_salvo_count() -> int:
+	return 2 + boss_phase
+
+
+func boss_telegraph_duration() -> float:
+	return 3.0 - float(boss_phase) * 0.2
+
+
+func boss_salvo_interval() -> float:
+	return 14.0 - float(boss_phase)
 
 
 func _show_salvo_telegraph() -> void:
@@ -446,9 +531,9 @@ func _show_salvo_telegraph() -> void:
 	direction.y = 0.0
 	var reach := clampf(direction.length() + 12.0, 18.0, 75.0)
 	direction = direction.normalized()
-	var shots := 3 + boss_phase * 2
+	var shots := _salvo_shot_count
 	for index in shots:
-		var spread := deg_to_rad((float(index) - float(shots - 1) * 0.5) * (5.5 - boss_phase))
+		var spread := deg_to_rad((float(index) - float(shots - 1) * 0.5) * 7.0)
 		var lane := direction.rotated(Vector3.UP, spread)
 		var side := lane.cross(Vector3.UP) * 0.22
 		var start := center + lane * 4.0
@@ -471,13 +556,18 @@ func _set_planar_velocity(input_direction: Vector3, delta: float, speed: float) 
 	direction.y = 0.0
 	if direction.length_squared() > 1.0:
 		direction = direction.normalized()
-	var target_velocity := direction * speed
-	velocity.x = move_toward(velocity.x, target_velocity.x, acceleration * delta)
-	velocity.z = move_toward(velocity.z, target_velocity.z, acceleration * delta)
 	if direction.length_squared() > 0.02:
 		_last_move = direction.normalized()
 		var wanted_yaw := atan2(-direction.x, -direction.z)
-		rotation.y = lerp_angle(rotation.y, wanted_yaw, clampf(turn_speed * delta, 0.0, 1.0))
+		rotation.y = rotate_toward(rotation.y, wanted_yaw, turn_speed * delta)
+	# Turning a tracked hull takes time. Reduce travel until the hull faces the
+	# requested world direction instead of skating sideways at cruising speed.
+	var alignment := (-global_basis.z).dot(direction.normalized()) if direction.length_squared() > 0.02 else 1.0
+	var steering_speed := lerpf(0.32, 1.0, clampf(alignment, 0.0, 1.0))
+	var target_velocity := direction * speed * steering_speed
+	var planar_velocity := Vector2(velocity.x, velocity.z).move_toward(Vector2(target_velocity.x, target_velocity.z), acceleration * delta)
+	velocity.x = planar_velocity.x
+	velocity.z = planar_velocity.y
 
 
 func _avoid_obstacles(desired: Vector3) -> Vector3:
@@ -509,7 +599,7 @@ func _update_turret(delta: float) -> void:
 		return
 	var world_yaw := atan2(-aim_delta.x, -aim_delta.z)
 	var local_yaw := wrapf(world_yaw - rotation.y, -PI, PI)
-	_turret.rotation.y = lerp_angle(_turret.rotation.y, local_yaw, clampf(delta * (9.0 if is_player else 5.0), 0.0, 1.0))
+	_turret.rotation.y = rotate_toward(_turret.rotation.y, local_yaw, turret_turn_speed * delta)
 
 
 func _update_engine_audio() -> void:
@@ -527,7 +617,11 @@ func try_fire() -> bool:
 	var direction := -_turret.global_basis.z
 	direction.y = 0.0
 	direction = direction.normalized()
-	var launch_position := _launch_weapon(_barrel.global_position, _muzzle.global_position, direction, projectile_damage, projectile_speed, 2.1 if is_boss or archetype == "heavy" else 0.0, "cannon")
+	if not is_player:
+		var speed_ratio := clampf(Vector2(velocity.x, velocity.z).length() / move_speed, 0.0, 1.0)
+		var spread_degrees := lerpf(0.6, 3.4, speed_ratio)
+		direction = direction.rotated(Vector3.UP, deg_to_rad(_rng.randf_range(-spread_degrees, spread_degrees)))
+	var launch_position := _launch_weapon(_barrel.global_position, _muzzle.global_position, direction, projectile_damage, projectile_speed, 1.6 if is_boss or archetype == "heavy" else 0.0, "cannon")
 	game.spawn_muzzle_flash(launch_position, Color("ffcc6d") if team == TEAM_PLAYER else Color("ff5c43"), 1.0 if not is_boss else 1.5)
 	_recoil = 0.46 if is_boss else 0.34
 	add_camera_shake(0.16)
@@ -563,10 +657,11 @@ func try_dash(direction: Vector3) -> bool:
 	if not is_player or dash_cooldown > 0.0 or stunned > 0.0 or destroyed or not active:
 		return false
 	var impulse := direction.normalized() if direction.length_squared() > 0.04 else _last_move
-	velocity.x = impulse.x * move_speed * 2.15
-	velocity.z = impulse.z * move_speed * 2.15
-	dash_cooldown = 4.0
-	invulnerable = 0.32
+	velocity.x = impulse.x * move_speed * 1.35
+	velocity.z = impulse.z * move_speed * 1.35
+	_dash_remaining = 0.8
+	dash_cooldown = 6.0
+	invulnerable = 0.18
 	return true
 
 
@@ -592,11 +687,13 @@ func try_place_mine() -> bool:
 func apply_emp(duration: float) -> void:
 	stunned = maxf(stunned, duration)
 	velocity = Vector3.ZERO
+	_aim_hold_time = 0.0
+	_observation_clock = 0.0
 	if boss_warning:
 		boss_warning = false
 		_charge_clock = 0.0
 		_clear_salvo_telegraph()
-		_salvo_clock = 3.4
+		_salvo_clock = 7.0
 		game.notify("EMP 已打断铁牙的火箭齐射", 2.2)
 
 
@@ -605,13 +702,17 @@ func activate_boss() -> void:
 		return
 	active = true
 	ai_state = "acquire"
-	_salvo_clock = 2.8
+	_salvo_clock = 7.0
+	reload = maxf(reload, 3.0)
+	_aim_hold_time = 0.0
 	game.spawn_emp_visual(global_position, 1.4)
 
 
 func receive_damage(amount: float, attacker_team: int, hit_position := Vector3.ZERO) -> float:
 	if destroyed or attacker_team == team or invulnerable > 0.0 or not active:
 		return 0.0
+	if not is_player and game.has_method("alert_enemy"):
+		game.alert_enemy(self)
 	var accepted := maxf(1.0, amount * (1.0 - armor))
 	hp = maxf(0.0, hp - accepted)
 	AudioService.play_3d("hit", hit_position if hit_position != Vector3.ZERO else global_position, -9.0, _rng.randf_range(0.9, 1.12))
@@ -620,8 +721,8 @@ func receive_damage(amount: float, attacker_team: int, hit_position := Vector3.Z
 		var next_phase := 3 if fraction <= 0.35 else (2 if fraction <= 0.70 else 1)
 		while boss_phase < next_phase:
 			boss_phase += 1
-			fire_interval *= 0.82
-			move_speed *= 1.08
+			fire_interval = maxf(4.6, 5.4 - float(boss_phase - 1) * 0.4)
+			move_speed = 4.3 + float(boss_phase - 1) * 0.25
 			boss_phase_changed.emit(boss_phase)
 	if hp <= 0.0:
 		_die(attacker_team)
@@ -674,5 +775,5 @@ func toggle_camera() -> void:
 	if not is_player or not is_instance_valid(_camera_arm):
 		return
 	var tactical := _camera_arm.spring_length < 29.0
-	_camera_arm.spring_length = 36.0 if tactical else 21.5
-	_camera_arm.rotation_degrees.x = -63.0 if tactical else -49.0
+	_camera_arm.spring_length = 36.0 if tactical else 26.5
+	_camera_arm.rotation_degrees.x = -63.0 if tactical else -52.0

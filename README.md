@@ -18,7 +18,11 @@
 
 三种车型的实际负重轮按车速和转向差速转动，停车时停止；共享拆分后的网格并保留原始 PBR 材质。当前履带链条仍为静态网格。贴图使用 PC 显存压缩，第三方模型署名与许可随 Windows 成品一同打包在 `credits/` 中。
 
-PC 0.2.1 自检完善：战斗镜头固定世界朝向，WASD/左摇杆与屏幕方向保持一致；右摇杆松开后保持瞄准方向，移动鼠标或点击可接管。白色角标表示瞄准位置，圆形准星表示当前炮管射线的首个命中位置，显示装填、距离和遮挡；右上雷达显示敌军、未激活的首领及双方地雷。Boss 齐射先锁定位置并在地面标出危险方向，可侧移躲避或用 EMP 打断。
+PC 0.2.2 调整为更从容的装甲交战：玩家移速从 13.5 降至 8 米/秒，主炮装填从 0.92 延长到 2.9 秒，单发伤害提高到 62；普通敌车移速 4.2–7.2 米/秒、装填 4.2–6 秒。车体和炮塔使用有限角速度，转弯降速；空格为 1.35 倍短时加速。炮弹保持高速飞行，降低的是射击频率。
+
+敌军停稳并连续瞄准 1.1–1.6 秒后才开火，失去视线或被 EMP 干扰后重新瞄准；不再精确追踪预判高速移动的玩家。普通敌车分三组、每组两辆推进；前两组清空后有 5 秒间歇、42 点装甲和 1 枚地雷补给。提前攻击后续敌车会使其还击。Boss 前补给把装甲恢复至至少 75% 并重置 EMP 冷却；Boss 主炮装填 5.4–4.6 秒，齐射有 2.8–2.4 秒预警和发射后的休止，场上最多一辆护卫。
+
+战斗镜头固定世界朝向并扩大前方视野，WASD/左摇杆与屏幕方向保持一致；右摇杆松开后保持瞄准，移动鼠标或点击可接管。白色角标表示瞄准位置，圆形准星表示当前炮管射线的首个命中位置，显示装填、距离和遮挡；右上雷达显示敌军、首领及双方地雷。视线内的受损敌车显示血条，正在瞄准的敌车显示琥珀预警；中央任务条缩小，避免遮住前方战场。Boss 齐射锁定位置并标出危险方向，可侧移躲避或用 EMP 打断。
 
 工业场景补充库房门窗、屋顶设备、完整街灯、管线阀组和集装箱细节；静态附件按材质合并为 9 个网格批次。18 个集装箱移到装卸区并增加实体碰撞，保持主干道与横街畅通。自检修复高速穿越地雷无伤害、设置页返回错误、重开残留特效、胜利奖励显示不一致和击毁护卫覆盖 Boss 目标等问题；胜利主按钮返回指挥中心，当前 PC 战役仍为可玩的第一章。
 
@@ -31,6 +35,8 @@ Godot PC 实际渲染截图（Challenger 2：tomm8，CC BY 4.0；完整来源见
 
 [0.2.1 战斗准星与雷达](docs/pc-realistic/battle.png) · [工业街区细节](docs/pc-realistic/industrial-street.png) · [烟尘效果](docs/pc-realistic/smoke.png)
 
+[0.2.2 战斗视野与敌车反馈](docs/pc-realistic/tactical-battle-0.2.2.png) · [战斗节奏对照与 271 项自检](docs/pc-realistic/SELF_CHECK_0.2.2.md)
+
 键鼠和标准手柄操作：
 
 | 操作 | 键鼠 | 标准手柄 |
@@ -38,7 +44,7 @@ Godot PC 实际渲染截图（Challenger 2：tomm8，CC BY 4.0；完整来源见
 | 移动 | WASD / 方向键 | 左摇杆 |
 | 瞄准 | 鼠标 | 右摇杆 |
 | 开火 | 鼠标左键 | RT |
-| 冲刺 | 空格 | LB |
+| 短时加速 | 空格 | LB |
 | 电磁脉冲 / 排雷 | E | RB |
 | 布设地雷 | M | 右摇杆按下（R3） |
 | 切换镜头 | C | Y |
@@ -61,7 +67,7 @@ $godot = (Resolve-Path .\work\tools\godot-4.7.2\editor\Godot_v4.7.2-stable_win64
 pwsh -NoProfile -File .\scripts\build-pc-godot.ps1 -Configuration Release
 ```
 
-构建脚本固定校验官方 Godot 可执行文件和模板的 SHA-256；其他位置的同版 console 程序可通过 `-GodotPath <路径>` 指定，Windows 模板仍放在 `work/tools/godot-4.7.2/templates/`。Release 成品位于 `outputs/pc-godot/windows-x86_64/`，可分发压缩包为 `outputs/pc-godot/Iron-Embers-Windows-x86_64-0.2.1.zip`。当前 Windows 可执行文件未做代码签名，首次运行可能显示系统信誉提示。
+构建脚本固定校验官方 Godot 可执行文件和模板的 SHA-256；其他位置的同版 console 程序可通过 `-GodotPath <路径>` 指定，Windows 模板仍放在 `work/tools/godot-4.7.2/templates/`。Release 成品位于 `outputs/pc-godot/windows-x86_64/`，可分发压缩包为 `outputs/pc-godot/Iron-Embers-Windows-x86_64-0.2.2.zip`。当前 Windows 可执行文件未做代码签名，首次运行可能显示系统信誉提示。
 
 本次 PC 重制的源码集中在 `pc-godot/`，构建与验收脚本为 `scripts/build-pc-godot.ps1`、`scripts/smoke-pc-godot.ps1`；`mobile/baseline/` 和 `android/` 未改动。
 

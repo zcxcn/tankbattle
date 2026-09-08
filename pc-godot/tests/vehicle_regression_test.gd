@@ -104,12 +104,15 @@ func _check_motion_and_wheels(player: TankActor) -> void:
 	for action: String in controls:
 		var start := player.global_position
 		Input.action_press(action)
-		await _frames(35)
+		# Heavy tracked steering now takes up to three seconds to reverse its
+		# heading. Keep the original distance/direction assertion with enough
+		# real input time to cover that intended turning behavior.
+		await _frames(120)
 		Input.action_release(action)
 		var travelled := player.global_position - start
 		_check(travelled.dot(controls[action]) > 3.0, action + " moves through real physics along its world direction after a hull turn")
 		_check(player.camera.global_basis.x.dot(Vector3.RIGHT) > 0.999, action + " keeps screen-right aligned with world-right")
-		await _frames(35)
+		await _frames(65)
 	var wall := _box(Vector3(300.0, 3.0, -12.0), Vector3(18.0, 6.0, 0.30))
 	player.global_position = Vector3(300.0, 0.03, 0.0)
 	player.rotation = Vector3.ZERO
@@ -150,17 +153,19 @@ func _check_aim_and_abilities(player: TankActor) -> void:
 	player._input(mouse_motion)
 	_check(not player.is_controller_aiming(), "moving the mouse explicitly restores mouse aiming")
 	player.aim_point = player._turret.global_position + Vector3(-18.0, 0.0, -12.0)
-	player._update_turret(1.0)
+	player._update_turret(3.0)
 	var exact_direction := (player.aim_point - player._turret.global_position).normalized()
 	_check((-player._turret.global_basis.z.normalized()).dot(exact_direction) > 0.9999, "nearby aim uses the authored turret pivot instead of the chassis center")
 	_clear_shells()
 	player.reload = 0.0
 	player.aim_point = player._turret.global_position + Vector3(25.0, 0.0, 0.0)
+	player._turret.rotation.y = 0.0
+	var expected_direction := Vector3.FORWARD.rotated(Vector3.UP, -player.turret_turn_speed * 0.2)
 	Input.action_press("fire")
-	player._player_control(1.0)
+	player._player_control(0.2)
 	Input.action_release("fire")
 	var shells := get_tree().get_nodes_in_group("projectiles")
-	_check(shells.size() == 1 and (shells[0] as IronProjectile).direction.dot(Vector3.RIGHT) > 0.999, "a fire input launches after the current frame's turret aim update")
+	_check(shells.size() == 1 and (shells[0] as IronProjectile).direction.dot(expected_direction) > 0.999, "a fire input launches after the current frame's bounded turret aim update")
 	_clear_shells()
 	player.active = false
 	player.emp_cooldown = 0.0
@@ -194,17 +199,18 @@ func _check_boss_telegraph_and_cover(player: TankActor) -> void:
 	boss._ai_control(0.5)
 	_check(boss._salvo_aim_point.is_equal_approx(locked_target) and boss.aim_point.is_equal_approx(locked_target), "boss telegraph commits to a position the player can dodge")
 	_clear_shells()
-	boss._ai_control(1.2)
+	boss._ai_control(boss.boss_telegraph_duration() - 0.5 + 0.02)
 	var rockets: Array = get_tree().get_nodes_in_group("projectiles").filter(func(node: Node) -> bool: return node is IronProjectile and node.weapon_kind == "rocket")
-	var locked_spread := rockets.size() == 5
+	var locked_spread := rockets.size() == 3
 	for rocket: IronProjectile in rockets:
 		var announced_direction := (locked_target - rocket.global_position).normalized()
 		locked_spread = locked_spread and rocket.direction.dot(announced_direction) > cos(deg_to_rad(9.1))
-	_check(locked_spread, "phase-one salvo fires five rockets within the announced spread instead of tracking the last instant")
+	_check(locked_spread, "phase-one salvo fires three rockets within the announced spread instead of tracking the last instant")
 	_check(not boss.boss_warning and not boss._salvo_telegraph.visible, "danger lanes clear after the salvo fires")
 	_clear_shells()
 	boss._salvo_clock = 0.0
 	boss._charge_clock = 0.0
+	boss._salvo_recovery = 0.0
 	boss._ai_control(0.01)
 	boss.apply_emp(1.6)
 	_check(not boss.boss_warning and not boss._salvo_telegraph.visible and not boss._salvo_target_locked, "EMP clears both the charged attack and its ground warning")

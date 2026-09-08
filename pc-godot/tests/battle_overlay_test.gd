@@ -76,6 +76,14 @@ func _run() -> void:
 		check(Rect2(Vector2.ZERO, overlay.size).encloses(radar.grow(12)), "radar stays inside %dx%d viewport" % [dimensions.x, dimensions.y])
 		check(overlay.map_position(Vector2.ZERO).distance_to(radar.get_center()) < 0.01,
 			"radar keeps world origin centered at %dx%d" % [dimensions.x, dimensions.y])
+		var objective_rect := Rect2(float(dimensions.x) * 0.25, 20.0, float(dimensions.x) * 0.5, 64.0)
+		var reserved_regions: Array[Rect2] = [objective_rect]
+		overlay.set_hud_regions(reserved_regions)
+		var label_position: Vector2 = overlay.marker_position(Vector2(float(dimensions.x) * 0.5, 40.0))
+		var label_rect := Rect2(label_position - Vector2(30, 21), Vector2(77, 29))
+		check(label_position != Vector2.INF and not objective_rect.grow(3).intersects(label_rect)
+			and Rect2(Vector2.ZERO, overlay.size).encloses(label_rect),
+			"enemy warning avoids the objective panel and viewport edges at %dx%d" % [dimensions.x, dimensions.y])
 	check(overlay.map_position(Vector2(0, -50)).y < overlay.map_position(Vector2(0, 50)).y,
 		"north-up radar agrees with forward movement and the fixed camera")
 	game.pause_game()

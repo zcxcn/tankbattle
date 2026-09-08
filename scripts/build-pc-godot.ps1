@@ -114,6 +114,10 @@ if (-not $SkipTests) {
     Write-Host "Running battle overlay tests..."
     & $GodotPath --headless --path $projectRoot --script "res://tests/battle_overlay_test.gd" -- --test
     Assert-LastExitCode -Action "Godot battle overlay tests"
+
+    Write-Host "Running tactical pacing, crew response and resupply regressions..."
+    & $GodotPath --headless --path $projectRoot "res://tests/pacing_regression_test.tscn" -- --test
+    Assert-LastExitCode -Action "Godot tactical pacing tests"
 }
 
 $outputRoot = [System.IO.Path]::GetFullPath((Join-Path $repositoryRoot "outputs/pc-godot"))
@@ -155,7 +159,7 @@ foreach ($credit in $creditSources.GetEnumerator()) {
     }
 }
 
-$productVersion = "0.2.1"
+$productVersion = "0.2.2"
 $manifestPath = Join-Path $artifactDirectory "build-manifest.json"
 $payloadFiles = @(Get-ChildItem -LiteralPath $artifactDirectory -File -Recurse | Sort-Object FullName)
 $manifestFiles = @(
