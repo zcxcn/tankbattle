@@ -95,9 +95,25 @@ if (-not $SkipTests) {
     & $GodotPath --headless --path $projectRoot --script "res://tests/tracked_drive_test.gd"
     Assert-LastExitCode -Action "Godot tracked drive tests"
 
+    Write-Host "Running explosion particle resource tests..."
+    & $GodotPath --headless --path $projectRoot "res://tests/explosion_fx_test.tscn" -- --test
+    Assert-LastExitCode -Action "Godot explosion particle tests"
+
     Write-Host "Running UI construction smoke tests..."
     & $GodotPath --headless --path $projectRoot --script "res://ui/game_ui_smoke_test.gd" -- --test
     Assert-LastExitCode -Action "Godot UI smoke tests"
+
+    Write-Host "Running combat flow and mine regression tests..."
+    & $GodotPath --headless --path $projectRoot --script "res://tests/combat_regression_test.gd" -- --test
+    Assert-LastExitCode -Action "Godot combat regression tests"
+
+    Write-Host "Running vehicle and weapon regression tests..."
+    & $GodotPath --headless --path $projectRoot "res://tests/vehicle_regression_test.tscn" -- --test
+    Assert-LastExitCode -Action "Godot vehicle regression tests"
+
+    Write-Host "Running battle overlay tests..."
+    & $GodotPath --headless --path $projectRoot --script "res://tests/battle_overlay_test.gd" -- --test
+    Assert-LastExitCode -Action "Godot battle overlay tests"
 }
 
 $outputRoot = [System.IO.Path]::GetFullPath((Join-Path $repositoryRoot "outputs/pc-godot"))
@@ -139,7 +155,7 @@ foreach ($credit in $creditSources.GetEnumerator()) {
     }
 }
 
-$productVersion = "0.2.0"
+$productVersion = "0.2.1"
 $manifestPath = Join-Path $artifactDirectory "build-manifest.json"
 $payloadFiles = @(Get-ChildItem -LiteralPath $artifactDirectory -File -Recurse | Sort-Object FullName)
 $manifestFiles = @(

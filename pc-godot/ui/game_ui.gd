@@ -13,6 +13,7 @@ signal setting_requested(id: String)
 
 const ThemeFactory = preload("res://ui/iron_theme.gd")
 const Backdrop = preload("res://ui/iron_backdrop.gd")
+const BattleOverlay = preload("res://ui/battle_overlay.gd")
 
 const VALID_MODES: Array[String] = ["title", "playing", "paused", "won", "lost", "settings"]
 const DISPLAY_MODE_NAMES: Array[String] = ["窗口", "无边框全屏", "独占全屏"]
@@ -30,6 +31,7 @@ var _shake_enabled := true
 
 var _title_layer: Control
 var _hud_layer: Control
+var _battle_overlay: Control
 var _pause_layer: Control
 var _settings_layer: Control
 var _result_layer: Control
@@ -230,7 +232,7 @@ func _build_title_layer() -> void:
 	layout.add_child(HSeparator.new())
 	var footer := HBoxContainer.new()
 	layout.add_child(footer)
-	footer.add_child(_label("BUILD 0.2 · FORWARD+ / PBR ARMOR", &"Micro"))
+	footer.add_child(_label("BUILD 0.2.1 · FORWARD+ / PBR ARMOR", &"Micro"))
 	footer.add_child(_spacer(true, false))
 	var asset_credit := _label("3D：tomm8 · GRIP420 / David Falke · Comrade1280 · CC BY 4.0", &"Micro")
 	asset_credit.name = "AssetCredit"
@@ -246,6 +248,8 @@ func _build_title_layer() -> void:
 
 func _build_hud_layer() -> void:
 	_hud_layer = _new_layer("BattleHUD")
+	_battle_overlay = BattleOverlay.new()
+	_hud_layer.add_child(_battle_overlay)
 	var safe := _new_safe_container(_hud_layer)
 	var layout := VBoxContainer.new()
 	layout.add_theme_constant_override(&"separation", 10)
@@ -405,6 +409,9 @@ func _build_pause_layer() -> void:
 	_pause_notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_pause_notice.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(_pause_notice)
+	var controls := _label("WASD / 左摇杆：移动    鼠标 / 右摇杆：瞄准\n左键 / RT：开火    C / Y：切换镜头\nM / R3：布雷    E / RB：脉冲排雷    空格 / LB：冲刺", &"Muted")
+	controls.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(controls)
 	box.add_child(HSeparator.new())
 	var resume_button := _button("继续行动", &"PrimaryButton", func() -> void: resume_requested.emit())
 	box.add_child(resume_button)
@@ -451,7 +458,7 @@ func _build_settings_layer() -> void:
 	settings_box.add_theme_constant_override(&"separation", 13)
 	panel.add_child(settings_box)
 	settings_box.add_child(_label("显示与图形", &"SectionTitle"))
-	var explanation := _label("切换项目后由设置服务应用并保存。全屏变更应由游戏流程提供确认与自动回退。", &"Muted")
+	var explanation := _label("设置立即生效并在本机保存。F11 可切换显示模式。", &"Muted")
 	explanation.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	settings_box.add_child(explanation)
 	settings_box.add_child(HSeparator.new())
@@ -481,7 +488,7 @@ func _build_settings_layer() -> void:
 		grid.add_child(button)
 		buttons.append(button)
 	settings_box.add_child(_spacer(false, true))
-	var note := _label("提示：可随时按 F11 切换窗口模式。设置层不会自行暂停、切场景或写入存档。", &"Micro")
+	var note := _label("F11：切换显示模式    ESC：返回    音量调至 0% 时静音", &"Micro")
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	settings_box.add_child(note)
 	buttons.append(back_button)
@@ -529,7 +536,7 @@ func _build_result_layer() -> void:
 	_result_career.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(_result_career)
 	box.add_child(_spacer(false, true))
-	_result_primary = _button("继续战役", &"PrimaryButton", func() -> void: _result_primary_action())
+	_result_primary = _button("返回指挥中心", &"PrimaryButton", func() -> void: _result_primary_action())
 	box.add_child(_result_primary)
 	var retry_button := _button("再战本关", &"CommandButton", func() -> void: retry_requested.emit())
 	box.add_child(retry_button)
@@ -579,6 +586,7 @@ func _update_title() -> void:
 
 
 func _update_hud() -> void:
+	_battle_overlay.update_snapshot(_snapshot)
 	var hp := maxf(0.0, _float_value("hp", 100.0))
 	var max_hp := maxf(1.0, _float_value("max_hp", 100.0))
 	var level := maxi(1, _int_value("tank_level", 1))
@@ -659,7 +667,7 @@ func _update_pause() -> void:
 		"controller_disconnected":
 			_pause_notice.text = "手柄连接已中断。重新连接后再继续行动。"
 		_:
-			_pause_notice.text = "所有作战计时已经停止。继续后输入会从中立状态恢复。"
+			_pause_notice.text = "战斗已暂停。按 ESC 或选择继续行动返回战场。"
 
 
 func _update_result() -> void:
@@ -675,12 +683,12 @@ func _update_result() -> void:
 		maxi(0, _int_value("lifetime_kills", 0)),
 		maxi(0, _int_value("best_score", 0)),
 	]
-	_result_primary.text = "继续战役" if won else "重新部署"
+	_result_primary.text = "返回指挥中心" if won else "重新部署"
 
 
 func _result_primary_action() -> void:
 	if _mode == "won":
-		start_requested.emit()
+		menu_requested.emit()
 	else:
 		retry_requested.emit()
 

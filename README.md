@@ -18,10 +18,18 @@
 
 三种车型的实际负重轮按车速和转向差速转动，停车时停止；共享拆分后的网格并保留原始 PBR 材质。当前履带链条仍为静态网格。贴图使用 PC 显存压缩，第三方模型署名与许可随 Windows 成品一同打包在 `credits/` 中。
 
+PC 0.2.1 自检完善：战斗镜头固定世界朝向，WASD/左摇杆与屏幕方向保持一致；右摇杆松开后保持瞄准方向，移动鼠标或点击可接管。白色角标表示瞄准位置，圆形准星表示当前炮管射线的首个命中位置，显示装填、距离和遮挡；右上雷达显示敌军、未激活的首领及双方地雷。Boss 齐射先锁定位置并在地面标出危险方向，可侧移躲避或用 EMP 打断。
+
+工业场景补充库房门窗、屋顶设备、完整街灯、管线阀组和集装箱细节；静态附件按材质合并为 9 个网格批次。18 个集装箱移到装卸区并增加实体碰撞，保持主干道与横街畅通。自检修复高速穿越地雷无伤害、设置页返回错误、重开残留特效、胜利奖励显示不一致和击毁护卫覆盖 Boss 目标等问题；胜利主按钮返回指挥中心，当前 PC 战役仍为可玩的第一章。
+
+爆炸改为共享柔边噪声粒子纹理，火焰逐步冷却，烟尘膨胀并渐隐；扬尘替代发光硬环，每次爆炸仍有 122 粒子的固定上限。EMP 使用宽度固定、渐隐的细环，避免范围扩大时变成遮挡战场的亮墙。
+
 Godot PC 实际渲染截图（Challenger 2：tomm8，CC BY 4.0；完整来源见上方资产说明）：
 
-![PC 0.2.0 首页](docs/pc-realistic/title.png)
+![PC 0.2.1 首页](docs/pc-realistic/title.png)
 ![Challenger 2 战场近景](docs/pc-realistic/challenger2.png)
+
+[0.2.1 战斗准星与雷达](docs/pc-realistic/battle.png) · [工业街区细节](docs/pc-realistic/industrial-street.png) · [烟尘效果](docs/pc-realistic/smoke.png)
 
 键鼠和标准手柄操作：
 
@@ -53,7 +61,7 @@ $godot = (Resolve-Path .\work\tools\godot-4.7.2\editor\Godot_v4.7.2-stable_win64
 pwsh -NoProfile -File .\scripts\build-pc-godot.ps1 -Configuration Release
 ```
 
-构建脚本固定校验官方 Godot 可执行文件和模板的 SHA-256；其他位置的同版 console 程序可通过 `-GodotPath <路径>` 指定，Windows 模板仍放在 `work/tools/godot-4.7.2/templates/`。Release 成品位于 `outputs/pc-godot/windows-x86_64/`，可分发压缩包为 `outputs/pc-godot/Iron-Embers-Windows-x86_64-0.2.0.zip`。当前 Windows 可执行文件未做代码签名，首次运行可能显示系统信誉提示。
+构建脚本固定校验官方 Godot 可执行文件和模板的 SHA-256；其他位置的同版 console 程序可通过 `-GodotPath <路径>` 指定，Windows 模板仍放在 `work/tools/godot-4.7.2/templates/`。Release 成品位于 `outputs/pc-godot/windows-x86_64/`，可分发压缩包为 `outputs/pc-godot/Iron-Embers-Windows-x86_64-0.2.1.zip`。当前 Windows 可执行文件未做代码签名，首次运行可能显示系统信誉提示。
 
 本次 PC 重制的源码集中在 `pc-godot/`，构建与验收脚本为 `scripts/build-pc-godot.ps1`、`scripts/smoke-pc-godot.ps1`；`mobile/baseline/` 和 `android/` 未改动。
 

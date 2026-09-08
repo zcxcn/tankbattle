@@ -101,16 +101,12 @@ func _check_scaled_ai_and_obstructed_barrel() -> void:
 	game.player.global_transform = Transform3D(Basis.IDENTITY, Vector3(300.0, 5.0, 0.0))
 	player_turret.rotation = Vector3.ZERO
 	game.player.reload = 0.0
-	var wall := StaticBody3D.new()
-	wall.collision_layer = 1
-	wall.collision_mask = 0
-	var wall_shape := CollisionShape3D.new()
-	var wall_box := BoxShape3D.new()
-	wall_box.size = Vector3(8.0, 6.0, 0.30)
-	wall_shape.shape = wall_box
-	wall.add_child(wall_shape)
+	var wall := DestructibleCover.new()
+	wall.game = game
+	wall.size = Vector3(8.0, 6.0, 0.30)
+	wall.position = Vector3(300.0, 4.0, -4.0)
 	game.add_child(wall)
-	wall.global_position = Vector3(300.0, 7.0, -4.0)
+	var wall_hp_before := wall.hp
 	await _frames(2)
 	_check(game.player.try_fire(), "player can fire when the long barrel intersects cover")
 	var wall_shell: IronProjectile
@@ -119,8 +115,8 @@ func _check_scaled_ai_and_obstructed_barrel() -> void:
 			wall_shell = projectile as IronProjectile
 			break
 	_check(
-		wall_shell != null and wall_shell.global_position.z > wall.global_position.z,
-		"obstructed cannon shell starts on the near side of thin cover"
+		wall_shell == null and is_equal_approx(wall.hp, wall_hp_before - game.player.projectile_damage),
+		"obstructed cannon immediately damages the first cover exactly once without spawning beyond it"
 	)
 	await _frames(3)
 	_check(not is_instance_valid(wall_shell), "obstructed shell impacts the wall instead of escaping past the muzzle")

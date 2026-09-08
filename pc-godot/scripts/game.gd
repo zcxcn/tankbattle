@@ -23,6 +23,7 @@ var objective := "整备装甲，等待行动命令"
 var notice := ""
 var notice_time := 0.0
 var pause_reason := "manual"
+var _settings_return_mode := "title"
 var _title_rig: Node3D
 var _cleanup: Array[Dictionary] = []
 var _smoke_test := false
@@ -118,12 +119,15 @@ func _build_title_shot() -> void:
 
 
 func start_game() -> void:
+	_settle_abandoned_run()
 	_clear_combat_nodes()
 	_build_arena()
 	mission_kills = 0
 	total_run_kills = 0
 	score = 0
 	play_time = 0.0
+	pause_reason = "manual"
+	_settings_return_mode = "paused"
 	current_run_id = "%d-%d" % [Time.get_unix_time_from_system(), randi()]
 	SaveService.begin_run(current_run_id)
 	player = _spawn_tank("PlayerTank", Vector3(0, 0.05, 51), TankActor.TEAM_PLAYER, true, false, "line")
@@ -143,7 +147,7 @@ func start_game() -> void:
 	mode = "playing"
 	objective = "突破工业街区 · 击毁敌军 0 / %d" % target_kills
 	notify("第一章 · 灰中点火\n突破封锁，找到围城指挥车“铁牙”", 4.0)
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	Input.mouse_mode = Input.MOUSE_MODE_HIDDEN
 	if _smoke_test:
 		get_tree().create_timer(1.5).timeout.connect(_finish_smoke_test)
 
@@ -154,10 +158,9 @@ func retry_game() -> void:
 
 func return_to_menu() -> void:
 	if mode == "settings":
-		mode = "paused" if not current_run_id.is_empty() and is_instance_valid(player) and not player.destroyed else "title"
+		_close_settings()
 		return
-	if not current_run_id.is_empty() and mode in ["playing", "paused"]:
-		SaveService.settle_run(current_run_id, false, score, 0)
+	_settle_abandoned_run()
 	current_run_id = ""
 	_show_title_tank()
 
@@ -175,16 +178,29 @@ func resume_game() -> void:
 	if mode != "paused":
 		return
 	mode = "playing"
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	Input.mouse_mode = Input.MOUSE_MODE_HIDDEN
 
 
 func open_settings() -> void:
+	if mode == "settings":
+		return
 	if mode == "playing":
 		pause_game("settings")
+	_settings_return_mode = mode
 	mode = "settings"
 
 
+func _close_settings() -> void:
+	mode = _settings_return_mode
+
+
+func _settle_abandoned_run() -> void:
+	if not current_run_id.is_empty():
+		SaveService.settle_run(current_run_id, false, score, 0)
+
+
 func quit_game() -> void:
+	_settle_abandoned_run()
 	SaveService.save_now()
 	SettingsService.save_settings()
 	get_tree().quit()
@@ -195,6 +211,9 @@ func is_combat_running() -> bool:
 
 
 func _process(delta: float) -> void:
+	var mouse_mode := Input.MOUSE_MODE_HIDDEN if mode == "playing" else Input.MOUSE_MODE_VISIBLE
+	if Input.mouse_mode != mouse_mode:
+		Input.mouse_mode = mouse_mode
 	notice_time = maxf(0.0, notice_time - delta)
 	if notice_time <= 0.0:
 		notice = ""
@@ -217,17 +236,26 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif mode == "paused":
 			resume_game()
 		elif mode == "settings":
-			mode = "paused" if is_instance_valid(player) and not player.destroyed else "title"
+			_close_settings()
 		get_viewport().set_input_as_handled()
 
 
 func _update_mouse_aim() -> void:
 	if not is_instance_valid(player) or player.destroyed or not is_instance_valid(player.camera):
 		return
+	if player.is_controller_aiming():
+		return
 	var mouse := get_viewport().get_mouse_position()
 	var origin := player.camera.project_ray_origin(mouse)
 	var ray := player.camera.project_ray_normal(mouse)
-	var intersection: Variant = Plane(Vector3.UP, 0.08).intersects_ray(origin, ray)
+	var query := PhysicsRayQueryParameters3D.create(origin, origin + ray * player.camera.far, 1 | 4, [player.get_rid()])
+	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	if not hit.is_empty():
+		player.aim_point = hit.position
+		return
+	var muzzle := player.get_node_or_null("ArmoredModel/TurretPivot/GunRecoil/Muzzle") as Node3D
+	var aim_height := muzzle.global_position.y if muzzle != null else player.global_position.y + 1.0
+	var intersection: Variant = Plane(Vector3.UP, aim_height).intersects_ray(origin, ray)
 	if intersection is Vector3:
 		player.aim_point = intersection
 
@@ -289,17 +317,22 @@ func emit_emp(source: TankActor, radius: float) -> void:
 	notify("电磁脉冲释放 · 排除 %d 枚地雷" % removed, 2.0)
 
 
-func radial_damage(at: Vector3, radius: float, damage: float, attacker_team: int) -> void:
+func radial_damage(at: Vector3, radius: float, damage: float, attacker_team: int, contact_positions: Dictionary = {}) -> void:
 	for node: Node in get_tree().get_nodes_in_group("tanks"):
+		if not is_combat_running():
+			break
 		if not node is TankActor:
 			continue
 		var tank := node as TankActor
 		if tank.team == attacker_team or not tank.is_targetable():
 			continue
-		var distance := at.distance_to(tank.global_position)
-		if distance <= radius and has_line_of_sight(at + Vector3.UP * 0.2, tank.global_position + Vector3.UP):
+		# A swept mine may trigger between physics frames, after the tank has
+		# already moved beyond the blast. Resolve that target at its contact point.
+		var target_position: Vector3 = contact_positions.get(tank.get_instance_id(), tank.global_position)
+		var distance := at.distance_to(target_position)
+		if distance <= radius and has_line_of_sight(at + Vector3.UP * 0.2, target_position + Vector3.UP):
 			var falloff := lerpf(0.35, 1.0, 1.0 - distance / maxf(radius, 0.01))
-			tank.receive_damage(damage * falloff, attacker_team, tank.global_position)
+			tank.receive_damage(damage * falloff, attacker_team, target_position)
 
 
 func spawn_explosion(at: Vector3, scale_factor := 1.0) -> void:
@@ -318,6 +351,7 @@ func spawn_impact(at: Vector3, heavy: bool) -> void:
 
 func spawn_muzzle_flash(at: Vector3, color: Color, scale_factor: float) -> void:
 	var light := OmniLight3D.new()
+	light.add_to_group("combat_effects")
 	light.position = at
 	light.light_color = color
 	light.light_energy = 7.0 * scale_factor
@@ -325,7 +359,7 @@ func spawn_muzzle_flash(at: Vector3, color: Color, scale_factor: float) -> void:
 	light.shadow_enabled = false
 	add_child(light)
 	var flash := ArtFactory.add_sphere(light, "MuzzleFlash", Vector3.ZERO, 0.28 * scale_factor, ArtFactory.material(color, 0.0, 0.2, 8.0), 10)
-	var tween := create_tween()
+	var tween := light.create_tween()
 	tween.tween_property(light, "light_energy", 0.0, 0.12)
 	tween.parallel().tween_property(flash, "scale", Vector3.ONE * 3.0, 0.12)
 	tween.tween_callback(light.queue_free)
@@ -333,16 +367,26 @@ func spawn_muzzle_flash(at: Vector3, color: Color, scale_factor: float) -> void:
 
 func spawn_emp_visual(at: Vector3, scale_factor := 1.0) -> void:
 	var root := Node3D.new()
+	root.add_to_group("combat_effects")
 	root.position = at + Vector3.UP * 0.18
 	add_child(root)
-	var surface := ArtFactory.material(Color(0.18, 0.88, 1.0, 0.65), 0.1, 0.25, 5.0)
-	surface.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	for offset in [0.0, 0.18, 0.36]:
-		var ring := ArtFactory.add_torus(root, "EMPWave", Vector3.UP * offset, 1.0, 0.09, surface)
-		ring.scale = Vector3.ONE * maxf(0.1, scale_factor)
-		var tween := create_tween()
-		tween.tween_interval(offset * 0.35)
-		tween.tween_property(ring, "scale", Vector3.ONE * (18.0 * scale_factor), 0.65)
+	for offset in [0.0, 0.13, 0.26]:
+		var surface := ArtFactory.material(Color(0.18, 0.8, 1.0, 0.42), 0.0, 0.8, 1.2)
+		surface.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		surface.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		var ring := ArtFactory.add_torus(root, "EMPWave", Vector3.UP * offset * 0.2, 0.4, 0.045, surface)
+		ring.scale.y = 0.35
+		var torus := ring.mesh as TorusMesh
+		torus.rings = 64
+		torus.ring_segments = 8
+		var tween := ring.create_tween()
+		tween.tween_interval(offset)
+		# Keep the expanding pulse thin enough to see the battlefield through it.
+		tween.tween_method(func(radius: float) -> void:
+			torus.inner_radius = maxf(0.01, radius - 0.045)
+			torus.outer_radius = radius + 0.045
+		, 0.4, maxf(0.4, 18.0 * scale_factor), 0.65)
+		tween.parallel().tween_property(surface, "albedo_color:a", 0.0, 0.65)
 		tween.tween_callback(ring.queue_free)
 	get_tree().create_timer(1.2).timeout.connect(root.queue_free)
 
@@ -353,8 +397,13 @@ func has_line_of_sight(from: Vector3, to: Vector3) -> bool:
 
 
 func _on_tank_destroyed(tank: TankActor, attacker_team: int) -> void:
+	# Destruction signals from an impact already in progress must not replace
+	# a terminal result or mutate the score after the save has been settled.
+	if mode != "playing":
+		return
 	if tank.is_player:
 		mode = "lost"
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		objective = "主战坦克失去战斗能力"
 		SaveService.settle_run(current_run_id, false, score, 0)
 		AudioService.play_ui("defeat", -3.0)
@@ -365,13 +414,16 @@ func _on_tank_destroyed(tank: TankActor, attacker_team: int) -> void:
 		SaveService.credit_run_kills(current_run_id, total_run_kills)
 	if tank.is_boss:
 		mode = "won"
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		objective = "铁牙已摧毁 · 灰中点火行动完成"
-		SaveService.settle_run(current_run_id, true, score + 2500, 0)
+		score += 2500
+		SaveService.settle_run(current_run_id, true, score, 0)
 		AudioService.play_ui("victory", -2.0)
 		notify("行动成功 · 围城指挥车已摧毁", 5.0)
 		return
-	if tank.counts_for_objective:
-		mission_kills += 1
+	if not tank.counts_for_objective:
+		return
+	mission_kills += 1
 	objective = "突破工业街区 · 击毁敌军 %d / %d" % [mini(mission_kills, target_kills), target_kills]
 	if mission_kills >= target_kills and is_instance_valid(boss) and not boss.active:
 		_activate_boss()
@@ -385,6 +437,8 @@ func _activate_boss() -> void:
 
 
 func _on_boss_phase_changed(phase: int) -> void:
+	if mode != "playing" or not is_instance_valid(boss) or boss.hp <= 0.0:
+		return
 	notify("铁牙装甲阶段 %d / 3 · 呼叫护卫" % phase, 3.0)
 	var offsets := [Vector3(-10, 0.05, -48), Vector3(10, 0.05, -48)]
 	for index in range(2):
@@ -399,6 +453,7 @@ func notify(text: String, duration := 2.0) -> void:
 
 
 func schedule_cleanup(node: Node, delay: float) -> void:
+	node.add_to_group("combat_effects")
 	_cleanup.append({"node": node, "time": delay})
 
 
@@ -415,7 +470,7 @@ func _update_cleanup(delta: float) -> void:
 func get_ui_snapshot() -> Dictionary:
 	var player_valid := is_instance_valid(player)
 	var boss_valid := is_instance_valid(boss) and boss.active and not boss.destroyed
-	return {
+	var snapshot := {
 		"mode": mode,
 		"hp": player.hp if player_valid else 0.0,
 		"max_hp": player.max_hp if player_valid else 240.0,
@@ -449,6 +504,8 @@ func get_ui_snapshot() -> Dictionary:
 		"effects_volume": SettingsService.effects_volume,
 		"pause_reason": pause_reason,
 	}
+	snapshot.merge(preload("res://scripts/battle_telemetry.gd").collect(self))
+	return snapshot
 
 
 func _on_setting_requested(id: String) -> void:
@@ -485,11 +542,14 @@ func _clear_combat_nodes() -> void:
 	if is_instance_valid(_title_rig):
 		_title_rig.free()
 	_title_rig = null
-	for group in ["tanks", "mines", "projectiles"]:
+	for group in ["tanks", "mines", "projectiles", "combat_effects"]:
 		for node: Node in get_tree().get_nodes_in_group(group):
 			if is_instance_valid(node):
 				node.free()
 	enemies.clear()
+	_cleanup.clear()
+	notice = ""
+	notice_time = 0.0
 	boss = null
 	player = null
 

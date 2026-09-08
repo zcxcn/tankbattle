@@ -69,6 +69,9 @@ var _engine_audio: AudioStreamPlayer3D
 var _ai_clock := 0.0
 var _salvo_clock := 5.0
 var _charge_clock := 0.0
+var _salvo_aim_point := Vector3.ZERO
+var _salvo_target_locked := false
+var _salvo_telegraph: MeshInstance3D
 var _strafe_sign := 1.0
 var _rng := RandomNumberGenerator.new()
 var _base_barrel_z := 0.0
@@ -76,6 +79,8 @@ var _recoil := 0.0
 var _last_move := Vector3.FORWARD
 var _camera_shake := 0.0
 var _camera_base_position := Vector3.ZERO
+var _controller_aim_active := false
+var _controller_aim_direction := Vector3.FORWARD
 
 
 func _ready() -> void:
@@ -249,8 +254,10 @@ func _build_camera() -> void:
 	_camera_pivot = Node3D.new()
 	_camera_pivot.name = "CameraRig"
 	add_child(_camera_pivot)
-	_camera_pivot.position = Vector3(0, 1.2, 1.5)
-	_camera_base_position = _camera_pivot.position
+	# Controls use world axes. Keep the view on those same axes as the hull turns.
+	_camera_pivot.top_level = true
+	_camera_base_position = Vector3(0, 1.2, 1.5)
+	_camera_pivot.global_transform = Transform3D(Basis.IDENTITY, global_position + _camera_base_position)
 	_camera_arm = SpringArm3D.new()
 	_camera_arm.spring_length = 21.5
 	_camera_arm.margin = 0.35
@@ -269,6 +276,19 @@ func _build_camera() -> void:
 func _process(delta: float) -> void:
 	if is_player and is_instance_valid(_camera_pivot):
 		_update_camera_shake(delta)
+
+
+func _input(event: InputEvent) -> void:
+	if not is_player:
+		return
+	if event is InputEventMouseMotion and event.relative.length_squared() > 1.0:
+		_controller_aim_active = false
+	elif event is InputEventMouseButton and event.pressed:
+		_controller_aim_active = false
+
+
+func is_controller_aiming() -> bool:
+	return _controller_aim_active or Input.get_vector("aim_left", "aim_right", "aim_up", "aim_down").length() > 0.24
 
 
 func _physics_process(delta: float) -> void:
@@ -294,10 +314,10 @@ func _physics_process(delta: float) -> void:
 	else:
 		velocity.x = move_toward(velocity.x, 0.0, acceleration * delta)
 		velocity.z = move_toward(velocity.z, 0.0, acceleration * delta)
+		_update_turret(delta)
 	_apply_gravity(delta)
 	move_and_slide()
 	_drive.step(get_real_velocity(), angle_difference(old_yaw, rotation.y), delta)
-	_update_turret(delta)
 	_update_engine_audio()
 
 
@@ -307,8 +327,11 @@ func _player_control(delta: float) -> void:
 	_set_planar_velocity(desired, delta, move_speed * (2.15 if invulnerable > 0.0 and dash_cooldown > 3.35 else 1.0))
 	var pad_aim := Input.get_vector("aim_left", "aim_right", "aim_up", "aim_down")
 	if pad_aim.length() > 0.24:
-		var aim_direction := Vector3(pad_aim.x, 0, pad_aim.y).normalized()
-		aim_point = global_position + aim_direction * 35.0
+		_controller_aim_active = true
+		_controller_aim_direction = Vector3(pad_aim.x, 0, pad_aim.y).normalized()
+	if _controller_aim_active:
+		aim_point = global_position + _controller_aim_direction * 35.0
+	_update_turret(delta)
 	if Input.is_action_pressed("fire"):
 		try_fire()
 	if Input.is_action_just_pressed("dash"):
@@ -332,7 +355,9 @@ func _ai_control(delta: float) -> void:
 	if is_boss:
 		_update_boss_attack(delta, target, distance)
 		if boss_warning:
+			aim_point = _salvo_aim_point
 			_set_planar_velocity(Vector3.ZERO, delta, move_speed)
+			_update_turret(delta)
 			return
 	_ai_clock -= delta
 	_salvo_clock -= delta
@@ -355,6 +380,7 @@ func _ai_control(delta: float) -> void:
 			_strafe_sign *= -1.0
 	desired = _avoid_obstacles(desired)
 	_set_planar_velocity(desired, delta, move_speed)
+	_update_turret(delta)
 	if distance < 62.0 and game.has_line_of_sight(_muzzle.global_position, target.global_position + Vector3.UP):
 		var forward := -_turret.global_basis.z.normalized()
 		if forward.dot(delta_to.normalized()) > 0.96:
@@ -371,11 +397,15 @@ func _update_boss_attack(delta: float, target: TankActor, distance: float) -> vo
 		if _charge_clock <= 0.0:
 			boss_warning = false
 			_fire_boss_salvo(target)
+			_clear_salvo_telegraph()
 			_salvo_clock = 8.0 - boss_phase * 1.15
 	elif _salvo_clock <= 0.0 and distance < 70.0:
 		_charge_clock = 1.55 if boss_phase == 1 else 1.15
+		_salvo_aim_point = target.global_position + Vector3.UP
+		_salvo_target_locked = true
 		boss_warning = true
 		ai_state = "telegraph"
+		_show_salvo_telegraph()
 		AudioService.play_3d("boss_warning", global_position, -4.0, 0.88 + boss_phase * 0.08)
 
 
@@ -383,15 +413,57 @@ func _fire_boss_salvo(target: TankActor) -> void:
 	var shots := 3 + boss_phase * 2
 	for index in range(shots):
 		var launch_marker := _rocket_muzzles[index % _rocket_muzzles.size()] if not _rocket_muzzles.is_empty() else _muzzle
-		var launch_position := launch_marker.global_position
-		var base := (target.global_position + Vector3.UP - launch_position).normalized()
+		var target_point := _salvo_aim_point if _salvo_target_locked else target.global_position + Vector3.UP
+		var base := (target_point - launch_marker.global_position).normalized()
 		var spread := deg_to_rad((float(index) - float(shots - 1) * 0.5) * (5.5 - boss_phase))
 		var direction := base.rotated(Vector3.UP, spread)
-		game.spawn_projectile(self, launch_position, direction, projectile_damage * 0.72, projectile_speed * 0.9, 3.2, "rocket")
+		var launch_position := _launch_weapon(_turret.global_position, launch_marker.global_position, direction, projectile_damage * 0.72, projectile_speed * 0.9, 3.2, "rocket")
 		game.spawn_muzzle_flash(launch_position, Color("ff593d"), 0.82)
 	var audio_origin := _rocket_muzzles[0].global_position if not _rocket_muzzles.is_empty() else _muzzle.global_position
 	AudioService.play_3d("cannon", audio_origin, -1.0, 0.68)
 	AudioService.play_3d("cannon_tail", audio_origin, -4.5, 0.82)
+	_salvo_target_locked = false
+
+
+func _show_salvo_telegraph() -> void:
+	if not is_instance_valid(_salvo_telegraph):
+		_salvo_telegraph = MeshInstance3D.new()
+		_salvo_telegraph.name = "SalvoDangerLanes"
+		add_child(_salvo_telegraph)
+		_salvo_telegraph.top_level = true
+		_salvo_telegraph.global_transform = Transform3D.IDENTITY
+		_salvo_telegraph.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var surface := StandardMaterial3D.new()
+	surface.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	surface.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	surface.cull_mode = BaseMaterial3D.CULL_DISABLED
+	surface.albedo_color = Color(1.0, 0.12, 0.035, 0.42)
+	var mesh := ImmediateMesh.new()
+	mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES, surface)
+	var center := global_position
+	center.y = 0.06
+	var direction := _salvo_aim_point - center
+	direction.y = 0.0
+	var reach := clampf(direction.length() + 12.0, 18.0, 75.0)
+	direction = direction.normalized()
+	var shots := 3 + boss_phase * 2
+	for index in shots:
+		var spread := deg_to_rad((float(index) - float(shots - 1) * 0.5) * (5.5 - boss_phase))
+		var lane := direction.rotated(Vector3.UP, spread)
+		var side := lane.cross(Vector3.UP) * 0.22
+		var start := center + lane * 4.0
+		var end := center + lane * reach
+		for point: Vector3 in [start - side, start + side, end + side, start - side, end + side, end - side]:
+			mesh.surface_add_vertex(point)
+	mesh.surface_end()
+	_salvo_telegraph.mesh = mesh
+	_salvo_telegraph.visible = true
+
+
+func _clear_salvo_telegraph() -> void:
+	_salvo_target_locked = false
+	if is_instance_valid(_salvo_telegraph):
+		_salvo_telegraph.visible = false
 
 
 func _set_planar_velocity(input_direction: Vector3, delta: float, speed: float) -> void:
@@ -431,7 +503,7 @@ func _apply_gravity(delta: float) -> void:
 func _update_turret(delta: float) -> void:
 	if not is_instance_valid(_turret):
 		return
-	var aim_delta := aim_point - global_position
+	var aim_delta := aim_point - _turret.global_position
 	aim_delta.y = 0.0
 	if aim_delta.length_squared() < 0.05:
 		return
@@ -455,29 +527,40 @@ func try_fire() -> bool:
 	var direction := -_turret.global_basis.z
 	direction.y = 0.0
 	direction = direction.normalized()
-	var launch_position := _muzzle.global_position
-	# Long authored barrels can extend through cover while the hull remains
-	# outside. Start at the first obstruction so the projectile's normal swept
-	# collision resolves that hit instead of teleporting the shell past it.
-	var muzzle_path := PhysicsRayQueryParameters3D.create(
-		_barrel.global_position, launch_position, 1 | (4 if team == TEAM_PLAYER else 2), [get_rid()]
-	)
-	muzzle_path.hit_from_inside = true
-	var obstruction := get_world_3d().direct_space_state.intersect_ray(muzzle_path)
-	if not obstruction.is_empty():
-		launch_position = Vector3(obstruction["position"]) - direction * 0.02
-	game.spawn_projectile(self, launch_position, direction, projectile_damage, projectile_speed, 2.1 if is_boss or archetype == "heavy" else 0.0, "cannon")
+	var launch_position := _launch_weapon(_barrel.global_position, _muzzle.global_position, direction, projectile_damage, projectile_speed, 2.1 if is_boss or archetype == "heavy" else 0.0, "cannon")
 	game.spawn_muzzle_flash(launch_position, Color("ffcc6d") if team == TEAM_PLAYER else Color("ff5c43"), 1.0 if not is_boss else 1.5)
 	_recoil = 0.46 if is_boss else 0.34
 	add_camera_shake(0.16)
 	var firing_pitch := 1.04 if is_player else (0.72 if is_boss else 0.9)
-	AudioService.play_3d("cannon", _muzzle.global_position, -3.0 if not is_boss else -1.0, firing_pitch)
-	AudioService.play_3d("cannon_tail", _muzzle.global_position, -7.0 if not is_boss else -4.0, firing_pitch)
+	AudioService.play_3d("cannon", launch_position, -3.0 if not is_boss else -1.0, firing_pitch)
+	AudioService.play_3d("cannon_tail", launch_position, -7.0 if not is_boss else -4.0, firing_pitch)
 	return true
 
 
+func _launch_weapon(origin: Vector3, muzzle: Vector3, direction: Vector3, damage: float, speed: float, splash: float, kind: String) -> Vector3:
+	# Long authored barrels can extend through cover while the hull remains
+	# outside. Resolve the first obstruction before spawning a shell. Rocket pods
+	# also need this check because their wide offset can protrude into side cover.
+	var muzzle_path := PhysicsRayQueryParameters3D.create(
+		origin, muzzle, 1 | (4 if team == TEAM_PLAYER else 2), [get_rid()]
+	)
+	muzzle_path.hit_from_inside = true
+	var obstruction := get_world_3d().direct_space_state.intersect_ray(muzzle_path)
+	if not obstruction.is_empty():
+		var impact_position: Vector3 = obstruction["position"]
+		var collider: Object = obstruction.get("collider")
+		if collider != null and collider.has_method("receive_damage"):
+			collider.call("receive_damage", damage, team, impact_position)
+		if splash > 0.0:
+			game.radial_damage(impact_position, splash, damage * 0.55, team)
+		game.spawn_impact(impact_position, splash > 0.0)
+		return impact_position
+	game.spawn_projectile(self, muzzle, direction, damage, speed, splash, kind)
+	return muzzle
+
+
 func try_dash(direction: Vector3) -> bool:
-	if not is_player or dash_cooldown > 0.0 or stunned > 0.0:
+	if not is_player or dash_cooldown > 0.0 or stunned > 0.0 or destroyed or not active:
 		return false
 	var impulse := direction.normalized() if direction.length_squared() > 0.04 else _last_move
 	velocity.x = impulse.x * move_speed * 2.15
@@ -488,7 +571,7 @@ func try_dash(direction: Vector3) -> bool:
 
 
 func try_emp() -> bool:
-	if not is_player or emp_cooldown > 0.0 or stunned > 0.0:
+	if not is_player or emp_cooldown > 0.0 or stunned > 0.0 or destroyed or not active:
 		return false
 	emp_cooldown = 13.0
 	game.emit_emp(self, 28.0)
@@ -512,6 +595,7 @@ func apply_emp(duration: float) -> void:
 	if boss_warning:
 		boss_warning = false
 		_charge_clock = 0.0
+		_clear_salvo_telegraph()
 		_salvo_clock = 3.4
 		game.notify("EMP 已打断铁牙的火箭齐射", 2.2)
 
@@ -553,18 +637,18 @@ func add_camera_shake(strength: float) -> void:
 func _update_camera_shake(delta: float) -> void:
 	if not SettingsService.screen_shake:
 		_camera_shake = 0.0
-		_camera_pivot.position = _camera_base_position
+		_camera_pivot.global_position = global_position + _camera_base_position
 		return
 	_camera_shake = move_toward(_camera_shake, 0.0, delta * 2.9)
 	if _camera_shake <= 0.001:
-		_camera_pivot.position = _camera_base_position
+		_camera_pivot.global_position = global_position + _camera_base_position
 		return
 	var offset := Vector3(
 		_rng.randf_range(-1.0, 1.0),
 		_rng.randf_range(-0.58, 0.58),
 		_rng.randf_range(-0.35, 0.35)
 	) * _camera_shake
-	_camera_pivot.position = _camera_base_position + offset
+	_camera_pivot.global_position = global_position + _camera_base_position + offset
 
 
 func _die(attacker_team: int) -> void:

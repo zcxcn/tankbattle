@@ -7,6 +7,7 @@ var hp := 110.0
 var size := Vector3(5.0, 1.5, 1.1)
 var surface: Material
 var _mesh: MeshInstance3D
+var _destroyed := false
 
 
 func _ready() -> void:
@@ -29,9 +30,12 @@ func _ready() -> void:
 
 
 func receive_damage(amount: float, _attacker_team: int, hit_position: Vector3) -> void:
+	if _destroyed:
+		return
 	hp -= amount
 	if hp > 0.0:
 		return
+	_destroyed = true
 	collision_layer = 0
 	game.spawn_explosion(global_position + Vector3.UP * 0.5, 0.72)
 	for index in range(5):

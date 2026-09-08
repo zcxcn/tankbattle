@@ -35,6 +35,7 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	if game == null or not game.is_combat_running() or _exploded:
 		return
+	var arming_remaining := armed_after
 	armed_after -= delta
 	lifetime -= delta
 	var pulse := 0.35 + (sin(Time.get_ticks_msec() * 0.012) + 1.0) * 0.32
@@ -54,10 +55,27 @@ func _physics_process(delta: float) -> void:
 			continue
 		if tank.team == team or tank.destroyed or not tank.is_targetable():
 			continue
+		if arming_remaining > 0.0:
+			# Ignore movement that occurred before arming within this physics step.
+			previous = previous.lerp(tank.global_position, clampf(arming_remaining / maxf(delta, 0.000001), 0.0, 1.0))
 		var swept_point := _closest_point_xz(previous, tank.global_position, global_position)
-		if global_position.distance_to(swept_point) <= trigger_radius and game.has_line_of_sight(global_position + Vector3.UP * 0.25, swept_point + Vector3.UP):
-			explode()
-			return
+		if global_position.distance_to(swept_point) <= trigger_radius:
+			var contact := _first_trigger_contact(previous, tank.global_position)
+			if game.has_line_of_sight(global_position + Vector3.UP * 0.25, contact + Vector3.UP):
+				explode({tank_id: contact})
+				return
+
+
+func _first_trigger_contact(from: Vector3, to: Vector3) -> Vector3:
+	var offset := Vector2(from.x - global_position.x, from.z - global_position.z)
+	var segment := Vector2(to.x - from.x, to.z - from.z)
+	var a := segment.length_squared()
+	var c := offset.length_squared() - trigger_radius * trigger_radius
+	if c <= 0.0 or a < 0.000001:
+		return Vector3(from.x, global_position.y, from.z)
+	var b := 2.0 * offset.dot(segment)
+	var fraction := clampf((-b - sqrt(maxf(0.0, b * b - 4.0 * a * c))) / (2.0 * a), 0.0, 1.0)
+	return Vector3(lerpf(from.x, to.x, fraction), global_position.y, lerpf(from.z, to.z, fraction))
 
 
 func _closest_point_xz(from: Vector3, to: Vector3, point: Vector3) -> Vector3:
@@ -74,11 +92,11 @@ func _closest_point_xz(from: Vector3, to: Vector3, point: Vector3) -> Vector3:
 	)
 
 
-func explode() -> void:
+func explode(contact_positions: Dictionary = {}) -> void:
 	if _exploded:
 		return
 	_exploded = true
-	game.radial_damage(global_position, 5.5, damage, team)
+	game.radial_damage(global_position, 5.5, damage, team, contact_positions)
 	game.spawn_explosion(global_position, 1.15)
 	AudioService.play_3d("mine", global_position, -3.0)
 	queue_free()
