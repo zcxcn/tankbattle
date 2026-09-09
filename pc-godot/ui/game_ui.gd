@@ -9,6 +9,9 @@ signal retry_requested
 signal menu_requested
 signal settings_requested
 signal quit_requested
+signal next_requested
+signal mission_requested
+signal chassis_requested
 signal setting_requested(id: String)
 
 const ThemeFactory = preload("res://ui/iron_theme.gd")
@@ -41,6 +44,11 @@ var _title_start_button: Button
 var _title_kills: Label
 var _title_level: Label
 var _title_best: Label
+var _title_mission: Button
+var _title_chassis: Button
+var _title_briefing: Label
+var _title_chapter: Label
+var _title_vehicle: Label
 
 var _hud_level: Label
 var _hud_hp_text: Label
@@ -61,6 +69,8 @@ var _hud_notice_panel: PanelContainer
 var _hud_notice: Label
 var _hud_weapon: Label
 var _hud_reload: Label
+var _hud_ammo: Label
+var _hud_weapon_slots: Label
 var _hud_mine: Label
 var _hud_emp: Label
 var _hud_dash: Label
@@ -186,11 +196,18 @@ func _build_title_layer() -> void:
 
 	_title_start_button = _button("开始行动", &"PrimaryButton", func() -> void: start_requested.emit())
 	command.add_child(_title_start_button)
+	_title_mission = _button("选择任务", &"CommandButton", func() -> void: mission_requested.emit())
+	command.add_child(_title_mission)
+	_title_chassis = _button("选择战车", &"CommandButton", func() -> void: chassis_requested.emit())
+	command.add_child(_title_chassis)
+	_title_vehicle = _label("", &"Micro")
+	_title_vehicle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	command.add_child(_title_vehicle)
 	var settings_button := _button("作战设置", &"CommandButton", func() -> void: settings_requested.emit())
 	command.add_child(settings_button)
 	var quit_button := _button("退出游戏", &"DangerButton", func() -> void: quit_requested.emit())
 	command.add_child(quit_button)
-	_wire_vertical_focus([_title_start_button, settings_button, quit_button])
+	_wire_vertical_focus([_title_start_button, _title_mission, _title_chassis, settings_button, quit_button])
 	_focus_targets["title"] = _title_start_button
 	command.add_child(_spacer(false, true))
 
@@ -202,12 +219,13 @@ func _build_title_layer() -> void:
 	feature.add_child(briefing)
 	var chapter := HBoxContainer.new()
 	briefing.add_child(chapter)
-	chapter.add_child(_label("第 01 章 · 灰中点火", &"HudValue"))
+	_title_chapter = _label("第 01 章 · 灰中点火", &"HudValue")
+	chapter.add_child(_title_chapter)
 	chapter.add_child(_spacer(true, false))
 	chapter.add_child(_label("行动简报", &"Kicker"))
-	var mission := _label("逐组突破修理厂封锁，清除 3 组敌军，击毁指挥重坦「铁牙」。", &"Muted")
-	mission.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	briefing.add_child(mission)
+	_title_briefing = _label("", &"Muted")
+	_title_briefing.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	briefing.add_child(_title_briefing)
 	briefing.add_child(HSeparator.new())
 	var stats := HBoxContainer.new()
 	stats.add_theme_constant_override(&"separation", 10)
@@ -233,9 +251,9 @@ func _build_title_layer() -> void:
 	layout.add_child(HSeparator.new())
 	var footer := HBoxContainer.new()
 	layout.add_child(footer)
-	footer.add_child(_label("BUILD 0.2.2 · FORWARD+ / PBR ARMOR", &"Micro"))
+	footer.add_child(_label("BUILD 0.3.0 · FORWARD+ / PBR ARMOR", &"Micro"))
 	footer.add_child(_spacer(true, false))
-	var asset_credit := _label("3D：tomm8 · GRIP420 / David Falke · Comrade1280 · CC BY 4.0", &"Micro")
+	var asset_credit := _label("3D：tomm8 · GRIP420 / David Falke · Comrade1280 · CC BY 4.0\n机枪录音：KuraiWolf / Nightshade Game Studios · CC BY 4.0", &"Micro")
 	asset_credit.name = "AssetCredit"
 	asset_credit.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	asset_credit.tooltip_text = (
@@ -243,6 +261,7 @@ func _build_title_layer() -> void:
 		+ "KF51 Panther — GRIP420 / David Falke\n"
 		+ "KV-2 heavy tank 1940 — Comrade1280\n"
 		+ "完整来源与修改记录：assets/THIRD_PARTY_ASSETS.md"
+		+ "\n机枪录音：KuraiWolf / Nightshade Game Studios，CC BY 4.0\n音效完整来源与处理记录：assets/audio/combat/README.md"
 	)
 	footer.add_child(asset_credit)
 
@@ -374,15 +393,21 @@ func _build_hud_layer() -> void:
 	weapon_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	weapon_panel.custom_minimum_size = Vector2(380.0, 72.0)
 	bottom.add_child(weapon_panel)
+	var weapon_stack := VBoxContainer.new()
+	weapon_panel.add_child(weapon_stack)
 	var weapon_box := HBoxContainer.new()
 	weapon_box.alignment = BoxContainer.ALIGNMENT_CENTER
-	weapon_panel.add_child(weapon_box)
-	weapon_box.add_child(_label("主武器", &"Muted"))
+	weapon_stack.add_child(weapon_box)
 	_hud_weapon = _label("加农炮", &"SectionTitle")
 	weapon_box.add_child(_hud_weapon)
 	weapon_box.add_child(_spacer(true, false))
+	_hud_ammo = _label("", &"Muted")
+	weapon_box.add_child(_hud_ammo)
 	_hud_reload = _label("READY", &"Success")
 	weapon_box.add_child(_hud_reload)
+	_hud_weapon_slots = _label("1 穿甲弹  2 机枪  3 榴弹  4 火箭", &"Micro")
+	weapon_stack.add_child(_hud_weapon_slots)
+	weapon_stack.add_child(_label("R / X 切换武器    C / Y 第三人称    滚轮 拉近 / 拉远", &"Micro"))
 
 	var ability_panel := _panel(&"HUDPanel")
 	_hud_panels.append(ability_panel)
@@ -421,10 +446,10 @@ func _build_pause_layer() -> void:
 	_pause_notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_pause_notice.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(_pause_notice)
-	var controls := _label("WASD / 左摇杆：移动    鼠标 / 右摇杆：瞄准\n左键 / RT：开火    C / Y：切换镜头\nM / R3：布雷    E / RB：脉冲排雷    空格 / LB：短时加速", &"Muted")
+	var controls := _label("WASD / 左摇杆：移动    鼠标 / 右摇杆：瞄准\n左键 / RT：开火    C / Y：俯视 / 第三人称    滚轮：变焦\n1–4：选择武器    R / X：切换武器\nM / R3：布雷    E / RB：脉冲排雷    空格 / LB：短时加速", &"Muted")
 	controls.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(controls)
-	var tactics := _label("停稳瞄准，开炮后退回掩体；清空一组可获得整备补给。", &"Muted")
+	var tactics := _label("停稳瞄准，开炮后退回掩体；绿色补给点可修复战车并补充弹药。", &"Muted")
 	tactics.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	tactics.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(tactics)
@@ -599,6 +624,14 @@ func _update_title() -> void:
 	_title_level.text = "LV.%02d" % level
 	_title_best.text = _compact_number(best)
 	_title_start_button.text = "继续行动" if lifetime > 0 or best > 0 else "开始行动"
+	var chapter := _int_value("selected_mission", 0) + 1
+	_title_mission.text = "任务 %02d · %s  ›" % [chapter, str(_snapshot.get("mission_name", "灰中点火"))]
+	_title_mission.tooltip_text = "点击轮换已解锁任务；击败本关首领解锁下一关。"
+	_title_mission.disabled = _int_value("unlocked_missions", 1) <= 1
+	_title_chassis.text = "战车 · %s  ›" % str(_snapshot.get("vehicle", "主战坦克"))
+	_title_vehicle.text = str(_snapshot.get("vehicle_description", ""))
+	_title_chapter.text = "任务 %02d / %02d · 已解锁 %d" % [chapter, _int_value("mission_count", 3), _int_value("unlocked_missions", 1)]
+	_title_briefing.text = str(_snapshot.get("mission_briefing", "清除巡逻车队，击败首领。"))
 
 
 func _update_hud() -> void:
@@ -606,7 +639,7 @@ func _update_hud() -> void:
 	var hp := maxf(0.0, _float_value("hp", 100.0))
 	var max_hp := maxf(1.0, _float_value("max_hp", 100.0))
 	var level := maxi(1, _int_value("tank_level", 1))
-	_hud_level.text = "LV.%02d · 指挥战车" % level
+	_hud_level.text = "LV.%02d · %s" % [level, str(_snapshot.get("vehicle", "指挥战车"))]
 	_hud_hp_text.text = "%d / %d" % [ceili(hp), ceili(max_hp)]
 	_hud_hp_bar.max_value = max_hp
 	_hud_hp_bar.value = clampf(hp, 0.0, max_hp)
@@ -618,6 +651,11 @@ func _update_hud() -> void:
 	_hud_kills.text = "%d / %d" % [kills, target]
 	_hud_kill_bar.max_value = target
 	_hud_kill_bar.value = mini(kills, target)
+	if str(_snapshot.get("mission_type", "clear")) in ["capture", "demolition"]:
+		var progress := clampf(_float_value("objective_fraction", 0.0), 0.0, 1.0)
+		_hud_kills.text = "%d%%" % roundi(progress * 100.0)
+		_hud_kill_bar.max_value = 1.0
+		_hud_kill_bar.value = progress
 	_hud_score.text = "%05d" % maxi(0, _int_value("score", 0))
 	_hud_time.text = _format_time(_float_value("time", 0.0))
 
@@ -639,6 +677,21 @@ func _update_hud() -> void:
 	var reload := maxf(0.0, _float_value("reload", 0.0))
 	_hud_reload.text = "READY" if reload <= 0.01 else "装填 %.1fs" % reload
 	_hud_reload.theme_type_variation = &"Success" if reload <= 0.01 else &"Danger"
+	var weapon_state: Dictionary = _snapshot.get("weapon_state", {})
+	var ammo := int(weapon_state.get("ammo", -1))
+	var reserve := int(weapon_state.get("reserve", 0))
+	_hud_ammo.text = "弹药 ∞" if ammo < 0 else ("%d / %d" % [ammo, reserve] if weapon_state.get("id", "") == "machine_gun" else "剩余 %d" % ammo)
+	if ammo == 0 and reload <= 0.01:
+		_hud_reload.text = "弹药耗尽"
+		_hud_reload.theme_type_variation = &"Danger"
+	elif weapon_state.get("belt_reloading", false):
+		_hud_reload.text = "换弹链 %.1fs" % reload
+	var slot_names: Array[String] = []
+	for slot: Dictionary in weapon_state.get("slots", []):
+		var selected := str(slot.get("id", "")) == str(weapon_state.get("id", ""))
+		slot_names.append("%s%d %s%s" % ["[" if selected else "", slot_names.size() + 1, str(slot.get("name", "")), "]" if selected else ""])
+	if not slot_names.is_empty():
+		_hud_weapon_slots.text = "  ".join(slot_names)
 	var mine_cooldown := maxf(0.0, _float_value("mine_cooldown", 0.0))
 	_hud_mine.text = "M  地雷 × %d%s" % [
 		maxi(0, _int_value("mine_ammo", 0)),
@@ -706,12 +759,15 @@ func _update_result() -> void:
 		maxi(0, _int_value("lifetime_kills", 0)),
 		maxi(0, _int_value("best_score", 0)),
 	]
-	_result_primary.text = "返回指挥中心" if won else "重新部署"
+	_result_primary.text = ("进入下一关" if _bool_value("has_next_mission", false) else "返回指挥中心") if won else "重新部署"
 
 
 func _result_primary_action() -> void:
 	if _mode == "won":
-		menu_requested.emit()
+		if _bool_value("has_next_mission", false):
+			next_requested.emit()
+		else:
+			menu_requested.emit()
 	else:
 		retry_requested.emit()
 

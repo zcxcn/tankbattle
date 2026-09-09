@@ -253,32 +253,39 @@ func _check_encounters() -> void:
 	_freeze()
 	await _frames(3)
 	var active_count := 0
+	var routes_present := true
 	for enemy: TankActor in game.enemies:
-		if not enemy.is_boss and game.can_enemy_engage(enemy):
-			active_count += 1
-	_check(active_count == 2, "opening street encounter permits two attackers instead of all six")
+		if not enemy.is_boss:
+			active_count += int(game.can_enemy_engage(enemy))
+			routes_present = routes_present and enemy.patrol_route.size() >= 2
+	_check(active_count == game.target_kills and routes_present, "all ordinary crews patrol authored routes without an artificial encounter freeze")
 	var reserve: TankActor = game.enemies[4]
-	reserve._ai_control(2.0)
-	_check(reserve.ai_state == "reserve" and reserve.velocity.length() < 0.01 and is_zero_approx(reserve._aim_hold_time), "later enemy groups hold their position and do not prepare cross-map fire")
+	game.player.global_position = Vector3(300, 0.03, 300)
+	reserve._ai_control(0.2)
+	_check(reserve.ai_state == "patrol" and reserve.velocity.length() > 0.01 and is_zero_approx(reserve._aim_hold_time), "distant patrols move normally without preparing cross-map shots")
 	var health := reserve.hp
-	reserve.receive_damage(5.0, 0, reserve.global_position)
-	_check(reserve.hp < health and game.can_enemy_engage(reserve), "a reserve hit by the player takes normal damage and can defend itself")
+	reserve.receive_damage(5.0, 0, reserve.global_position + Vector3.RIGHT)
+	_check(reserve.hp < health and reserve.ai_state == "search" and reserve._last_seen_position != game.player.global_position, "a patrol reacts to incoming damage without discovering the distant shooter's exact position")
 	game.retry_game()
 	_freeze()
 	await _frames(3)
 	game.player.hp = 100.0
 	game.player.mine_ammo = 3
-	# These are explicit transition unit fixtures, never playthrough evidence.
-	for enemy in game.enemies.duplicate():
-		if is_instance_valid(enemy) and not enemy.is_boss and int(enemy.get_meta("encounter_index", -1)) == 0:
-			enemy.receive_damage(10000.0, 0, enemy.global_position)
-	await _frames(3)
-	game._update_encounters(0.016)
-	_check(is_equal_approx(game.player.hp, 142.0) and game.player.mine_ammo == 4, "clearing a group performs the advertised one-time repair and mine resupply")
-	game._update_encounters(2.0)
-	_check(game._active_encounter == 0 and game._encounter_pause > 0.0, "reinforcements respect the announced regroup interval")
-	game._update_encounters(3.1)
-	_check(game._active_encounter == 1 and is_equal_approx(game.player.hp, 142.0), "the next group advances after regrouping without repeating the repair")
+	game.player.select_weapon(3)
+	game.player._loadout.fire()
+	var supply: Dictionary = game._supply_points[0]
+	game.player.global_position = supply.position
+	game._update_supplies()
+	_check(is_equal_approx(game.player.hp, 185.0) and game.player.mine_ammo == 6 and game.player.get_weapon_snapshot().ammo == 8, "entering an unused supply zone repairs armor and restores mines and finite weapons")
+	game.player.hp = 150.0
+	game._update_supplies()
+	_check(supply.used and is_equal_approx(game.player.hp, 150.0), "a consumed supply point cannot repeatedly regenerate armor")
+	game.player.hp = game.player.max_hp
+	game.player.resupply()
+	var untouched: Dictionary = game._supply_points[1]
+	game.player.global_position = untouched.position
+	game._update_supplies()
+	_check(not untouched.used, "a fully stocked tank does not waste an unused field supply")
 	game.player.hp = 30.0
 	game.player.emp_cooldown = 8.0
 	game._activate_boss()

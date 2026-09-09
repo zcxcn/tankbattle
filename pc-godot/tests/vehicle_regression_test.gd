@@ -29,6 +29,7 @@ func _run() -> void:
 		push_error("Vehicle regression checks require -- --test")
 		get_tree().quit(2)
 		return
+	SaveService.reset_for_tests()
 	game = load("res://scenes/main/main.tscn").instantiate()
 	add_child(game)
 	if not game.has_method("start_game"):
@@ -57,10 +58,11 @@ func _run() -> void:
 	await _frames(2)
 	_check((player.camera.global_position - player.global_position).distance_to(camera_offset) < 0.01, "fixed-heading camera follows tank translation")
 	player.toggle_camera()
-	player._process(0.1)
+	player._process(0.5)
 	await _frames(2)
-	_check(player.camera.global_basis.x.dot(Vector3.RIGHT) > 0.999, "tactical camera retains the same right axis")
+	_check(player.is_third_person() and player._camera_arm.spring_length < 18.0 and player._camera_arm.rotation.x > -0.5, "camera toggle reaches a genuinely close third-person viewing angle")
 	player.toggle_camera()
+	player._process(0.5)
 	await _check_motion_and_wheels(player)
 	await _check_aim_and_abilities(player)
 	await _check_boss_telegraph_and_cover(player)
@@ -140,14 +142,16 @@ func _check_aim_and_abilities(player: TankActor) -> void:
 	player.rotation = Vector3.ZERO
 	Input.action_press("aim_right")
 	player._player_control(0.2)
-	_check(player.is_controller_aiming() and (player.aim_point - player.global_position).normalized().dot(Vector3.RIGHT) > 0.999, "right stick claims aim and sets an independent world direction")
+	var stick_bearing := player.aim_point - player.global_position
+	_check(player.is_controller_aiming() and Vector2(stick_bearing.x, stick_bearing.z).normalized().dot(Vector2.RIGHT) > 0.999 and stick_bearing.y > 0.9, "right stick sets its independent horizontal bearing at armor height")
 	var stick_target := player.aim_point
 	game._update_mouse_aim()
 	_check(player.aim_point.is_equal_approx(stick_target), "an idle mouse cannot overwrite active gamepad aim on a rendering frame")
 	Input.action_release("aim_right")
 	player.global_position += Vector3(0.0, 0.0, 4.0)
 	player._player_control(0.1)
-	_check(player.is_controller_aiming() and (player.aim_point - player.global_position).normalized().dot(Vector3.RIGHT) > 0.999, "releasing the right stick preserves its bearing while the hull moves")
+	stick_bearing = player.aim_point - player.global_position
+	_check(player.is_controller_aiming() and Vector2(stick_bearing.x, stick_bearing.z).normalized().dot(Vector2.RIGHT) > 0.999 and stick_bearing.y > 0.9, "releasing the right stick preserves bearing and armor-height aim while the hull moves")
 	var mouse_motion := InputEventMouseMotion.new()
 	mouse_motion.relative = Vector2(8.0, 0.0)
 	player._input(mouse_motion)
@@ -232,6 +236,7 @@ func _check_boss_telegraph_and_cover(player: TankActor) -> void:
 	var midpoint := (player._barrel.global_position + player._muzzle.global_position) * 0.5
 	var barrel_cover := _box(Vector3(midpoint.x, 3.0, midpoint.z), Vector3(12.0, 6.0, 0.06))
 	await _frames(2)
-	player.reload = 0.0
+	player._loadout.tick(10.0)
+	player.select_weapon(0)
 	_check(player.try_fire() and get_tree().get_nodes_in_group("projectiles").is_empty(), "a long barrel inside thin cover resolves its impact without spawning a shell beyond the wall")
 	barrel_cover.free()

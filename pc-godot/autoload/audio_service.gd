@@ -1,10 +1,16 @@
 extends Node
-## Original synthesized weapon, engine and interface audio. No runtime network access.
+## Local recorded combat layers and original interface/engine synthesis.
 
 const SAMPLE_RATE := 44100
 const MAX_VOICES := 24
 const CANNON_RECORDING := preload("res://assets/audio/recorded/tank_shots_preview_hq.mp3")
 const EXPLOSION_RECORDING := preload("res://assets/audio/recorded/muffled_distant_explosion.wav")
+const CANNON_VARIANTS := [preload("res://assets/audio/combat/cannon-01.wav"), preload("res://assets/audio/combat/cannon-02.wav"), preload("res://assets/audio/combat/cannon-03.wav")]
+const EXPLOSION_VARIANTS := [preload("res://assets/audio/combat/explosion-heavy-01.wav"), preload("res://assets/audio/combat/explosion-heavy-02.wav")]
+const ARMOR_VARIANTS := [preload("res://assets/audio/combat/impact-armor-01.wav"), preload("res://assets/audio/combat/impact-armor-02.wav")]
+const MACHINE_RECORDING := preload("res://assets/audio/combat/mg-fire.wav")
+const ROCKET_RECORDING := preload("res://assets/audio/combat/rocket-launch.wav")
+const RICOCHET_RECORDING := preload("res://assets/audio/combat/ricochet-01.wav")
 
 var streams: Dictionary = {}
 var _rng := RandomNumberGenerator.new()
@@ -18,15 +24,43 @@ func _ready() -> void:
 		streams[kind] = _synthesize(kind)
 	# Recorded CC0 field audio adds the pressure wave and outdoor reflections;
 	# the synthesized layers keep the close transient responsive in the mix.
-	streams["cannon_tail"] = CANNON_RECORDING
+	streams["cannon_tail"] = CANNON_VARIANTS[0]
 	streams["explosion_tail"] = EXPLOSION_RECORDING
+	streams["explosion"] = EXPLOSION_VARIANTS[0]
+	streams["machine"] = MACHINE_RECORDING
+	streams["machine_gun"] = MACHINE_RECORDING
+	streams["rocket"] = ROCKET_RECORDING
+	streams["armor_hit"] = ARMOR_VARIANTS[0]
+	streams["ground_hit"] = streams["hit"]
+	streams["ricochet"] = RICOCHET_RECORDING
 
 
 func play_3d(kind: String, world_position: Vector3, volume_db := -5.0, pitch := 1.0) -> void:
-	if not streams.has(kind) or get_child_count() >= MAX_VOICES:
+	if not streams.has(kind):
 		return
+	var fast_effect := kind in ["machine", "machine_gun", "armor_hit", "ground_hit"]
+	var same_voices := 0
+	for node: Node in get_children():
+		if node.get_meta("audio_kind", "") == kind and not node.is_queued_for_deletion():
+			same_voices += 1
+	# A burst cannot consume every voice and suppress the main gun or a Boss.
+	if fast_effect and same_voices >= 6:
+		return
+	if get_child_count() >= MAX_VOICES:
+		if fast_effect:
+			return
+		var released := false
+		for node: Node in get_children():
+			if node.get_meta("audio_kind", "") in ["machine", "machine_gun", "armor_hit", "ground_hit"]:
+				node.free()
+				released = true
+				break
+		if not released:
+			return
 	var voice := AudioStreamPlayer3D.new()
-	voice.stream = streams[kind]
+	voice.stream = _select_stream(kind)
+	voice.set_meta("audio_kind", kind)
+	voice.add_to_group("combat_effects")
 	voice.position = world_position
 	voice.volume_db = volume_db
 	voice.pitch_scale = pitch
@@ -34,10 +68,11 @@ func play_3d(kind: String, world_position: Vector3, volume_db := -5.0, pitch := 
 	voice.attenuation_filter_cutoff_hz = 12000.0
 	voice.bus = "SFX"
 	add_child(voice)
+	voice.tree_exiting.connect(_stop_spatial_voice.bind(voice))
 	voice.finished.connect(voice.queue_free)
 	voice.play()
 	var maximum_duration := {
-		"cannon_tail": 1.15,
+		"cannon_tail": 3.2,
 		"explosion_tail": 3.2,
 	}.get(kind, 0.0) as float
 	if maximum_duration > 0.0:
@@ -46,6 +81,24 @@ func play_3d(kind: String, world_position: Vector3, volume_db := -5.0, pitch := 
 		var cutoff := voice.create_tween()
 		cutoff.tween_interval(maximum_duration)
 		cutoff.tween_callback(voice.queue_free)
+
+
+func _select_stream(kind: String) -> AudioStream:
+	match kind:
+		"cannon_tail":
+			return CANNON_VARIANTS[_rng.randi_range(0, CANNON_VARIANTS.size() - 1)]
+		"explosion":
+			return EXPLOSION_VARIANTS[_rng.randi_range(0, EXPLOSION_VARIANTS.size() - 1)]
+		"armor_hit":
+			return ARMOR_VARIANTS[_rng.randi_range(0, ARMOR_VARIANTS.size() - 1)]
+	return streams[kind]
+
+
+func _stop_spatial_voice(voice: AudioStreamPlayer3D) -> void:
+	# Stop explicitly before releasing the stream, including mission changes
+	# and quit while a long explosion tail is still playing.
+	voice.stop()
+	voice.stream = null
 
 
 func play_ui(kind: String, volume_db := -8.0, pitch := 1.0) -> void:

@@ -1,10 +1,12 @@
 class_name IndustrialArena
 extends Node3D
-## Authored procedural city block for Chapter 01: Ash Ignition.
+## Three authored industrial districts sharing real-world scale modular fittings.
 
 const DetailsBuilder = preload("res://scripts/industrial_details.gd")
+const Catalog = preload("res://data/mission_catalog.gd")
 
 var game: Node
+var mission_index := 0
 var boss_gate: Array[MeshInstance3D] = []
 var _asphalt: StandardMaterial3D
 var _concrete: StandardMaterial3D
@@ -48,8 +50,11 @@ func _ready() -> void:
 	_build_industrial_blocks()
 	_build_cover()
 	_build_details()
+	_build_landmarks()
 	_details.bake(self)
 	set_meta("industrial_detail_pieces", _details.piece_count)
+	set_meta("mission_index", mission_index)
+	set_meta("arena_bounds", get_radar_bounds())
 	_details = null
 
 
@@ -69,8 +74,8 @@ func _build_environment() -> void:
 	environment.background_mode = Environment.BG_SKY
 	var sky := Sky.new()
 	var sky_material := ProceduralSkyMaterial.new()
-	sky_material.sky_top_color = Color("566b79")
-	sky_material.sky_horizon_color = Color("abb4b5")
+	sky_material.sky_top_color = [Color("566b79"), Color("687d8f"), Color("4b5967")][clampi(mission_index, 0, 2)]
+	sky_material.sky_horizon_color = [Color("abb4b5"), Color("d0c3ac"), Color("afb2b5")][clampi(mission_index, 0, 2)]
 	sky_material.ground_bottom_color = Color("343a3d")
 	sky_material.ground_horizon_color = Color("747d80")
 	sky_material.sun_angle_max = 4.0
@@ -93,60 +98,92 @@ func _build_environment() -> void:
 	environment.fog_enabled = true
 	environment.fog_light_color = Color("88969c")
 	environment.fog_light_energy = 0.30
-	environment.fog_density = 0.0012
+	environment.fog_density = 0.0008 if mission_index == 1 else 0.0012
 	environment.fog_sky_affect = 0.32
 	environment.volumetric_fog_enabled = true
-	environment.volumetric_fog_density = 0.0038
-	environment.volumetric_fog_length = 120.0
+	environment.volumetric_fog_density = 0.0025 if mission_index == 1 else 0.0032
+	environment.volumetric_fog_length = 180.0
 	environment.volumetric_fog_sky_affect = 0.24
 	world_environment.environment = environment
 	add_child(world_environment)
 	var sun := DirectionalLight3D.new()
 	sun.name = "LowSun"
-	sun.rotation_degrees = Vector3(-52.0, -32.0, 0)
-	sun.light_color = Color("fff1dd")
-	sun.light_energy = 1.15
+	sun.rotation_degrees = [Vector3(-52, -32, 0), Vector3(-32, 48, 0), Vector3(-44, -70, 0)][clampi(mission_index, 0, 2)]
+	sun.light_color = [Color("fff1dd"), Color("ffe1b7"), Color("e9f0ff")][clampi(mission_index, 0, 2)]
+	sun.light_energy = 1.10 if mission_index == 2 else 1.15
 	sun.shadow_enabled = true
-	sun.directional_shadow_max_distance = 150.0
+	sun.directional_shadow_max_distance = 190.0
 	sun.directional_shadow_fade_start = 0.72
 	add_child(sun)
 
 
 func _build_ground() -> void:
-	ArtFactory.add_box(self, "Terrain", Vector3(0, -0.45, 0), Vector3(190, 0.8, 132), _concrete, true)
-	ArtFactory.add_box(self, "MainAvenue", Vector3(0, 0.015, 0), Vector3(24, 0.05, 128), _asphalt)
-	for z in [-36.0, 0.0, 36.0]:
-		ArtFactory.add_box(self, "CrossStreet", Vector3(0, 0.025, z), Vector3(186, 0.06, 18), _asphalt)
+	ArtFactory.add_box(self, "Terrain", Vector3(0, -0.45, 0), Vector3(290, 0.8, 386), _concrete, true)
+	for x in [-96.0, 0.0, 96.0]:
+		ArtFactory.add_box(self, "MainAvenue", Vector3(x, 0.015, 0), Vector3(24 if x == 0 else 20, 0.05, 380), _asphalt)
+	for z in [-144.0, -72.0, 0.0, 72.0, 144.0]:
+		ArtFactory.add_box(self, "CrossStreet", Vector3(0, 0.025, z), Vector3(282, 0.06, 18), _asphalt)
 	var stripe := ArtFactory.material(Color("d3bd72"), 0.05, 0.6, 0.12)
-	for z in range(-60, 63, 8):
-		ArtFactory.add_box(self, "LaneMark", Vector3(0, 0.065, float(z)), Vector3(0.22, 0.03, 3.4), stripe)
-	for x in range(-84, 85, 8):
-		ArtFactory.add_box(self, "CrossMark", Vector3(float(x), 0.07, 0), Vector3(3.3, 0.03, 0.18), stripe)
+	for x in [-96.0, 0.0, 96.0]:
+		for z in range(-184, 185, 8):
+			_details.box(Vector3(x, 0.065, float(z)), Vector3(0.18, 0.025, 3.4), stripe)
+	for z in [-144.0, -72.0, 0.0, 72.0, 144.0]:
+		for x in range(-136, 137, 8):
+			_details.box(Vector3(float(x), 0.07, z), Vector3(3.3, 0.025, 0.16), stripe)
+	# Loading aprons, kerbs and drainage sit outside the three clear vehicle lanes.
+	for side in [-1.0, 1.0]:
+		for z in [-108.0, -36.0, 36.0, 108.0]:
+			_details.box(Vector3(side * 48, 0.04, z), Vector3(66, 0.04, 48), _asphalt)
+			for dz in [-25.0, 25.0]:
+				_details.box(Vector3(side * 48, 0.15, z + dz), Vector3(64, 0.24, 0.4), _concrete)
+			_details.box(Vector3(side * 82, 0.04, z), Vector3(0.4, 0.06, 44), _dark_metal)
 
 
 func _build_boundaries() -> void:
 	for data in [
-		[Vector3(0, 2.1, -65), Vector3(190, 4.2, 1.3)],
-		[Vector3(0, 2.1, 65), Vector3(190, 4.2, 1.3)],
-		[Vector3(-94, 2.1, 0), Vector3(1.3, 4.2, 132)],
-		[Vector3(94, 2.1, 0), Vector3(1.3, 4.2, 132)],
+		[Vector3(0, 2.1, -192), Vector3(288, 4.2, 1.3)],
+		[Vector3(0, 2.1, 192), Vector3(288, 4.2, 1.3)],
+		[Vector3(-144, 2.1, 0), Vector3(1.3, 4.2, 384)],
+		[Vector3(144, 2.1, 0), Vector3(1.3, 4.2, 384)],
 	]:
 		ArtFactory.add_box(self, "PerimeterWall", data[0], data[1], _concrete, true)
-	for x in range(-90, 91, 10):
-		ArtFactory.add_box(self, "WallPier", Vector3(float(x), 2.5, -64.1), Vector3(1.1, 5.0, 1.6), _metal)
-		ArtFactory.add_box(self, "WallPier", Vector3(float(x), 2.5, 64.1), Vector3(1.1, 5.0, 1.6), _metal)
-	for x in [-4.5, -2.7, -0.9, 0.9, 2.7, 4.5]:
-		var gate_bar := ArtFactory.add_box(self, "BossGate", Vector3(x, 2.25, -43.0), Vector3(0.32, 4.5, 1.0), _metal, true)
+	for x in range(-140, 141, 12):
+		for z in [-191.1, 191.1]:
+			_details.box(Vector3(float(x), 2.5, z), Vector3(1.1, 5, 1.6), _metal)
+	for z in range(-180, 181, 12):
+		for x in [-143.1, 143.1]:
+			_details.box(Vector3(x, 2.5, float(z)), Vector3(1.6, 5, 1.1), _metal)
+	for x in [-7.5, -4.5, -1.5, 1.5, 4.5, 7.5]:
+		var gate_bar := ArtFactory.add_box(self, "BossGate", Vector3(x, 2.25, -156.0), Vector3(0.32, 4.5, 1.0), _metal, true)
 		boss_gate.append(gate_bar)
+	for side in [-1.0, 1.0]:
+		ArtFactory.add_box(self, "GateHouse", Vector3(side * 21, 3.0, -158), Vector3(12, 6, 10), _building, true)
+		_details.box(Vector3(side * 21, 6.15, -158), Vector3(13, 0.3, 11), _dark_metal)
+		_details.box(Vector3(side * 21, 3.9, -152.92), Vector3(8, 1.4, 0.12), _glass)
 
 
 func _build_industrial_blocks() -> void:
-	var buildings := [
-		[Vector3(-57, 5.5, -48), Vector3(48, 11, 15)], [Vector3(56, 7.0, -48), Vector3(50, 14, 15)],
-		[Vector3(-59, 6.5, -18), Vector3(44, 13, 16)], [Vector3(61, 4.8, -17), Vector3(45, 9.6, 17)],
-		[Vector3(-58, 5.0, 19), Vector3(48, 10, 16)], [Vector3(59, 6.8, 19), Vector3(47, 13.6, 16)],
-		[Vector3(-59, 7.4, 49), Vector3(46, 14.8, 15)], [Vector3(58, 5.3, 49), Vector3(48, 10.6, 15)],
-	]
+	var buildings: Array = []
+	for row in range(4):
+		var z := -108.0 + row * 72.0
+		for side in [-1.0, 1.0]:
+			if mission_index == 1 and side > 0:
+				continue # This district's eastern parcels are working container yards.
+			if mission_index == 2 and row % 2 == 0:
+				# Two independent magazines per parcel create traversable inner courtyards.
+				for x in [34.0, 64.0]:
+					buildings.append([Vector3(side * x, 3.0, z), Vector3(20, 6, 28)])
+				continue
+			var height := 8.0 + float((row + int(side)) % 3) * 1.3
+			if mission_index == 2:
+				height = 6.2 + row * 0.6
+			var width := 44.0 + 2.0 * (row % 3)
+			var depth := 24.0 + 2.0 * (row % 2)
+			buildings.append([Vector3(side * 48, height * 0.5, z), Vector3(width, height, depth)])
+	for side in [-1.0, 1.0]:
+		buildings.append([Vector3(side * 55, 5.0, 175), Vector3(42, 10, 20)])
+		if mission_index != 1:
+			buildings.append([Vector3(side * 58, 7.0, -174), Vector3(42, 14, 20)])
 	for index in range(buildings.size()):
 		var data: Array = buildings[index]
 		var building_position: Vector3 = data[0]
@@ -154,6 +191,10 @@ func _build_industrial_blocks() -> void:
 		var building := ArtFactory.add_box(self, "Warehouse_%02d" % index, building_position, building_size, _building, true)
 		_details.placement = building.transform
 		_warehouse_fittings(building_size)
+		if mission_index == 2:
+			_fortification_fittings(building_size)
+		_details.placement = Transform3D.IDENTITY
+		_details.bake(self, "WarehouseFittings_%02d" % index)
 	_details.placement = Transform3D.IDENTITY
 
 
@@ -165,7 +206,8 @@ func _warehouse_fittings(size: Vector3) -> void:
 		var face_z: float = side * (size.z * 0.5 + 0.06)
 		_details.box(Vector3(0, floor_y + 0.35, face_z), Vector3(size.x, 0.7, 0.16), _concrete)
 		_details.box(Vector3(0, roof_y - 0.2, face_z), Vector3(size.x + 0.5, 0.4, 0.32), _metal)
-		for column in range(-3, 4):
+		var columns := 2 if size.x < 28.0 else 3
+		for column in range(-columns, columns + 1):
 			var x: float = float(column) * size.x * 0.135
 			_details.box(Vector3(x, 0, face_z), Vector3(0.24, size.y - 0.7, 0.2), _concrete)
 			# Framed clerestory glazing on both long elevations, with mullions and sills.
@@ -217,9 +259,10 @@ func _warehouse_fittings(size: Vector3) -> void:
 
 func _build_cover() -> void:
 	var positions := [
-		Vector3(-7, 0, 30), Vector3(8, 0, 22), Vector3(-7, 0, 10), Vector3(7, 0, -8),
-		Vector3(-8, 0, -23), Vector3(7, 0, -34), Vector3(-24, 0, 35), Vector3(26, 0, 34),
-		Vector3(-28, 0, 4), Vector3(31, 0, -4), Vector3(-27, 0, -32), Vector3(29, 0, -31),
+		Vector3(-14, 0, 130), Vector3(14, 0, 92), Vector3(-14, 0, 54), Vector3(14, 0, 16),
+		Vector3(-14, 0, -20), Vector3(14, 0, -58), Vector3(-14, 0, -96), Vector3(14, 0, -130),
+		Vector3(-81, 0, 54), Vector3(81, 0, 18), Vector3(-81, 0, -56), Vector3(81, 0, -130),
+		Vector3(-116, 0, 122), Vector3(116, 0, 84), Vector3(-116, 0, -84), Vector3(116, 0, -152),
 	]
 	for index in range(positions.size()):
 		var cover := DestructibleCover.new()
@@ -234,27 +277,149 @@ func _build_cover() -> void:
 
 
 func _build_details() -> void:
-	for z in range(-55, 58, 12):
+	for z in [-132, -60, 12, 84, 156]:
 		for side in [-1.0, 1.0]:
 			var center := Vector3(side * 15.2, 0, float(z))
 			_street_lamp(center, side)
-	for z in [-27.0, 12.0, 43.0]:
+	for z in [-120.0, 24.0, 120.0]:
 		for side in [-1.0, 1.0]:
-			_utility_station(Vector3(side * 22.0, 0, z))
+			_utility_station(Vector3(side * 78.0, 0, z))
 	var container_paints: Array[StandardMaterial3D] = [
 		_weathered_steel(Color("7b4b39")),
 		_weathered_steel(Color("49616b")),
 		_weathered_steel(Color("626952")),
 	]
 	# Keep complete containers in the loading aprons instead of intersecting warehouses.
-	var container_rows := [-59.0, -51.0, -23.0, -15.0, 15.0, 23.0, 48.0, 54.0, 60.0]
-	for index in range(18):
+	var container_rows := [-128.0, -88.0, -56.0, -16.0, 16.0, 56.0, 88.0, 128.0]
+	for index in range(16):
 		var side := -1.0 if index % 2 == 0 else 1.0
-		var container := ArtFactory.add_box(self, "Container_%02d" % index, Vector3(side * 27.5, 1.3, container_rows[index >> 1]), Vector3(5.8, 2.6, 2.45), container_paints[index % 3], true)
-		container.rotation.y = (PI if side > 0.0 else 0.0) + 0.025 * float((index % 5) - 2)
-		_details.placement = container.transform
-		_container_fittings(container_paints[index % 3])
+		_add_container(Vector3(side * 60, 1.3, container_rows[index >> 1]), container_paints[index % 3], index)
+	if mission_index == 1:
+		for row in range(4):
+			for column in range(4):
+				var z := -108.0 + row * 72.0
+				var x := 29.0 + column * 13.0
+				for dz in [-7.0, 7.0]:
+					_add_container(Vector3(x, 1.3, z + dz), container_paints[(row + column) % 3], 16 + row * 8 + column * 2 + int(dz > 0))
+				if column % 2 == row % 2:
+					_add_container(Vector3(x, 3.9, z - 7), container_paints[(row + column + 1) % 3], 48 + row * 4 + column)
 	_details.placement = Transform3D.IDENTITY
+
+
+func _fortification_fittings(size: Vector3) -> void:
+	var top := size.y * 0.5
+	# Thick blast parapets, roof access and shielded window apertures distinguish the forts.
+	for side in [-1.0, 1.0]:
+		_details.box(Vector3(0, top + 0.63, side * (size.z * 0.5 - 0.2)), Vector3(size.x + 0.6, 1.0, 0.75), _concrete)
+		_details.box(Vector3(side * (size.x * 0.5 - 0.2), top + 0.63, 0), Vector3(0.75, 1.0, size.z + 0.6), _concrete)
+		for x in [-size.x * 0.32, 0.0, size.x * 0.32]:
+			_details.box(Vector3(x, top - 1.9, side * (size.z * 0.5 + 0.24)), Vector3(3.8, 0.16, 0.65), _dark_metal)
+			_details.box(Vector3(x, top - 2.65, side * (size.z * 0.5 + 0.18)), Vector3(3.8, 0.5, 0.45), _concrete)
+		for z in [-size.z * 0.3, size.z * 0.3]:
+			_details.box(Vector3(side * (size.x * 0.5 + 0.3), -0.6, z), Vector3(0.6, size.y - 1.5, 1.1), _concrete)
+	_details.box(Vector3(size.x * 0.32, top + 0.25, size.z * 0.25), Vector3(2.4, 0.35, 2.4), _dark_metal)
+	_details.cylinder(Vector3(size.x * 0.32, top + 0.48, size.z * 0.25), 0.55, 0.12, _metal)
+
+
+func _add_container(at: Vector3, paint: Material, index: int) -> void:
+	var container := ArtFactory.add_box(self, "Container_%02d" % index, at, Vector3(5.8, 2.6, 2.45), paint, true)
+	container.rotation.y = PI if index % 2 == 0 else 0.0
+	_details.placement = container.transform
+	_container_fittings(paint)
+	_details.placement = Transform3D.IDENTITY
+
+
+func _build_landmarks() -> void:
+	match mission_index:
+		1:
+			# The quay and water are beyond the perimeter: every playable road stays solid.
+			var water := ArtFactory.material(Color("264753"), 0.3, 0.18)
+			ArtFactory.add_box(self, "HarborWater", Vector3(208, -0.22, 0), Vector3(124, 0.1, 420), water)
+			for z in [-108.0, 36.0, 108.0]:
+				_port_crane(Vector3(124, 0, z))
+			for z in range(-174, 175, 24):
+				_details.cylinder(Vector3(140, 0.75, float(z)), 0.7, 1.5, _dark_metal)
+				_details.cylinder(Vector3(140, 1.5, float(z)), 0.95, 0.25, _metal)
+		2:
+			for side in [-1.0, 1.0]:
+				for z in [-108.0, 36.0, 108.0]:
+					_watch_tower(Vector3(side * 125, 0, z))
+				for z in [-36.0, 108.0]:
+					# Cast revetments around the outer forts have gaps aligned to cross streets.
+					ArtFactory.add_box(self, "FortRevetment", Vector3(side * 126, 2, z + 23), Vector3(20, 4, 2.4), _concrete, true)
+			_radar_mast(Vector3(58, 14.2, -174))
+		_:
+			for z in [-108.0, 36.0]:
+				for x in [-125.0, 125.0]:
+					_storage_tank(Vector3(x, 0, z))
+			_radar_mast(Vector3(-58, 14.2, -174))
+	_details.placement = Transform3D.IDENTITY
+
+
+func _port_crane(center: Vector3) -> void:
+	for dx in [-7.0, 7.0]:
+		for dz in [-8.0, 8.0]:
+			ArtFactory.add_box(self, "CraneFoot", center + Vector3(dx, 1.0, dz), Vector3(2.3, 2, 3), _concrete, true)
+			ArtFactory.add_box(self, "CraneLeg", center + Vector3(dx, 10.0, dz), Vector3(0.9, 18, 0.9), _paint, true)
+		_details.box(center + Vector3(dx, 19.4, 0), Vector3(1.2, 1.8, 20), _paint)
+	for z in [-8.0, 8.0]:
+		_details.box(center + Vector3(5, 20.2, z), Vector3(31, 1.2, 1.1), _paint)
+		_details.pipe(center + Vector3(-7, 19, z), center + Vector3(7, 11, z), 0.16, _metal)
+	_details.box(center + Vector3(-5.0, 17, 0), Vector3(3.5, 3, 3), _dark_metal)
+	_details.box(center + Vector3(-6.81, 17.3, 0), Vector3(0.08, 1.4, 2.65), _glass)
+	for z in [-3.0, 3.0]:
+		_details.pipe(center + Vector3(0, 20, z), center + Vector3(0, 8, z), 0.055, _dark_metal)
+	_details.box(center + Vector3(0, 8, 0), Vector3(3, 0.5, 7), _paint)
+
+
+func _watch_tower(center: Vector3) -> void:
+	for dx in [-3.0, 3.0]:
+		for dz in [-3.0, 3.0]:
+			ArtFactory.add_box(self, "TowerLeg", center + Vector3(dx, 5.0, dz), Vector3(0.7, 10, 0.7), _metal, true)
+		_details.pipe(center + Vector3(dx, 1.5, -3), center + Vector3(dx, 8.5, 3), 0.14, _dark_metal)
+	_details.box(center + Vector3(0, 10, 0), Vector3(8, 0.4, 8), _concrete)
+	_details.box(center + Vector3(0, 11.2, 0), Vector3(5.4, 2.2, 5.4), _dark_metal)
+	for side in [-1.0, 1.0]:
+		_details.box(center + Vector3(0, 11.5, side * 2.75), Vector3(4.7, 0.95, 0.09), _glass)
+		_details.box(center + Vector3(side * 2.75, 11.5, 0), Vector3(0.09, 0.95, 4.7), _glass)
+	_details.box(center + Vector3(0, 12.5, 0), Vector3(6.2, 0.28, 6.2), _metal)
+	_details.pipe(center + Vector3(0, 12.6, 0), center + Vector3(0, 18, 0), 0.07, _dark_metal)
+	_details.cylinder(center + Vector3(0, 18.1, 0), 0.14, 0.16, _lamp_lens)
+
+
+func _storage_tank(center: Vector3) -> void:
+	var body := StaticBody3D.new()
+	body.name = "StorageTankCollision"
+	body.position = center + Vector3(0, 5, 0)
+	body.collision_layer = 1
+	body.collision_mask = 0
+	var shape := CollisionShape3D.new()
+	var cylinder := CylinderShape3D.new()
+	cylinder.radius = 6.8
+	cylinder.height = 10.0
+	shape.shape = cylinder
+	body.add_child(shape)
+	add_child(body)
+	_details.cylinder(center + Vector3(0, 0.22, 0), 7.2, 0.44, _concrete)
+	_details.cylinder(center + Vector3(0, 5.1, 0), 6.7, 9.8, _metal)
+	_details.dome(center + Vector3(0, 10, 0), Vector3(6.7, 1.2, 6.7), _metal)
+	for y in [0.5, 3.2, 6.1, 9.5]:
+		_details.cylinder(center + Vector3(0, y, 0), 6.79, 0.11, _dark_metal)
+	for y in range(1, 11):
+		_details.box(center + Vector3(-6.8, float(y), 0), Vector3(0.25, 0.09, 0.9), _dark_metal)
+	for z in [-0.47, 0.47]:
+		_details.pipe(center + Vector3(-6.8, 0.3, z), center + Vector3(-6.8, 10.6, z), 0.055, _dark_metal)
+
+
+func _radar_mast(center: Vector3) -> void:
+	_details.cylinder(center + Vector3(0, 5, 0), 0.26, 10, _dark_metal)
+	for side in [-1.0, 1.0]:
+		_details.pipe(center + Vector3(side * 4, 0, 0), center + Vector3(0, 8, 0), 0.065, _metal)
+		_details.pipe(center + Vector3(0, 0, side * 4), center + Vector3(0, 8, 0), 0.065, _metal)
+	_details.box(center + Vector3(0, 9.5, 0), Vector3(7, 2.2, 0.4), _metal, Vector3(0, 0.28, 0))
+	for x in range(-3, 4):
+		_details.box(center + Vector3(float(x), 9.5, -0.32), Vector3(0.11, 2.4, 0.17), _dark_metal)
+	_details.cylinder(center + Vector3(0, 10.85, 0), 0.13, 0.2, _lamp_lens)
 
 
 func _street_lamp(center: Vector3, side: float) -> void:
@@ -344,3 +509,7 @@ func set_boss_gate_open(open: bool) -> void:
 		for child in bar.get_children():
 			if child is StaticBody3D:
 				(child as StaticBody3D).collision_layer = 0 if open else 1
+
+
+func get_radar_bounds() -> Rect2:
+	return Catalog.ARENA_BOUNDS

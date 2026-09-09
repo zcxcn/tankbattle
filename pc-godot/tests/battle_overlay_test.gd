@@ -5,6 +5,7 @@ var passed := 0
 var failed := 0
 var menu_events := 0
 var start_events := 0
+var next_events := 0
 
 func _initialize() -> void:
 	call_deferred("_run")
@@ -30,13 +31,13 @@ func _run() -> void:
 	await process_frame
 	var data: Dictionary = telemetry.collect(game)
 	check(data["tactical_visible"], "live combat enables tactical telemetry")
-	check(data["radar_contacts"].size() == 7, "radar includes six opponents and the locked boss, excluding the player")
+	check(data["radar_contacts"].size() < 7, "radar only includes nearby enemies with clear line of sight")
 	var locked_boss := false
 	for contact: Dictionary in data["radar_contacts"]:
 		locked_boss = locked_boss or (contact["boss"] and not contact["active"])
-	check(locked_boss, "locked boss stays discoverable before activation")
-	game.spawn_mine(game.player, Vector3(2, 0, 46))
-	game.spawn_mine(game.enemies[0], Vector3(-2, 0, 46))
+	check(not locked_boss, "inactive boss is not presented as a live detected contact")
+	game.spawn_mine(game.player, game.player.position + Vector3(2, 0, -5))
+	game.spawn_mine(game.enemies[0], game.player.position + Vector3(-2, 0, -5))
 	data = telemetry.collect(game)
 	var friendly := 0
 	for mine: Dictionary in data["radar_mines"]:
@@ -52,7 +53,7 @@ func _run() -> void:
 		"requested aim marker follows the world target under perspective")
 	var wall := StaticBody3D.new()
 	wall.collision_layer = 1
-	wall.position = Vector3(0, 2, 38)
+	wall.position = game.player.position + Vector3(0, 2, -10)
 	var shape := CollisionShape3D.new()
 	var box := BoxShape3D.new()
 	box.size = Vector3(5, 4, 0.5)
@@ -93,8 +94,13 @@ func _run() -> void:
 	ui.update_snapshot(game.get_ui_snapshot())
 	ui.menu_requested.connect(func(): menu_events += 1)
 	ui.start_requested.connect(func(): start_events += 1)
+	ui.next_requested.disconnect(game.next_mission)
+	ui.next_requested.connect(func(): next_events += 1)
 	ui._result_primary_action()
-	check(menu_events == 1 and start_events == 0, "victory primary action returns to menu instead of silently replaying the only chapter")
+	check(next_events == 1 and menu_events == 0 and start_events == 0, "chapter victory primary action requests the next mission")
+	ui.update_snapshot({"mode": "won", "has_next_mission": false})
+	ui._result_primary_action()
+	check(menu_events == 1 and start_events == 0, "final campaign victory primary action returns to command")
 	game.free()
 	await process_frame
 	print("BATTLE_OVERLAY_RESULT: %d passed, %d failed" % [passed, failed])

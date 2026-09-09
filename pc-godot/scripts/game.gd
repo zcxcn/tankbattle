@@ -1,12 +1,24 @@
 extends Node3D
-## Chapter 01 vertical slice and top-level game flow.
+## Three-mission campaign, patrol encounters and native PC game flow.
 
 const TankScript = preload("res://actors/tank.gd")
 const ProjectileScript = preload("res://actors/projectile.gd")
 const MineScript = preload("res://actors/mine.gd")
 const ExplosionScript = preload("res://actors/explosion_fx.gd")
+const MissionCatalog = preload("res://data/mission_catalog.gd")
+const VehicleCatalog = preload("res://data/vehicle_catalog.gd")
+const MissionTarget = preload("res://actors/mission_target.gd")
 const ArenaScript = preload("res://scenes/missions/industrial_arena.gd")
 
+var mission_index := 0
+var selected_mission := 0
+var selected_chassis := 1
+var mission_data: Dictionary = {}
+var objective_complete := false
+var objective_progress := 0.0
+var mission_target: StaticBody3D
+var _objective_marker: Node3D
+var _supply_points: Array[Dictionary] = []
 var mode := "title"
 var player: TankActor
 var boss: TankActor
@@ -34,13 +46,16 @@ const ENCOUNTER_INTERVAL := 5.0
 
 
 func _ready() -> void:
+	selected_chassis = clampi(int(SaveService.profile.get("selected_chassis", 1)), 0, 2)
+	selected_mission = unlocked_mission_count() - 1
 	_setup_inputs()
+	mission_data = MissionCatalog.get_mission(selected_mission)
 	_create_ui()
 	_show_title_tank()
 	get_window().focus_exited.connect(_on_focus_lost)
 	Input.joy_connection_changed.connect(_on_joy_connection_changed)
 	_smoke_test = "--smoke-test" in OS.get_cmdline_user_args()
-	print("IRON_EMBERS_PC_READY | Godot native | Chapter 01 | mines + EMP + boss")
+	print("IRON_EMBERS_PC_READY | Godot native | Campaign 0.3 | patrols + loadouts + chase camera")
 	if _smoke_test:
 		call_deferred("start_game")
 
@@ -51,6 +66,7 @@ func _build_arena() -> void:
 	arena = ArenaScript.new()
 	arena.name = "GrayIgnitionArena"
 	arena.game = self
+	arena.mission_index = mission_index
 	add_child(arena)
 
 
@@ -65,6 +81,9 @@ func _create_ui() -> void:
 	_connect_ui_signal("menu_requested", return_to_menu)
 	_connect_ui_signal("settings_requested", open_settings)
 	_connect_ui_signal("quit_requested", quit_game)
+	_connect_ui_signal("next_requested", next_mission)
+	_connect_ui_signal("mission_requested", cycle_mission)
+	_connect_ui_signal("chassis_requested", cycle_chassis)
 	if ui.has_signal("setting_requested"):
 		ui.connect("setting_requested", _on_setting_requested)
 
@@ -76,12 +95,13 @@ func _connect_ui_signal(signal_name: StringName, target: Callable) -> void:
 
 func _show_title_tank() -> void:
 	_clear_combat_nodes()
+	mission_index = selected_mission
 	_build_arena()
-	player = _spawn_tank("CommandTank", Vector3(7.0, 0.05, 44.5), TankActor.TEAM_PLAYER, true, false, "line")
+	player = _spawn_tank("CommandTank", Vector3(7.0, 0.05, 44.5), TankActor.TEAM_PLAYER, true, false, ["scout", "line", "heavy"][selected_chassis])
 	player.rotation.y = PI - 0.05
 	player.active = false
 	_build_title_shot()
-	objective = "灰中点火 / CHAPTER 01"
+	objective = "第 %02d 章 · %s" % [selected_mission + 1, MissionCatalog.get_mission(selected_mission).name]
 	mode = "title"
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
@@ -125,11 +145,16 @@ func _build_title_shot() -> void:
 func start_game() -> void:
 	_settle_abandoned_run()
 	_clear_combat_nodes()
+	mission_index = clampi(selected_mission, 0, MissionCatalog.count() - 1)
+	mission_data = MissionCatalog.get_mission(mission_index)
 	_build_arena()
 	mission_kills = 0
 	total_run_kills = 0
+	target_kills = mission_data.enemy_layout.size()
 	score = 0
 	play_time = 0.0
+	objective_complete = false
+	objective_progress = 0.0
 	_active_encounter = 0
 	_encounter_pause = 0.0
 	_encounter_cleared = false
@@ -137,24 +162,24 @@ func start_game() -> void:
 	_settings_return_mode = "paused"
 	current_run_id = "%d-%d" % [Time.get_unix_time_from_system(), randi()]
 	SaveService.begin_run(current_run_id)
-	player = _spawn_tank("PlayerTank", Vector3(0, 0.05, 51), TankActor.TEAM_PLAYER, true, false, "line")
-	var layout := [
-		[Vector3(-4, 0.05, 19), "scout"], [Vector3(4, 0.05, 13), "line"],
-		[Vector3(-4, 0.05, 1), "heavy"], [Vector3(4, 0.05, -15), "scout"],
-		[Vector3(-4, 0.05, -29), "sniper"], [Vector3(4, 0.05, -39), "heavy"],
-	]
-	for index in range(layout.size()):
-		var data: Array = layout[index]
-		var enemy := _spawn_tank("Enemy_%02d" % index, data[0], TankActor.TEAM_ENEMY, false, false, data[1])
+	player = _spawn_tank("PlayerTank", mission_data.player_start, TankActor.TEAM_PLAYER, true, false, ["scout", "line", "heavy"][selected_chassis])
+	for index in range(mission_data.enemy_layout.size()):
+		var data: Dictionary = mission_data.enemy_layout[index]
+		var enemy := _spawn_tank("Enemy_%02d" % index, data.position, TankActor.TEAM_ENEMY, false, false, data.kind)
+		enemy.patrol_route.assign(data.get("patrol", []))
 		enemy.set_meta("encounter_index", index >> 1)
 		enemies.append(enemy)
-	boss = _spawn_tank("Boss_IronFang", Vector3(0, 0.05, -54), TankActor.TEAM_ENEMY, false, true, "boss")
+	boss = _spawn_tank("Boss_IronFang", mission_data.boss_position, TankActor.TEAM_ENEMY, false, true, "boss")
+	boss.display_name = mission_data.boss_name
+	boss.max_hp *= 1.0 + mission_index * 0.12
+	boss.hp = boss.max_hp
 	boss.boss_phase_changed.connect(_on_boss_phase_changed)
 	enemies.append(boss)
 	arena.set_boss_gate_open(false)
+	_create_mission_props()
 	mode = "playing"
 	_update_encounter_objective()
-	notify("第一章 · 灰中点火\n敌军分组推进 · 停稳瞄准，装填时退回掩体", 5.0)
+	notify("第 %02d 章 · %s\n%s" % [mission_index + 1, mission_data.name, mission_data.briefing], 6.0)
 	Input.mouse_mode = Input.MOUSE_MODE_HIDDEN
 	if _smoke_test:
 		get_tree().create_timer(1.5).timeout.connect(_finish_smoke_test)
@@ -204,7 +229,7 @@ func _close_settings() -> void:
 
 func _settle_abandoned_run() -> void:
 	if not current_run_id.is_empty():
-		SaveService.settle_run(current_run_id, false, score, 0)
+		SaveService.settle_run(current_run_id, false, score, mission_index)
 
 
 func quit_game() -> void:
@@ -219,7 +244,9 @@ func is_combat_running() -> bool:
 
 
 func _process(delta: float) -> void:
-	var mouse_mode := Input.MOUSE_MODE_HIDDEN if mode == "playing" else Input.MOUSE_MODE_VISIBLE
+	var mouse_mode := Input.MOUSE_MODE_VISIBLE
+	if mode == "playing":
+		mouse_mode = Input.MOUSE_MODE_CAPTURED if is_instance_valid(player) and player.is_third_person() else Input.MOUSE_MODE_HIDDEN
 	if Input.mouse_mode != mouse_mode:
 		Input.mouse_mode = mouse_mode
 	notice_time = maxf(0.0, notice_time - delta)
@@ -252,18 +279,28 @@ func _unhandled_input(event: InputEvent) -> void:
 func _update_mouse_aim() -> void:
 	if not is_instance_valid(player) or player.destroyed or not is_instance_valid(player.camera):
 		return
-	if player.is_controller_aiming():
+	if player.is_controller_aiming() and not player.is_third_person():
 		return
-	var mouse := get_viewport().get_mouse_position()
+	var mouse := get_viewport().get_visible_rect().size * 0.5 if player.is_third_person() else get_viewport().get_mouse_position()
 	var origin := player.camera.project_ray_origin(mouse)
 	var ray := player.camera.project_ray_normal(mouse)
+	var muzzle := player.get_node_or_null("ArmoredModel/TurretPivot/GunRecoil/Muzzle") as Node3D
+	var aim_height := muzzle.global_position.y if muzzle != null else player.global_position.y + 1.0
 	var query := PhysicsRayQueryParameters3D.create(origin, origin + ray * player.camera.far, 1 | 4, [player.get_rid()])
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
 	if not hit.is_empty():
-		player.aim_point = hit.position
+		if hit.get("collider") is TankActor:
+			var target: TankActor = hit.collider
+			player.aim_point = target._turret.global_position + Vector3.UP * 0.1
+		elif not player.is_third_person() and float(hit.position.y) < 0.5 and player.get_weapon_snapshot().id != "he":
+			var level_target: Variant = Plane(Vector3.UP, aim_height).intersects_ray(origin, ray)
+			player.aim_point = level_target if level_target is Vector3 else hit.position
+		else:
+			player.aim_point = hit.position
 		return
-	var muzzle := player.get_node_or_null("ArmoredModel/TurretPivot/GunRecoil/Muzzle") as Node3D
-	var aim_height := muzzle.global_position.y if muzzle != null else player.global_position.y + 1.0
+	if player.is_third_person():
+		player.aim_point = origin + ray * 160.0
+		return
 	var intersection: Variant = Plane(Vector3.UP, aim_height).intersects_ray(origin, ray)
 	if intersection is Vector3:
 		player.aim_point = intersection
@@ -353,25 +390,12 @@ func spawn_explosion(at: Vector3, scale_factor := 1.0) -> void:
 		player.add_camera_shake(shake)
 
 
-func spawn_impact(at: Vector3, heavy: bool) -> void:
-	var effect := ExplosionScript.create(at, 0.42 if heavy else 0.2, false)
-	add_child(effect)
+func spawn_impact(at: Vector3, heavy: bool, surface_kind := "ground", normal := Vector3.UP, weapon_kind := "cannon") -> void:
+	add_child(ExplosionScript.create_impact(at, heavy, surface_kind, normal, weapon_kind))
 
 
-func spawn_muzzle_flash(at: Vector3, color: Color, scale_factor: float) -> void:
-	var light := OmniLight3D.new()
-	light.add_to_group("combat_effects")
-	light.position = at
-	light.light_color = color
-	light.light_energy = 7.0 * scale_factor
-	light.omni_range = 8.0 * scale_factor
-	light.shadow_enabled = false
-	add_child(light)
-	var flash := ArtFactory.add_sphere(light, "MuzzleFlash", Vector3.ZERO, 0.28 * scale_factor, ArtFactory.material(color, 0.0, 0.2, 8.0), 10)
-	var tween := light.create_tween()
-	tween.tween_property(light, "light_energy", 0.0, 0.12)
-	tween.parallel().tween_property(flash, "scale", Vector3.ONE * 3.0, 0.12)
-	tween.tween_callback(light.queue_free)
+func spawn_muzzle_flash(at: Vector3, _color: Color, scale_factor: float, forward := Vector3.FORWARD, weapon_kind := "cannon") -> void:
+	add_child(ExplosionScript.create_muzzle(at, forward, scale_factor, weapon_kind))
 
 
 func spawn_emp_visual(at: Vector3, scale_factor := 1.0) -> void:
@@ -414,7 +438,7 @@ func _on_tank_destroyed(tank: TankActor, attacker_team: int) -> void:
 		mode = "lost"
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		objective = "主战坦克失去战斗能力"
-		SaveService.settle_run(current_run_id, false, score, 0)
+		SaveService.settle_run(current_run_id, false, score, mission_index)
 		AudioService.play_ui("defeat", -3.0)
 		return
 	if attacker_team == TankActor.TEAM_PLAYER:
@@ -424,17 +448,18 @@ func _on_tank_destroyed(tank: TankActor, attacker_team: int) -> void:
 	if tank.is_boss:
 		mode = "won"
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-		objective = "铁牙已摧毁 · 灰中点火行动完成"
+		objective = "%s已摧毁 · %s行动完成" % [mission_data.get("boss_name", "指挥车"), mission_data.get("name", "当前")]
 		score += 2500
-		SaveService.settle_run(current_run_id, true, score, 0)
+		SaveService.settle_run(current_run_id, true, score, mission_index)
 		AudioService.play_ui("victory", -2.0)
-		notify("行动成功 · 围城指挥车已摧毁", 5.0)
+		notify("行动成功 · 下一关已解锁" if mission_index < MissionCatalog.count() - 1 else "战役完成 · 尘湾防线已肃清", 5.0)
 		return
 	if not tank.counts_for_objective:
 		return
 	mission_kills += 1
 	_update_encounter_objective()
-	if mission_kills >= target_kills and is_instance_valid(boss) and not boss.active:
+	if mission_data.get("objective_type", "clear") == "clear" and mission_kills >= target_kills and is_instance_valid(boss) and not boss.active:
+		objective_complete = true
 		_activate_boss()
 
 
@@ -446,9 +471,15 @@ func _activate_boss() -> void:
 	if is_instance_valid(player) and not player.destroyed:
 		player.hp = maxf(player.hp, player.max_hp * 0.75)
 		player.emp_cooldown = 0.0
+		player.resupply()
 	boss.activate_boss()
-	objective = "最终目标 · 摧毁“铁牙”围城指挥车"
-	notify("前线补给：装甲恢复至至少 75%，EMP 就绪\n铁牙出动 · 离开红色射线，或靠近后用 EMP 打断", 5.0)
+	if is_instance_valid(_objective_marker):
+		_objective_marker.global_position = mission_data.boss_position
+		for child: Node in _objective_marker.get_children():
+			if child is Label3D:
+				child.text = "首领阵地 · " + boss.display_name
+	objective = "最终目标 · 摧毁%s" % boss.display_name
+	notify("前线补给：装甲恢复至至少 75%，EMP 就绪\n首领出动 · 离开红色射线，或靠近后用 EMP 打断", 5.0)
 
 
 func _on_boss_phase_changed(phase: int) -> void:
@@ -459,7 +490,7 @@ func _on_boss_phase_changed(phase: int) -> void:
 			notify("铁牙装甲阶段 %d / 3 · 注意火箭预警" % phase, 3.0)
 			return
 	notify("铁牙装甲阶段 %d / 3 · 一辆护卫进入战场" % phase, 3.0)
-	var offset := Vector3(-10 if phase == 2 else 10, 0.05, -48 + phase * 2.0)
+	var offset := boss.global_position + Vector3(-12 if phase == 2 else 12, 0.05, 14.0)
 	var guard := _spawn_tank("BossGuard_%d" % phase, offset, TankActor.TEAM_ENEMY, false, false, "scout" if phase == 2 else "line")
 	guard.counts_for_objective = false
 	guard.reload = guard.fire_interval
@@ -467,45 +498,53 @@ func _on_boss_phase_changed(phase: int) -> void:
 
 
 func can_enemy_engage(tank: TankActor) -> bool:
-	return tank.is_boss or not tank.has_meta("encounter_index") or tank.get_meta("alerted", false) or int(tank.get_meta("encounter_index")) <= _active_encounter
+	return tank.active and not tank.destroyed
 
 
 func alert_enemy(tank: TankActor) -> void:
-	# Reserves can be attacked and will defend themselves. No invisible armor
-	# or damage immunity is used to enforce encounter order.
-	if not can_enemy_engage(tank):
-		tank.set_meta("alerted", true)
+	tank.set_meta("alerted", true)
 
 
 func _update_encounter_objective() -> void:
-	objective = "工业街区 · 第 %d / 3 组 · 击毁 %d / %d" % [mini(_active_encounter + 1, 3), mini(mission_kills, target_kills), target_kills]
+	if is_instance_valid(boss) and boss.active:
+		objective = "%s · 摧毁%s" % [mission_data.get("name", "最终目标"), boss.display_name]
+		return
+	var prefix := "%02d · %s" % [mission_index + 1, mission_data.get("name", "灰中点火")]
+	match str(mission_data.get("objective_type", "clear")):
+		"capture":
+			objective = "%s · 占领通信站 %d%%" % [prefix, roundi(objective_progress / maxf(1.0, float(mission_data.get("objective_seconds", 12.0))) * 100.0)]
+		"demolition":
+			objective = "%s · 炮击敌军燃料库" % prefix
+		_:
+			objective = "%s · 肃清巡逻部队 %d/%d" % [prefix, mini(mission_kills, target_kills), target_kills]
 
 
 func _update_encounters(delta: float) -> void:
+	if not is_instance_valid(player) or player.destroyed:
+		return
+	_update_supplies()
 	if not is_instance_valid(boss) or boss.active:
 		return
-	if _encounter_pause > 0.0:
-		_encounter_pause = maxf(0.0, _encounter_pause - delta)
-		objective = "街区已肃清 · %d 秒后下一组接敌" % ceili(_encounter_pause)
-		if _encounter_pause <= 0.0:
-			_active_encounter += 1
-			_encounter_cleared = false
-			_update_encounter_objective()
-			notify("第 %d / 3 组敌军开始推进 · 利用掩体逐辆击破" % (_active_encounter + 1), 3.0)
-		return
-	if _encounter_cleared:
-		return
-	for enemy in enemies:
-		if is_instance_valid(enemy) and not enemy.destroyed and enemy.counts_for_objective and int(enemy.get_meta("encounter_index", -1)) <= _active_encounter:
-			return
-	_encounter_cleared = true
-	if is_instance_valid(player) and not player.destroyed:
-		var repaired := minf(42.0, player.max_hp - player.hp)
-		player.hp = minf(player.max_hp, player.hp + 42.0)
-		player.mine_ammo = mini(6, player.mine_ammo + 1)
-		notify("小队已肃清 · 前线整备\n装甲 +%d · 补充地雷 · 5 秒后下一组推进" % roundi(repaired), 4.5)
-	if _active_encounter < 2:
-		_encounter_pause = ENCOUNTER_INTERVAL
+	var kind := str(mission_data.get("objective_type", "clear"))
+	if kind == "capture":
+		var at: Vector3 = mission_data.objective_position
+		var nearby := Vector2(player.position.x - at.x, player.position.z - at.z).length() <= float(mission_data.get("objective_radius", 10.0))
+		var contested := false
+		for enemy in enemies:
+			if is_instance_valid(enemy) and not enemy.destroyed and enemy.active and enemy.global_position.distance_to(at) < 22.0:
+				contested = true
+		if nearby and not contested:
+			objective_progress = minf(float(mission_data.get("objective_seconds", 12.0)), objective_progress + delta)
+		objective_complete = objective_progress >= float(mission_data.get("objective_seconds", 12.0))
+		_update_encounter_objective()
+		if nearby and contested:
+			objective += " · 清除争夺敌军"
+	elif kind == "demolition":
+		objective_complete = is_instance_valid(mission_target) and mission_target.destroyed
+	else:
+		objective_complete = mission_kills >= target_kills
+	if objective_complete:
+		_activate_boss()
 
 
 func notify(text: String, duration := 2.0) -> void:
@@ -544,7 +583,7 @@ func get_ui_snapshot() -> Dictionary:
 		"mine_cooldown": player.mine_cooldown if player_valid else 0.0,
 		"emp_cooldown": player.emp_cooldown if player_valid else 0.0,
 		"dash_cooldown": player.dash_cooldown if player_valid else 0.0,
-		"weapon": "120mm 滑膛炮",
+		"weapon": str(player.get_weapon_snapshot().get("name", "120mm 滑膛炮")) if player_valid else "120mm 滑膛炮",
 		"reload": player.reload if player_valid else 0.0,
 		"boss_name": boss.display_name if boss_valid else "",
 		"boss_hp": boss.hp if boss_valid else 0.0,
@@ -565,6 +604,30 @@ func get_ui_snapshot() -> Dictionary:
 		"effects_volume": SettingsService.effects_volume,
 		"pause_reason": pause_reason,
 	}
+	snapshot["mission_index"] = mission_index
+	snapshot["selected_mission"] = selected_mission
+	snapshot["mission_name"] = MissionCatalog.get_mission(selected_mission).name
+	snapshot["mission_briefing"] = MissionCatalog.get_mission(selected_mission).briefing
+	snapshot["mission_count"] = MissionCatalog.count()
+	snapshot["mission_type"] = mission_data.get("objective_type", "clear")
+	snapshot["objective_fraction"] = objective_progress / maxf(1.0, float(mission_data.get("objective_seconds", 12.0)))
+	if snapshot["mission_type"] == "demolition" and is_instance_valid(mission_target):
+		snapshot["objective_fraction"] = 1.0 - mission_target.hp / 320.0
+	snapshot["unlocked_missions"] = unlocked_mission_count()
+	snapshot["has_next_mission"] = mode == "won" and mission_index < MissionCatalog.count() - 1
+	snapshot["selected_chassis"] = selected_chassis
+	snapshot["vehicle"] = VehicleCatalog.player_options()[selected_chassis].name
+	snapshot["vehicle_description"] = VehicleCatalog.player_options()[selected_chassis].description
+	snapshot["camera_mode"] = "第三人称" if player_valid and player.is_third_person() else "俯视"
+	snapshot["weapon_state"] = player.get_weapon_snapshot() if player_valid else {}
+	snapshot["world_bounds"] = Rect2(-144, -192, 288, 384)
+	var destination: Vector3 = boss.global_position if boss_valid else mission_data.get("objective_position", Vector3.ZERO)
+	snapshot["objective_world"] = Vector2(destination.x, destination.z)
+	snapshot["objective_distance"] = player.global_position.distance_to(destination) if player_valid else 0.0
+	snapshot["supply_positions"] = []
+	for supply: Dictionary in _supply_points:
+		if not supply.used:
+			snapshot["supply_positions"].append(Vector2(supply.position.x, supply.position.z))
 	snapshot.merge(preload("res://scripts/battle_telemetry.gd").collect(self))
 	return snapshot
 
@@ -607,6 +670,11 @@ func _clear_combat_nodes() -> void:
 		for node: Node in get_tree().get_nodes_in_group(group):
 			if is_instance_valid(node):
 				node.free()
+	if is_instance_valid(mission_target):
+		mission_target.free()
+	mission_target = null
+	_objective_marker = null
+	_supply_points.clear()
 	enemies.clear()
 	_cleanup.clear()
 	notice = ""
@@ -620,6 +688,7 @@ func _setup_inputs() -> void:
 		"move_forward": [KEY_W, KEY_UP], "move_back": [KEY_S, KEY_DOWN],
 		"move_left": [KEY_A, KEY_LEFT], "move_right": [KEY_D, KEY_RIGHT],
 		"fire": [], "dash": [KEY_SPACE], "emp": [KEY_E], "place_mine": [KEY_M],
+		"weapon_1": [KEY_1], "weapon_2": [KEY_2], "weapon_3": [KEY_3], "weapon_4": [KEY_4], "weapon_next": [KEY_R],
 		"camera": [KEY_C], "pause": [KEY_ESCAPE], "confirm": [KEY_ENTER],
 		"menu_up": [KEY_UP, KEY_W], "menu_down": [KEY_DOWN, KEY_S],
 	}
@@ -640,6 +709,7 @@ func _setup_inputs() -> void:
 	_add_joy_button("emp", JOY_BUTTON_RIGHT_SHOULDER)
 	_add_joy_button("place_mine", JOY_BUTTON_RIGHT_STICK)
 	_add_joy_button("camera", JOY_BUTTON_Y)
+	_add_joy_button("weapon_next", JOY_BUTTON_X)
 	_add_joy_button("pause", JOY_BUTTON_START)
 	_add_joy_button("confirm", JOY_BUTTON_A)
 	_add_joy_axis("move_left", JOY_AXIS_LEFT_X, -1.0)
@@ -667,6 +737,78 @@ func _add_joy_axis(action: String, axis: JoyAxis, value: float) -> void:
 
 
 func _finish_smoke_test() -> void:
-	var okay := is_instance_valid(player) and enemies.size() == 7 and is_instance_valid(ui) and mode == "playing"
+	var okay := is_instance_valid(player) and enemies.size() == target_kills + 1 and is_instance_valid(ui) and mode == "playing"
 	print("IRON_EMBERS_SMOKE_PASS" if okay else "IRON_EMBERS_SMOKE_FAIL")
 	get_tree().quit(0 if okay else 1)
+
+func unlocked_mission_count() -> int:
+	var completed: Array = SaveService.profile.get("completed_missions", [])
+	var count := 1
+	while count < MissionCatalog.count() and count - 1 in completed:
+		count += 1
+	return count
+
+func cycle_mission() -> void:
+	if mode != "title":
+		return
+	selected_mission = (selected_mission + 1) % unlocked_mission_count()
+	mission_data = MissionCatalog.get_mission(selected_mission)
+	_show_title_tank()
+	AudioService.play_ui("click")
+
+func cycle_chassis() -> void:
+	if mode != "title":
+		return
+	selected_chassis = (selected_chassis + 1) % VehicleCatalog.player_options().size()
+	SaveService.profile["selected_chassis"] = selected_chassis
+	SaveService.save_now()
+	_show_title_tank()
+	AudioService.play_ui("click")
+
+func next_mission() -> void:
+	if mode != "won" or mission_index >= MissionCatalog.count() - 1:
+		return
+	selected_mission = mission_index + 1
+	start_game()
+
+func _create_mission_props() -> void:
+	var at: Vector3 = mission_data.get("objective_position", Vector3.ZERO)
+	_objective_marker = _make_beacon(at, Color("e9bf70"), "任务目标", float(mission_data.get("objective_radius", 9.0)))
+	if mission_data.get("objective_type") == "demolition":
+		mission_target = MissionTarget.new()
+		mission_target.game = self
+		mission_target.position = at
+		add_child(mission_target)
+	for point: Vector3 in mission_data.get("supply_positions", [Vector3(12, 0.05, 110), Vector3(-12, 0.05, -65)]):
+		var marker := _make_beacon(point, Color("73ddb1"), "整备点 · 驶入补给", 6.0)
+		_supply_points.append({"position": point, "node": marker, "used": false})
+
+func _make_beacon(at: Vector3, color: Color, text: String, radius: float) -> Node3D:
+	var marker := Node3D.new()
+	marker.add_to_group("combat_effects")
+	marker.position = at
+	add_child(marker)
+	var surface := ArtFactory.material(color, 0.0, 0.7, 0.65)
+	ArtFactory.add_torus(marker, "ZoneRing", Vector3.UP * 0.07, radius, 0.07, surface)
+	var label := Label3D.new()
+	label.text = text
+	label.position.y = 4.0
+	label.font_size = 40
+	label.pixel_size = 0.02
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.modulate = color
+	marker.add_child(label)
+	return marker
+
+func _update_supplies() -> void:
+	for supply: Dictionary in _supply_points:
+		if supply.used or player.global_position.distance_to(supply.position) > 6.0:
+			continue
+		# A supply point is consumed only when something can actually be restored.
+		if player.hp >= player.max_hp and player.mine_ammo >= 6 and not player.needs_resupply():
+			continue
+		supply.used = true
+		player.hp = minf(player.max_hp, player.hp + 85.0)
+		player.resupply()
+		supply.node.queue_free()
+		notify("整备补给 · 装甲 +85 · 弹药/地雷补满", 3.0)

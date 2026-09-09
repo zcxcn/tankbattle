@@ -118,6 +118,20 @@ if (-not $SkipTests) {
     Write-Host "Running tactical pacing, crew response and resupply regressions..."
     & $GodotPath --headless --path $projectRoot "res://tests/pacing_regression_test.tscn" -- --test
     Assert-LastExitCode -Action "Godot tactical pacing tests"
+
+    Write-Host "Running weapon, ballistics, navigation and campaign tests..."
+    & $GodotPath --headless --path $projectRoot --script "res://tests/field_combat_test.gd" -- --test
+    Assert-LastExitCode -Action "Godot field combat tests"
+    & $GodotPath --headless --path $projectRoot "res://tests/ballistics_test.tscn" -- --test
+    Assert-LastExitCode -Action "Godot ballistic collision tests"
+    & $GodotPath --headless --path $projectRoot "res://tests/barrel_elevation_test.tscn" -- --test
+    Assert-LastExitCode -Action "Godot weapon elevation tests"
+    & $GodotPath --headless --path $projectRoot "res://tests/mission_navigation_test.tscn" -- --test
+    Assert-LastExitCode -Action "Godot map navigation tests"
+    & $GodotPath --headless --path $projectRoot "res://tests/campaign_regression_test.tscn" -- --test
+    Assert-LastExitCode -Action "Godot campaign progression tests"
+    & $GodotPath --headless --path $projectRoot --script "res://tests/camera_regression_test.gd" -- --test
+    Assert-LastExitCode -Action "Godot camera collision tests"
 }
 
 $outputRoot = [System.IO.Path]::GetFullPath((Join-Path $repositoryRoot "outputs/pc-godot"))
@@ -144,6 +158,8 @@ Get-RequiredPath -Path $pckPath -Description "Exported PCK" | Out-Null
 
 $creditSources = [ordered]@{
     "THIRD_PARTY_ASSETS.md" = "assets/THIRD_PARTY_ASSETS.md"
+    "audio/README.md" = "assets/audio/combat/README.md"
+    "audio/provenance.json" = "assets/audio/combat/provenance.json"
     "models/challenger2/SOURCE_LICENSE.txt" = "assets/models/realistic/challenger2/SOURCE_LICENSE.txt"
     "models/kf51/SOURCE_LICENSE.txt" = "assets/models/realistic/kf51/SOURCE_LICENSE.txt"
     "models/kv2/SOURCE_LICENSE.txt" = "assets/models/realistic/kv2/SOURCE_LICENSE.txt"
@@ -159,7 +175,7 @@ foreach ($credit in $creditSources.GetEnumerator()) {
     }
 }
 
-$productVersion = "0.2.2"
+$productVersion = "0.3.0"
 $manifestPath = Join-Path $artifactDirectory "build-manifest.json"
 $payloadFiles = @(Get-ChildItem -LiteralPath $artifactDirectory -File -Recurse | Sort-Object FullName)
 $manifestFiles = @(

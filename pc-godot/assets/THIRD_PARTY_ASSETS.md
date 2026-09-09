@@ -84,3 +84,16 @@ source and modification notice.
   retained.
 - Distributed file: `realistic/kv2/kv2_boss.glb`
 - SHA-256: `068299074352f4738521ca50869dc5bf10e7160ecc6a65721a06bce810bb13de`
+
+## Expanded PC weapon and impact recordings
+
+The PC edition now includes locally packaged single-shot cannon variants,
+machine-gun, rocket, armored impact and explosion clips. They were copied from
+the existing licensed web audio pack without changing the web or Android builds.
+Full source links and edits: [PC combat recording credits](audio/combat/README.md).
+Per-file checksums and source processing: [provenance](audio/combat/provenance.json).
+
+Required machine-gun attribution: **KuraiWolf / Nightshade Game Studios**,
+[Light Machine Gun](https://opengameart.org/content/light-machine-gun),
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), trimmed and mastered.
+The remaining added clips use CC0 or public-domain sources documented above.

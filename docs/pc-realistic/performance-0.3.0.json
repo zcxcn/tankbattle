@@ -1,0 +1,389 @@
+{
+	"engine": {
+		"build": "official",
+		"hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
+		"hex": 263938,
+		"major": 4,
+		"minor": 7,
+		"patch": 2,
+		"status": "stable",
+		"string": "4.7.2-stable (official)",
+		"timestamp": 0
+	},
+	"gpu": "NVIDIA GeForce GTX 1660 SUPER",
+	"method": "Real-time, uncapped, VSync disabled; live AI; stationary invulnerable player; third-person view at (0,142); 60 warm-up and 240 measured frames; no screenshots or disk IO inside sampling loops; same player chassis in all chapters.",
+	"results": [
+		{
+			"average_fps": 86.542372587992,
+			"cpu_render_ms": {
+				"max": 3.40000009536743,
+				"mean": 2.17308750251929,
+				"median": 1.77600002288818,
+				"p95": 3.0789999961853
+			},
+			"draw_calls": {
+				"max": 747.0,
+				"mean": 726.2125,
+				"median": 723.0,
+				"p95": 744.0
+			},
+			"frame_ms": {
+				"max": 17.056,
+				"mean": 11.5550333333333,
+				"median": 11.574,
+				"p95": 14.445
+			},
+			"game_mode": "playing",
+			"gpu_render_ms": {
+				"max": 11.2049999237061,
+				"mean": 10.7178875366847,
+				"median": 10.7379999160767,
+				"p95": 10.923999786377
+			},
+			"mission": 1,
+			"mission_name": "工业外围",
+			"msaa": 2,
+			"physics_ms": {
+				"max": 4.669,
+				"mean": 3.56424166666666,
+				"median": 3.2,
+				"p95": 4.669
+			},
+			"player_position": [
+				0.0,
+				-0.0650000125169754,
+				142.0
+			],
+			"primitives": {
+				"max": 1885672.0,
+				"mean": 1851320.93333333,
+				"median": 1837912.0,
+				"p95": 1883384.0
+			},
+			"process_ms": {
+				"max": 3411.085,
+				"mean": 72.2473583333333,
+				"median": 15.495,
+				"p95": 19.571
+			},
+			"profile": "1440p_high",
+			"render_scale": 1.0,
+			"sample_frames": 240,
+			"warmup_frames": 60,
+			"window_size": [
+				2560,
+				1440
+			]
+		},
+		{
+			"average_fps": 94.0431501320522,
+			"cpu_render_ms": {
+				"max": 5.78000020980835,
+				"mean": 2.1195750027895,
+				"median": 1.58500003814697,
+				"p95": 3.28699994087219
+			},
+			"draw_calls": {
+				"max": 907.0,
+				"mean": 885.620833333333,
+				"median": 883.0,
+				"p95": 907.0
+			},
+			"frame_ms": {
+				"max": 14.796,
+				"mean": 10.6334166666667,
+				"median": 10.648,
+				"p95": 12.893
+			},
+			"game_mode": "playing",
+			"gpu_render_ms": {
+				"max": 10.5830001831055,
+				"mean": 10.1111791849136,
+				"median": 10.1719999313354,
+				"p95": 10.3120002746582
+			},
+			"mission": 2,
+			"mission_name": "补给港区",
+			"msaa": 2,
+			"physics_ms": {
+				"max": 3.481,
+				"mean": 3.36993333333334,
+				"median": 3.426,
+				"p95": 3.481
+			},
+			"player_position": [
+				0.0,
+				-0.0650000125169754,
+				142.0
+			],
+			"primitives": {
+				"max": 2484901.0,
+				"mean": 2386951.06666667,
+				"median": 2370061.0,
+				"p95": 2484901.0
+			},
+			"process_ms": {
+				"max": 4426.202,
+				"mean": 252.007183333334,
+				"median": 11.876,
+				"p95": 4426.202
+			},
+			"profile": "1440p_high",
+			"render_scale": 1.0,
+			"sample_frames": 240,
+			"warmup_frames": 60,
+			"window_size": [
+				2560,
+				1440
+			]
+		},
+		{
+			"average_fps": 90.8538558944278,
+			"cpu_render_ms": {
+				"max": 6.38800001144409,
+				"mean": 2.6949374973774,
+				"median": 2.82399988174438,
+				"p95": 3.71399998664856
+			},
+			"draw_calls": {
+				"max": 983.0,
+				"mean": 950.733333333333,
+				"median": 947.0,
+				"p95": 980.0
+			},
+			"frame_ms": {
+				"max": 16.304,
+				"mean": 11.0066875,
+				"median": 10.913,
+				"p95": 14.965
+			},
+			"game_mode": "playing",
+			"gpu_render_ms": {
+				"max": 11.0,
+				"mean": 10.4272583723068,
+				"median": 10.4630002975464,
+				"p95": 10.5959997177124
+			},
+			"mission": 3,
+			"mission_name": "指挥堡垒",
+			"msaa": 2,
+			"physics_ms": {
+				"max": 4.749,
+				"mean": 4.52968333333333,
+				"median": 4.427,
+				"p95": 4.749
+			},
+			"player_position": [
+				0.0,
+				-0.0650000125169754,
+				142.0
+			],
+			"primitives": {
+				"max": 2170377.0,
+				"mean": 2118951.38333333,
+				"median": 2111675.0,
+				"p95": 2170221.0
+			},
+			"process_ms": {
+				"max": 2805.367,
+				"mean": 36.0565208333333,
+				"median": 11.813,
+				"p95": 15.09
+			},
+			"profile": "1440p_high",
+			"render_scale": 1.0,
+			"sample_frames": 240,
+			"warmup_frames": 60,
+			"window_size": [
+				2560,
+				1440
+			]
+		},
+		{
+			"average_fps": 154.396041285502,
+			"cpu_render_ms": {
+				"max": 4.51300001144409,
+				"mean": 2.0473499968648,
+				"median": 1.60399997234344,
+				"p95": 3.03900003433228
+			},
+			"draw_calls": {
+				"max": 740.0,
+				"mean": 730.7625,
+				"median": 732.0,
+				"p95": 740.0
+			},
+			"frame_ms": {
+				"max": 12.194,
+				"mean": 6.47685,
+				"median": 6.347,
+				"p95": 9.412
+			},
+			"game_mode": "playing",
+			"gpu_render_ms": {
+				"max": 5.54400014877319,
+				"mean": 5.12200418313344,
+				"median": 5.14900016784668,
+				"p95": 5.43300008773804
+			},
+			"mission": 1,
+			"mission_name": "工业外围",
+			"msaa": 1,
+			"physics_ms": {
+				"max": 4.972,
+				"mean": 4.63074999999998,
+				"median": 4.972,
+				"p95": 4.972
+			},
+			"player_position": [
+				0.0,
+				-0.0650000125169754,
+				142.0
+			],
+			"primitives": {
+				"max": 1795246.0,
+				"mean": 1784424.0,
+				"median": 1788016.0,
+				"p95": 1795246.0
+			},
+			"process_ms": {
+				"max": 10.797,
+				"mean": 10.0235,
+				"median": 10.797,
+				"p95": 10.797
+			},
+			"profile": "1080p_medium",
+			"render_scale": 0.850000023841858,
+			"sample_frames": 240,
+			"warmup_frames": 60,
+			"window_size": [
+				1920,
+				1080
+			]
+		},
+		{
+			"average_fps": 147.689944653193,
+			"cpu_render_ms": {
+				"max": 4.06699991226196,
+				"mean": 2.28464166472356,
+				"median": 1.84899997711182,
+				"p95": 3.32800006866455
+			},
+			"draw_calls": {
+				"max": 900.0,
+				"mean": 887.941666666667,
+				"median": 889.0,
+				"p95": 900.0
+			},
+			"frame_ms": {
+				"max": 11.583,
+				"mean": 6.77094166666667,
+				"median": 6.547,
+				"p95": 11.127
+			},
+			"game_mode": "playing",
+			"gpu_render_ms": {
+				"max": 5.49100017547607,
+				"mean": 5.12110834320386,
+				"median": 5.14400005340576,
+				"p95": 5.37900018692017
+			},
+			"mission": 2,
+			"mission_name": "补给港区",
+			"msaa": 1,
+			"physics_ms": {
+				"max": 3.744,
+				"mean": 3.40383333333335,
+				"median": 3.494,
+				"p95": 3.494
+			},
+			"player_position": [
+				0.0,
+				-0.0650000125169754,
+				142.0
+			],
+			"primitives": {
+				"max": 2394475.0,
+				"mean": 2326837.43333333,
+				"median": 2315931.0,
+				"p95": 2394475.0
+			},
+			"process_ms": {
+				"max": 11.063,
+				"mean": 10.5160166666667,
+				"median": 10.251,
+				"p95": 11.063
+			},
+			"profile": "1080p_medium",
+			"render_scale": 0.850000023841858,
+			"sample_frames": 240,
+			"warmup_frames": 60,
+			"window_size": [
+				1920,
+				1080
+			]
+		},
+		{
+			"average_fps": 131.476447637861,
+			"cpu_render_ms": {
+				"max": 5.92000007629395,
+				"mean": 2.50091666529576,
+				"median": 1.94599997997284,
+				"p95": 3.73399996757507
+			},
+			"draw_calls": {
+				"max": 975.0,
+				"mean": 955.441666666667,
+				"median": 954.0,
+				"p95": 975.0
+			},
+			"frame_ms": {
+				"max": 14.381,
+				"mean": 7.605925,
+				"median": 7.474,
+				"p95": 12.29
+			},
+			"game_mode": "playing",
+			"gpu_render_ms": {
+				"max": 5.47599983215332,
+				"mean": 5.11692083875338,
+				"median": 5.12400007247925,
+				"p95": 5.38500022888184
+			},
+			"mission": 3,
+			"mission_name": "指挥堡垒",
+			"msaa": 1,
+			"physics_ms": {
+				"max": 5.05,
+				"mean": 4.51054166666665,
+				"median": 4.698,
+				"p95": 5.05
+			},
+			"player_position": [
+				0.0,
+				-0.0650000125169754,
+				142.0
+			],
+			"primitives": {
+				"max": 2079145.0,
+				"mean": 2056525.65,
+				"median": 2063583.0,
+				"p95": 2079145.0
+			},
+			"process_ms": {
+				"max": 3160.181,
+				"mean": 561.477800000002,
+				"median": 10.032,
+				"p95": 3160.181
+			},
+			"profile": "1080p_medium",
+			"render_scale": 0.850000023841858,
+			"sample_frames": 240,
+			"warmup_frames": 60,
+			"window_size": [
+				1920,
+				1080
+			]
+		}
+	]
+}

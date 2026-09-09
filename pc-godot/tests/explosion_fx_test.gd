@@ -52,17 +52,40 @@ func _run() -> void:
 		total_particles += particles.amount
 		var material := (particles.draw_pass_1 as QuadMesh).material as StandardMaterial3D
 		textured_layers = textured_layers and material != null and material.albedo_texture != null and material.billboard_keep_scale
-	_check(textured_layers and total_particles == 122, "all four bounded particle layers preserve simulated size and use soft textures")
+	_check(textured_layers and total_particles <= 110, "all four bounded particle layers preserve simulated size and use soft textures within the reduced budget")
 	for label in ["Smoke", "Dust"]:
 		var particles := effect.get_node(label) as GPUParticles3D
 		var material := (particles.draw_pass_1 as QuadMesh).material as StandardMaterial3D
 		var process := particles.process_material as ParticleProcessMaterial
 		_check(material.blend_mode == BaseMaterial3D.BLEND_MODE_MIX and not material.emission_enabled and material.shading_mode == BaseMaterial3D.SHADING_MODE_PER_PIXEL, label + " is lit matte matter instead of additive glowing rectangles")
 		_check(process.scale_curve.curve.sample(1.0) > process.scale_curve.curve.sample(0.0) * 3.0 and process.color_ramp.gradient.sample(0.0).a == 0.0 and process.color_ramp.gradient.sample(1.0).a == 0.0, label + " expands and fades smoothly at birth and expiry")
+		_check(process.scale_curve.texture_mode == CurveTexture.TEXTURE_MODE_RGB, label + " scale curve provides all XYZ channels so billboards retain visible width and height")
 	var fire_process := (effect.get_node("Fire") as GPUParticles3D).process_material as ParticleProcessMaterial
 	var hot: Color = fire_process.color_ramp.gradient.sample(0.07)
 	var cool: Color = fire_process.color_ramp.gradient.sample(0.64)
 	_check(hot.a > 0.7 and hot.r > cool.r and hot.g > cool.g and fire_process.color_ramp.gradient.sample(1.0).a == 0.0, "fire transitions from a hot bright core to cool fading embers")
+	_check(fire_process.scale_curve.texture_mode == CurveTexture.TEXTURE_MODE_RGB, "fire scale curve cannot collapse its billboard onto a zero-height line")
+	_check(effect.get_node("Debris") is GPUParticles3D, "destruction ejects finite GPU fragments instead of spawning rigid-body debris piles")
 	effect.free()
+	var armor := ExplosionFX.create_impact(Vector3.ZERO, false, "armor", Vector3.RIGHT, "machine_gun")
+	add_child(armor)
+	armor.set_process(false)
+	var earth := ExplosionFX.create_impact(Vector3.ZERO, false, "ground", Vector3.UP, "machine_gun")
+	add_child(earth)
+	earth.set_process(false)
+	_check(armor.get_node_or_null("Sparks") != null and armor.get_node_or_null("Dust") == null and earth.get_node_or_null("Dust") != null and earth.get_node_or_null("Sparks") == null, "armor produces directional metal sparks while ground hits displace dust")
+	_check(armor._light == null and earth._light == null and armor.get_node_or_null("Fire") == null, "machine-gun impacts create no lights or explosive fireballs")
+	var spark_process := (armor.get_node("Sparks") as GPUParticles3D).process_material as ParticleProcessMaterial
+	_check(spark_process.direction.is_equal_approx(Vector3.RIGHT), "impact spark direction follows the real collision surface normal")
+	armor.free()
+	earth.free()
+	var effects: Array[ExplosionFX] = []
+	for index in ExplosionFX.MAX_IMPACTS + 6:
+		var impact := ExplosionFX.create_impact(Vector3.ZERO, false, "ground", Vector3.UP, "machine_gun")
+		add_child(impact)
+		effects.append(impact)
+	_check(get_tree().get_nodes_in_group("impact_fx").size() == ExplosionFX.MAX_IMPACTS, "simultaneous impact effects are capped under sustained machine-gun fire")
+	for impact: ExplosionFX in effects:
+		impact.free()
 	print("EXPLOSION_FX_RESULT: %d passed, %d failed" % [passed, failed])
 	get_tree().quit(0 if failed == 0 else 1)

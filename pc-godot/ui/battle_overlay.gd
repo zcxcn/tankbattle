@@ -1,7 +1,7 @@
 extends Control
 ## A single passive draw layer: aim intent, physical impact and a north-up map.
 
-const WORLD_BOUNDS := Rect2(-95, -66, 190, 132)
+const WORLD_BOUNDS := Rect2(-144, -192, 288, 384)
 const FRIENDLY := Color("72e1df")
 const HOSTILE := Color("ef7665")
 const AMBER := Color("e9bf70")
@@ -24,10 +24,11 @@ func set_hud_regions(regions: Array[Rect2]) -> void:
 
 func map_rect() -> Rect2:
 	var margin := clampf(size.x * (0.035 if size.x / maxf(size.y, 1.0) < 2.0 else 0.065), 24.0, 180.0)
-	return Rect2(size.x - margin - 240.0, clampf(size.y * 0.032, 18.0, 58.0) + 154.0, 240.0, 167.0)
+	return Rect2(size.x - margin - 186.0, clampf(size.y * 0.032, 18.0, 58.0) + 200.0, 186.0, 248.0)
 
 func map_position(world: Vector2) -> Vector2:
-	var fraction := (world - WORLD_BOUNDS.position) / WORLD_BOUNDS.size
+	var bounds: Rect2 = snapshot.get("world_bounds", WORLD_BOUNDS)
+	var fraction := (world - bounds.position) / bounds.size
 	fraction = fraction.clamp(Vector2.ZERO, Vector2.ONE)
 	return map_rect().position + fraction * map_rect().size
 
@@ -115,12 +116,23 @@ func _draw_radar() -> void:
 	draw_rect(rect, Color("566350"), false, 1.0)
 	_text(rect.position + Vector2(0, -11), "战术雷达", AMBER, 14)
 	_text(rect.position + Vector2(rect.size.x - 38, -11), "N ↑", FRIENDLY, 13)
-	# Keep road orientation identical to WASD, left stick and the battle camera.
+	# The map stays north-up even when the chase camera rotates.
 	var road := Color("58605466")
-	draw_rect(Rect2(map_position(Vector2(-12, -66)), Vector2(rect.size.x * 24.0 / 190.0, rect.size.y)), road)
-	for z in [-36.0, 0.0, 36.0]:
-		var start := map_position(Vector2(-95, z - 9))
-		draw_rect(Rect2(start, Vector2(rect.size.x, rect.size.y * 18.0 / 132.0)), road)
+	var bounds: Rect2 = snapshot.get("world_bounds", WORLD_BOUNDS)
+	for x in [-96.0, 0.0, 96.0]:
+		draw_rect(Rect2(map_position(Vector2(x - 12.0, bounds.position.y)), Vector2(rect.size.x * 24.0 / bounds.size.x, rect.size.y)), road)
+	for z in [-144.0, -72.0, 0.0, 72.0, 144.0]:
+		var start := map_position(Vector2(bounds.position.x, z - 9.0))
+		draw_rect(Rect2(start, Vector2(rect.size.x, rect.size.y * 18.0 / bounds.size.y)), road)
+	for supply: Vector2 in snapshot.get("supply_positions", []):
+		var point := map_position(supply)
+		draw_line(point - Vector2(3, 0), point + Vector2(3, 0), Color("88de99"), 2.0)
+		draw_line(point - Vector2(0, 3), point + Vector2(0, 3), Color("88de99"), 2.0)
+	if snapshot.has("objective_world"):
+		var target: Vector2 = snapshot["objective_world"]
+		var point := map_position(target)
+		draw_arc(point, 7.0, 0.0, TAU, 20, AMBER, 1.5, true)
+		_text(rect.position + Vector2(0, -32), "目标 %dm · %s" % [roundi(float(snapshot.get("objective_distance", 0.0))), str(snapshot.get("camera_mode", "俯视"))], AMBER, 13)
 	for mine: Dictionary in snapshot.get("radar_mines", []):
 		var color := FRIENDLY if mine.get("friendly", false) else HOSTILE
 		var point := map_position(mine["position"])
@@ -139,7 +151,7 @@ func _draw_radar() -> void:
 	var forward := Vector2(-sin(yaw), -cos(yaw))
 	var right := Vector2(-forward.y, forward.x)
 	draw_colored_polygon(PackedVector2Array([player + forward * 7.0, player - forward * 4.0 + right * 4.0, player - forward * 4.0 - right * 4.0]), FRIENDLY)
-	_text(rect.end + Vector2(-rect.size.x, 16), "青：我方   红：敌军   ◇：首领", Color("a8b49c"), 11)
+	_text(rect.end + Vector2(-rect.size.x, 16), "红：可见敌军  ○：目标  +：补给", Color("a8b49c"), 11)
 
 func _text(at: Vector2, value: String, color: Color, font_size: int) -> void:
 	var font := get_theme_default_font()

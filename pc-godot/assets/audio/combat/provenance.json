@@ -1,0 +1,324 @@
+{
+  "version": 1,
+  "acquired": "2026-09-07",
+  "adaptedForPC": "2026-09-09",
+  "description": "Copied unchanged from the existing licensed web combat pack for the native Godot PC edition. Per-file source edits remain listed; no runtime network dependency.",
+  "sources": [
+    {
+      "id": "tank-shots",
+      "title": "Tank Shots",
+      "creator": "qubodup",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "sourceUrl": "https://freesound.org/people/qubodup/sounds/239135/",
+      "downloadUrl": "https://cdn.freesound.org/previews/239/239135_71257-hq.mp3",
+      "originalFile": "tank_shots_preview_hq.mp3",
+      "sourceSha256": "1f1a4224804266e92425239491ee56984ecf38edfa7a9f290cc458671204e9e5"
+    },
+    {
+      "id": "artillery-shots",
+      "title": "Artillery Shots.flac",
+      "creator": "qubodup",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "sourceUrl": "https://freesound.org/people/qubodup/sounds/182822/",
+      "downloadUrl": "https://cdn.freesound.org/previews/182/182822_71257-hq.mp3",
+      "originalFile": "artillery-shots-182822.mp3",
+      "sourceSha256": "324895d4e6e350a654ade6ada75571d428a66a076cd8efe264bf8f84d8292d9a"
+    },
+    {
+      "id": "explosion",
+      "title": "Explosion",
+      "creator": "qubodup",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "sourceUrl": "https://freesound.org/people/qubodup/sounds/182429/",
+      "downloadUrl": "https://cdn.freesound.org/previews/182/182429_71257-hq.mp3",
+      "originalFile": "explosion-182429.mp3",
+      "sourceSha256": "0ee238ddce34c47d1ee216a2a682fb1cef2325a11c76da459f33b1088fad83a9"
+    },
+    {
+      "id": "sheet-metal",
+      "title": "Dropping sheet metal",
+      "creator": "SamsterBirdies",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "sourceUrl": "https://freesound.org/people/SamsterBirdies/sounds/587442/",
+      "downloadUrl": "https://cdn.freesound.org/previews/587/587442_5487341-hq.mp3",
+      "originalFile": "sheet-metal-587442.mp3",
+      "sourceSha256": "78e0316be4bb9e4f316d8e9ce4bf123bf7c6a0b6e3ec39940ed4db69bc14406e"
+    },
+    {
+      "id": "kenney-lowFrequency_explosion_000",
+      "title": "lowFrequency_explosion_000 (Sci-fi Sounds)",
+      "creator": "Kenney",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "sourceUrl": "https://kenney.nl/assets/sci-fi-sounds",
+      "downloadUrl": "https://kenney.nl/media/pages/assets/sci-fi-sounds/6b296f9ecf-1677589334/kenney_sci-fi-sounds.zip",
+      "originalFile": "lowFrequency_explosion_000.ogg",
+      "sourceSha256": "3cb48d86dab63140cfb9aaeea4d4a6846abaca5831d157d8adbec0490da26343",
+      "archiveMember": "Audio/lowFrequency_explosion_000.ogg"
+    },
+    {
+      "id": "kenney-explosionCrunch_004",
+      "title": "explosionCrunch_004 (Sci-fi Sounds)",
+      "creator": "Kenney",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "sourceUrl": "https://kenney.nl/assets/sci-fi-sounds",
+      "downloadUrl": "https://kenney.nl/media/pages/assets/sci-fi-sounds/6b296f9ecf-1677589334/kenney_sci-fi-sounds.zip",
+      "originalFile": "explosionCrunch_004.ogg",
+      "sourceSha256": "9c3a1c73cadf0de5d5a578b31a264f20b1ac7cb6ec9bbd34a203f58402ea5390",
+      "archiveMember": "Audio/explosionCrunch_004.ogg"
+    },
+    {
+      "id": "kenney-impactMetal_heavy_000",
+      "title": "impactMetal_heavy_000 (Impact Sounds)",
+      "creator": "Kenney",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "sourceUrl": "https://kenney.nl/assets/impact-sounds",
+      "downloadUrl": "https://kenney.nl/media/pages/assets/impact-sounds/87b4ddecda-1677589768/kenney_impact-sounds.zip",
+      "originalFile": "impactMetal_heavy_000.ogg",
+      "sourceSha256": "e07045693e4a2b3d165c424e3dab4c781d9ff8880a386880ac89a51315d7f831",
+      "archiveMember": "Audio/impactMetal_heavy_000.ogg"
+    },
+    {
+      "id": "kenney-impactMetal_heavy_003",
+      "title": "impactMetal_heavy_003 (Impact Sounds)",
+      "creator": "Kenney",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "sourceUrl": "https://kenney.nl/assets/impact-sounds",
+      "downloadUrl": "https://kenney.nl/media/pages/assets/impact-sounds/87b4ddecda-1677589768/kenney_impact-sounds.zip",
+      "originalFile": "impactMetal_heavy_003.ogg",
+      "sourceSha256": "b0f2ba4dabde9a87eb9c188a19d31e0c2300fd321adeba08d3b9b8aa011d7037",
+      "archiveMember": "Audio/impactMetal_heavy_003.ogg"
+    },
+    {
+      "id": "mg-fire-source",
+      "title": "Light Machine Gun / lmg_fire01.mp3",
+      "creator": "KuraiWolf / Nightshade Game Studios",
+      "license": "CC-BY-4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "sourceUrl": "https://opengameart.org/content/light-machine-gun",
+      "downloadUrl": "https://opengameart.org/sites/default/files/lmg_fire01.mp3",
+      "originalFile": "mg-source.mp3",
+      "sourceSha256": "344c665ef123b8155f6b34d2d7827848d0a800679e1ba3acb4e7be1d05f211d5"
+    },
+    {
+      "id": "rocket-launch-source",
+      "title": "Missle Launch",
+      "creator": "Kibblesbob",
+      "license": "Public Domain",
+      "licenseUrl": "https://soundbible.com/1794-Missle-Launch.html",
+      "sourceUrl": "https://soundbible.com/1794-Missle-Launch.html",
+      "downloadUrl": "https://soundbible.com/mp3/Missle_Launch-Kibblesbob-2118796725.mp3",
+      "originalFile": "rocket-source.mp3",
+      "sourceSha256": "de58fec61f13c7f9453484f76dc28a7387c3cf4e7b9ca4e5fa680b812ea99e8d"
+    },
+    {
+      "id": "ricochet-01-source",
+      "title": "bullet ricochet.wav",
+      "creator": "aust_paul",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "sourceUrl": "https://freesound.org/people/aust_paul/sounds/30932/",
+      "downloadUrl": "https://cdn.freesound.org/previews/30/30932_15696-hq.mp3",
+      "originalFile": "ricochet-source.mp3",
+      "sourceSha256": "0f2f5dabd889884b77e445f4264a5873a6e8a713a9076503a071f1d3a746f9b1"
+    }
+  ],
+  "files": [
+    {
+      "file": "cannon-01.wav",
+      "kind": "cannon",
+      "sources": [
+        "tank-shots"
+      ],
+      "processing": "Single field-recorded report; source slice 0..3.28 seconds; playback rate 1; mono48k; 26Hz high-pass, 5.8kHz low-pass, restrained +0.38 low-pass190Hz shelf; peak-normalized -1.5dBFS; 2ms/190ms edge fades. No rifle transient or synthetic oscillator.",
+      "sampleRate": 48000,
+      "channels": 1,
+      "bitsPerSample": 16,
+      "durationSeconds": 3.28,
+      "bytes": 314924,
+      "sha256": "814503d1a4b838df6a99d59e3d970ed8e5efab151bc1947584a87d81a3d1939d",
+      "peak": 0.84,
+      "rms": 0.13939,
+      "energyBelow250Hz": 0.7722,
+      "energyAbove2000Hz": 0.0239
+    },
+    {
+      "file": "cannon-02.wav",
+      "kind": "cannon",
+      "sources": [
+        "tank-shots"
+      ],
+      "processing": "Single field-recorded report; source slice 3.478..6.85 seconds; playback rate 0.98; mono48k; 26Hz high-pass, 5.8kHz low-pass, restrained +0.38 low-pass190Hz shelf; peak-normalized -1.5dBFS; 2ms/190ms edge fades. No rifle transient or synthetic oscillator.",
+      "sampleRate": 48000,
+      "channels": 1,
+      "bitsPerSample": 16,
+      "durationSeconds": 3.440833,
+      "bytes": 330364,
+      "sha256": "d55c2ed2605931def85cfa9a6bd54d144f6059d26029aa7d83925df15099b8df",
+      "peak": 0.84003,
+      "rms": 0.13749,
+      "energyBelow250Hz": 0.7559,
+      "energyAbove2000Hz": 0.0167
+    },
+    {
+      "file": "cannon-03.wav",
+      "kind": "cannon",
+      "sources": [
+        "artillery-shots"
+      ],
+      "processing": "Single field-recorded report; source slice 19.83..22.19 seconds; playback rate 0.84; mono48k; 26Hz high-pass, 5.8kHz low-pass, restrained +0.38 low-pass190Hz shelf; peak-normalized -1.5dBFS; 2ms/190ms edge fades. No rifle transient or synthetic oscillator.",
+      "sampleRate": 48000,
+      "channels": 1,
+      "bitsPerSample": 16,
+      "durationSeconds": 2.809563,
+      "bytes": 269762,
+      "sha256": "276e9afbfef2edc9c11f5ab74a872aa695988cbce123f7f1266ff033bb8b4fbb",
+      "peak": 0.84,
+      "rms": 0.09686,
+      "energyBelow250Hz": 0.4552,
+      "energyAbove2000Hz": 0.1136
+    },
+    {
+      "file": "explosion-heavy-01.wav",
+      "kind": "explosion",
+      "sources": [
+        "explosion",
+        "sheet-metal",
+        "kenney-lowFrequency_explosion_000",
+        "kenney-explosionCrunch_004"
+      ],
+      "processing": "Edited library sound design: qubodup explosion recording rate 0.94; Kenney low-frequency explosion and restrained crunch; real sheet-metal debris delayed75ms; lowpass4.8kHz; peak/fades. No claim that this composite is an unedited field recording.",
+      "sampleRate": 48000,
+      "channels": 1,
+      "bitsPerSample": 16,
+      "durationSeconds": 3.55,
+      "bytes": 340844,
+      "sha256": "b7139662e493addc9970141fd09677a91ac524cc70457df7fe56c570f019e64b",
+      "peak": 0.84,
+      "rms": 0.09792,
+      "energyBelow250Hz": 0.9057,
+      "energyAbove2000Hz": 0.0083
+    },
+    {
+      "file": "explosion-heavy-02.wav",
+      "kind": "explosion",
+      "sources": [
+        "explosion",
+        "sheet-metal",
+        "kenney-lowFrequency_explosion_000",
+        "kenney-explosionCrunch_004"
+      ],
+      "processing": "Edited library sound design: qubodup explosion recording rate 0.83; Kenney low-frequency explosion and restrained crunch; real sheet-metal debris delayed75ms; lowpass4.8kHz; peak/fades. No claim that this composite is an unedited field recording.",
+      "sampleRate": 48000,
+      "channels": 1,
+      "bitsPerSample": 16,
+      "durationSeconds": 3.95,
+      "bytes": 379244,
+      "sha256": "ff79d6b3636103d8b054efddd36c4df1aa37859f8cc8e4001afa62233ba9b643",
+      "peak": 0.84,
+      "rms": 0.09318,
+      "energyBelow250Hz": 0.9289,
+      "energyAbove2000Hz": 0.0072
+    },
+    {
+      "file": "impact-armor-01.wav",
+      "kind": "impact",
+      "sources": [
+        "sheet-metal",
+        "explosion",
+        "kenney-impactMetal_heavy_000"
+      ],
+      "processing": "Layered armor-hit design: isolated sheet-metal impact rate0.82; Kenney heavy-metal knock rate0.72 filtered470Hz below the clang; short recorded blast pressure at10ms; peak/fades.",
+      "sampleRate": 48000,
+      "channels": 1,
+      "bitsPerSample": 16,
+      "durationSeconds": 2.25,
+      "bytes": 216044,
+      "sha256": "25eb5e7f8e18d95cd4547bf8bb8929ab568b55d88d5026db51272d5045222f1d",
+      "peak": 0.84,
+      "rms": 0.09792,
+      "energyBelow250Hz": 0.7468,
+      "energyAbove2000Hz": 0.024
+    },
+    {
+      "file": "impact-armor-02.wav",
+      "kind": "impact",
+      "sources": [
+        "sheet-metal",
+        "explosion",
+        "kenney-impactMetal_heavy_003"
+      ],
+      "processing": "Layered armor-hit design: isolated sheet-metal impact rate0.82; Kenney heavy-metal knock rate0.72 filtered470Hz below the clang; short recorded blast pressure at10ms; peak/fades.",
+      "sampleRate": 48000,
+      "channels": 1,
+      "bitsPerSample": 16,
+      "durationSeconds": 2.25,
+      "bytes": 216044,
+      "sha256": "c26b13f4f06be8af254d18a1af84dc21173ab2af83a5ffcbd87ab55ca27139d3",
+      "peak": 0.84,
+      "rms": 0.10011,
+      "energyBelow250Hz": 0.7312,
+      "energyAbove2000Hz": 0.029
+    },
+    {
+      "file": "mg-fire.wav",
+      "kind": "weapon",
+      "sources": [
+        "mg-fire-source"
+      ],
+      "processing": "Decoded original MP3 to mono 44.1 kHz float PCM; third-order 70-15000 Hz zero-phase Butterworth bandpass; kept first 920 ms including the attack and outdoor tail; applied 0.8 ms onset fade and 160 ms tail fade; peak normalized to 0.88; exported PCM16 WAV. No synthesized replacement waveform.",
+      "sampleRate": 44100,
+      "channels": 1,
+      "bitsPerSample": 16,
+      "durationSeconds": 0.92,
+      "bytes": 81188,
+      "sha256": "b5dc842795d548ff4e68934fb5bf3369f9ba7543db2599561fae52f51af7c5b3",
+      "peak": 0.879974365234375,
+      "rms": 0.10931530470350025,
+      "loop": false
+    },
+    {
+      "file": "rocket-launch.wav",
+      "kind": "weapon",
+      "sources": [
+        "rocket-launch-source"
+      ],
+      "processing": "Decoded library MP3 to mono 44.1 kHz float PCM; third-order 65-13500 Hz zero-phase Butterworth bandpass; selected 0.055-2.750 s; 2 ms onset and 500 ms tail fades; peak normalized to 0.88; exported PCM16 WAV. Source description identifies a missile launch, but does not document a field recorder, so it is labeled a library sound effect rather than a verified field recording.",
+      "sampleRate": 44100,
+      "channels": 1,
+      "bitsPerSample": 16,
+      "durationSeconds": 2.6949886621315193,
+      "bytes": 237742,
+      "sha256": "d5034221828c31b0d155ee95c0995c80648bc36853170918b9d27996c5376c62",
+      "peak": 0.879974365234375,
+      "rms": 0.17137149808905186,
+      "loop": false
+    },
+    {
+      "file": "ricochet-01.wav",
+      "kind": "weapon",
+      "sources": [
+        "ricochet-01-source"
+      ],
+      "processing": "Decoded publicly served HQ MP3 to mono 44.1 kHz float PCM; third-order 600-15500 Hz zero-phase Butterworth bandpass; isolated variant at 0.016-0.420 s; applied 0.8 ms onset and 75 ms tail fades; peak normalized to 0.76; exported PCM16 WAV. Author labels these designed/simulated ricochet effects; no claim of live ammunition recording.",
+      "sampleRate": 44100,
+      "channels": 1,
+      "bitsPerSample": 16,
+      "durationSeconds": 0.40399092970521544,
+      "bytes": 35676,
+      "sha256": "36fa7b3012d42767e5469f3565e1d37d81cb98835df41ba3deb8675694eb465f",
+      "peak": 0.759979248046875,
+      "rms": 0.0382398786887734,
+      "loop": false
+    }
+  ],
+  "totalBytes": 2421832.0,
+  "licenseNote": "Retain KuraiWolf / Nightshade Game Studios CC BY 4.0 attribution for mg-fire.wav. Other included audio is CC0 or explicitly public domain as documented in sources."
+}
