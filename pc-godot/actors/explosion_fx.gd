@@ -10,6 +10,7 @@ static var _sprite_cache: Dictionary = {}
 static var _material_cache: Dictionary = {}
 static var _curve_cache: Dictionary = {}
 const MAX_BLASTS := 8
+const MAX_COOKOFFS := 3
 const MAX_IMPACTS := 18
 const MAX_MUZZLES := 8
 const MAX_FLASH_LIGHTS := 5
@@ -59,14 +60,32 @@ static func create_muzzle(at: Vector3, forward: Vector3, strength := 1.0, weapon
 	return effect
 
 
+static func create_cookoff(at: Vector3) -> ExplosionFX:
+	var effect := ExplosionFX.new()
+	effect.name = "AmmunitionCookoff"
+	effect.position = at
+	effect._profile = "cookoff"
+	effect.set_meta("destructive", true)
+	return effect
+
+
 func _ready() -> void:
 	add_to_group("combat_effects")
-	var group := "blast_fx" if _profile == "destruction" else ("muzzle_fx" if _profile == "muzzle" else "impact_fx")
-	var maximum := MAX_BLASTS if _profile == "destruction" else (MAX_MUZZLES if _profile == "muzzle" else MAX_IMPACTS)
-	if get_tree().get_nodes_in_group(group).size() >= maximum:
+	var large_blast := _profile in ["destruction", "cookoff"]
+	var group := "blast_fx" if large_blast else ("muzzle_fx" if _profile == "muzzle" else "impact_fx")
+	var maximum := MAX_BLASTS if large_blast else (MAX_MUZZLES if _profile == "muzzle" else MAX_IMPACTS)
+	if _profile == "cookoff" and get_tree().get_nodes_in_group("cookoff_fx").size() >= MAX_COOKOFFS:
 		queue_free()
 		return
+	if get_tree().get_nodes_in_group(group).size() >= maximum:
+		if _profile != "cookoff" or not _retire_oldest_destruction():
+			queue_free()
+			return
 	add_to_group(group)
+	if _profile == "cookoff":
+		add_to_group("cookoff_fx")
+		_build_cookoff()
+		return
 	if _profile == "impact":
 		_build_impact()
 		return
@@ -83,6 +102,82 @@ func _ready() -> void:
 	# The mastered explosion clips already include debris and outdoor decay.
 	# Layering the old long blast again would double the report and mask fire.
 	AudioService.play_3d("explosion", global_position, -2.0)
+
+
+func _retire_oldest_destruction() -> bool:
+	# A delayed ammunition fire must remain visible even when the initial
+	# vehicle explosions still occupy every slot with their lingering smoke.
+	# Existing cookoffs keep their slots; only ordinary destruction is retired.
+	var oldest: ExplosionFX
+	for candidate: Node in get_tree().get_nodes_in_group("blast_fx"):
+		if candidate is ExplosionFX and candidate._profile == "destruction":
+			if oldest == null or candidate._age > oldest._age:
+				oldest = candidate
+	if oldest == null:
+		return false
+	oldest.remove_from_group("blast_fx")
+	if is_instance_valid(oldest._light):
+		oldest._light.remove_from_group("impact_flash_lights")
+	oldest.queue_free()
+	return true
+
+
+func _build_cookoff() -> void:
+	# Ammunition vents through the turret ring: a fast vertical jet precedes
+	# rising fire clumps, falling hot fragments and a long, dark smoke column.
+	# All layers are cosmetic; the wreck owns the single 9 m damage query.
+	_duration = 6.2
+	_flash_duration = 0.16
+	_jet_duration = 1.2
+	_add_light(17.0, 28.0)
+	_add_flash(4.8, Vector3.UP * 0.65)
+	_muzzle_forward = Vector3.UP
+	_build_muzzle_jet(10.5, 3.2)
+	_muzzle_jet.name = "UpwardFlameJet"
+	_muzzle_jet.scale = Vector3(0.72, 0.72, 0.16)
+	var fire := _spawn_particles("Fire", 36, 1.85, Color.WHITE, Color.TRANSPARENT, 17.0, -1.4, 1.3, true)
+	fire.name = "CookoffFireColumn"
+	var flame_process := fire.process_material as ParticleProcessMaterial
+	flame_process.spread = 14.0
+	flame_process.emission_sphere_radius = 0.55
+	flame_process.initial_velocity_min = 11.5
+	flame_process.damping_min = 1.2
+	flame_process.damping_max = 2.5
+	flame_process.scale_curve = _growth_curve([Vector2(0, 0.35), Vector2(0.2, 1.15), Vector2(0.6, 1.85), Vector2(1, 1.65)])
+	var sparks := _spawn_particles("Sparks", 32, 2.1, Color.WHITE, Color.TRANSPARENT, 22.0, 12.0, 0.12, false)
+	sparks.name = "CookoffBurningFragments"
+	var spark_process := sparks.process_material as ParticleProcessMaterial
+	spark_process.spread = 25.0
+	spark_process.initial_velocity_min = 12.0
+	var smoke := _spawn_particles("Smoke", 28, 5.8, Color.GRAY, Color.TRANSPARENT, 6.8, 0.0, 2.0, true)
+	smoke.name = "CookoffSmokeColumn"
+	var smoke_process := smoke.process_material as ParticleProcessMaterial
+	smoke_process.spread = 18.0
+	smoke_process.gravity = Vector3(0.35, 0.95, 0.1)
+	smoke_process.damping_min = 0.25
+	smoke_process.damping_max = 0.5
+	smoke_process.color_ramp.gradient.set_color(1, Color(0.11, 0.09, 0.075, 0.82))
+	smoke_process.color_ramp.gradient.set_color(2, Color(0.21, 0.19, 0.17, 0.58))
+	var dust := _spawn_particles("Dust", 30, 2.6, Color.GRAY, Color.TRANSPARENT, 9.0, 0.0, 1.4, true, true)
+	dust.name = "CookoffPressureDust"
+	dust.position.y = 0.16 - global_position.y
+	var dust_process := dust.process_material as ParticleProcessMaterial
+	dust_process.emission_ring_radius = 1.3
+	dust_process.emission_ring_inner_radius = 0.7
+	dust_process.radial_velocity_min = 4.5
+	dust_process.radial_velocity_max = 8.8
+	_spawn_debris(18, 0.24)
+	var debris := get_node("Debris") as GPUParticles3D
+	debris.lifetime = 2.4
+	var debris_process := debris.process_material as ParticleProcessMaterial
+	debris_process.direction = Vector3.UP
+	debris_process.spread = 35.0
+	debris_process.initial_velocity_min = 7.0
+	debris_process.initial_velocity_max = 15.0
+	for child: Node in get_children():
+		if child is GPUParticles3D:
+			child.visibility_aabb = AABB(Vector3(-24, -4, -24), Vector3(48, 42, 48))
+	AudioService.play_3d("explosion", global_position, 0.5, 0.78)
 
 
 func _add_light(energy: float, distance: float) -> void:
@@ -242,9 +337,9 @@ func _process(delta: float) -> void:
 			child.speed_scale = 1.0
 	_age += delta
 	if is_instance_valid(_light):
-		_light.light_energy = _light_peak * exp(-_age * 24.0)
+		_light.light_energy = _light_peak * exp(-_age * (7.0 if _profile == "cookoff" else 24.0))
 		_light.light_color = Color("ffe0aa").lerp(Color("df5629"), clampf(_age * 3.0, 0.0, 1.0))
-		if _age > 0.22:
+		if _age > (0.7 if _profile == "cookoff" else 0.22):
 			_light.queue_free()
 	if is_instance_valid(_flash):
 		_flash.scale = Vector3.ONE * (0.7 + _age * 3.0)
@@ -253,9 +348,15 @@ func _process(delta: float) -> void:
 	if is_instance_valid(_muzzle_jet):
 		_muzzle_jet.visible = _age < _jet_duration
 		var phase := clampf(_age / _jet_duration, 0.0, 1.0)
-		_muzzle_jet.scale = Vector3.ONE * (0.78 + sin(phase * PI) * 0.26)
+		if _profile == "cookoff":
+			var surge := minf(_age / 0.14, 1.0)
+			var flicker := 1.0 + sin(_age * 41.0) * 0.07
+			_muzzle_jet.scale = Vector3(0.72 + surge * 0.35, 0.72 + surge * 0.35, lerpf(0.16, 1.12, surge) * flicker)
+		else:
+			_muzzle_jet.scale = Vector3.ONE * (0.78 + sin(phase * PI) * 0.26)
 		for material: StandardMaterial3D in _jet_materials:
-			material.albedo_color = Color(2.6 - phase, 1.65 - phase * 1.25, 0.60 - phase * 0.50, pow(1.0 - phase, 1.4) * 0.85)
+			var fade := 1.0 - smoothstep(0.25, 1.0, phase) if _profile == "cookoff" else pow(1.0 - phase, 1.4)
+			material.albedo_color = Color(2.6 - phase, 1.65 - phase * 1.25, 0.60 - phase * 0.50, fade * 0.85)
 	if _age >= _duration:
 		queue_free()
 

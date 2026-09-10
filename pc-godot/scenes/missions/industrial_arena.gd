@@ -5,6 +5,7 @@ extends Node3D
 const DetailsBuilder = preload("res://scripts/industrial_details.gd")
 const Catalog = preload("res://data/mission_catalog.gd")
 const FacadeLibrary = preload("res://scripts/factory_facade_library.gd")
+const WeatherScript = preload("res://scripts/battlefield_weather.gd")
 
 var game: Node
 var mission_index := 0
@@ -20,6 +21,8 @@ var _lamp_lens: StandardMaterial3D
 var _details: RefCounted
 var _district := 0
 var _building_types: Array[String] = []
+var weather: Node3D
+var _weather_roofs: Array[AABB] = []
 
 
 func _ready() -> void:
@@ -61,6 +64,38 @@ func _ready() -> void:
 	set_meta("arena_bounds", get_radar_bounds())
 	set_meta("building_types", _building_types)
 	_details = null
+	_build_weather()
+
+
+func _build_weather() -> void:
+	var weather_kind: String = Catalog.get_mission(mission_index).get("weather", "dry")
+	set_meta("weather", weather_kind)
+	if weather_kind == "dry":
+		return
+	# The same authored roof volumes drive rain occlusion and dry loading bays.
+	set_meta("weather_roofs", _weather_roofs)
+	weather = WeatherScript.new()
+	weather.name = "BattlefieldWeather"
+	weather.game = game
+	weather.kind = weather_kind
+	add_child(weather)
+	_asphalt.albedo_color = Color("687578")
+	_asphalt.roughness = 0.28 if weather_kind == "heavy_rain" else 0.43
+	_asphalt.normal_scale = 0.46
+	_concrete.albedo_color = Color("757e7e")
+	_concrete.roughness = 0.63
+	var environment: Environment = get_node("WorldEnvironment").environment
+	var sky_material: ProceduralSkyMaterial = environment.sky.sky_material
+	sky_material.sky_top_color = Color("52616d")
+	sky_material.sky_horizon_color = Color("96a4ae")
+	environment.ambient_light_energy = 0.92
+	environment.fog_light_color = Color("91a4b1")
+	environment.fog_density = 0.0025 if weather_kind == "heavy_rain" else 0.0015
+	environment.volumetric_fog_density = 0.0045 if weather_kind == "heavy_rain" else 0.003
+	var sun: DirectionalLight3D = get_node("LowSun")
+	sun.light_color = Color("cbdbe9")
+	sun.light_energy = 0.64 if weather_kind == "heavy_rain" else 0.82
+	sun.light_angular_distance = 1.4
 
 
 func _weathered_steel(tint: Color) -> StandardMaterial3D:
@@ -75,6 +110,7 @@ func _weathered_steel(tint: Color) -> StandardMaterial3D:
 
 func _build_environment() -> void:
 	var world_environment := WorldEnvironment.new()
+	world_environment.name = "WorldEnvironment"
 	var environment := Environment.new()
 	environment.background_mode = Environment.BG_SKY
 	var sky := Sky.new()
@@ -537,6 +573,7 @@ func _construct_building(at: Vector3, footprint: Vector3, index: int) -> void:
 	var height: float = {"warehouse": 6.0, "factory": 9.0, "office": 12.0, "apartment": 15.0, "hangar": 6.0, "substation": 6.0, "garage": 6.0}[kind]
 	var size := Vector3(footprint.x, height, footprint.z)
 	var origin := Vector3(at.x, 0.0, at.z)
+	_weather_roofs.append(AABB(origin + Vector3(-size.x * 0.5 - 0.35, 0, -size.z * 0.5 - 0.35), Vector3(size.x + 0.7, height + 0.24, size.z + 0.7)))
 	# A dark interior set behind actual modeled openings gives depth to glass.
 	# One conservative hull collider per building keeps navigation inexpensive.
 	var shell := ArtFactory.add_box(self, kind.capitalize() + "_%02d" % index,
@@ -562,6 +599,7 @@ func _construct_building(at: Vector3, footprint: Vector3, index: int) -> void:
 			# Loading canopies use steel posts, gutter edges and corrugated roofs.
 			for side in [-1.0, 1.0]:
 				_details.box(Vector3(0, 3.55, side * (size.z * 0.5 + 0.7)), Vector3(size.x - 2.5, 0.16, 1.6), _metal)
+				_weather_roofs.append(AABB(origin + Vector3(-(size.x - 2.5) * 0.5, 0, side * (size.z * 0.5 + 0.7) - 0.8), Vector3(size.x - 2.5, 3.63, 1.6)))
 				for x in [-size.x * 0.42, 0.0, size.x * 0.42]:
 					_details.pipe(Vector3(x, 2.6, side * size.z * 0.5), Vector3(x, 3.5, side * (size.z * 0.5 + 1.45)), 0.08, _dark_metal)
 			_roof_ventilation(size, 3)
@@ -597,6 +635,12 @@ func _construct_building(at: Vector3, footprint: Vector3, index: int) -> void:
 						for rail in range(9):
 							_details.box(Vector3(x - 1.5 + float(rail) * 0.375, y + 0.54, z + side * 0.65), Vector3(0.045, 0.9, 0.045), _dark_metal)
 		"hangar":
+			# Match the curved roof instead of letting drops enter the arch volume.
+			for band in range(24):
+				var roof_radius := size.z * 0.48
+				var band_z := -roof_radius + (float(band) + 0.5) * roof_radius * 2.0 / 24.0
+				var roof_height := height + sqrt(maxf(0.0, roof_radius * roof_radius - band_z * band_z)) * 0.38 + 0.1
+				_weather_roofs.append(AABB(origin + Vector3(-size.x * 0.5 - 0.2, 0, band_z - roof_radius / 24.0), Vector3(size.x + 0.4, roof_height, roof_radius * 2.0 / 24.0)))
 			# A curved standing-seam barrel roof replaces the flat warehouse roofline.
 			for side in [-1.0, 1.0]:
 				# Closed arch gables seal the barrel roof; no hollow floating roof shell.

@@ -140,7 +140,7 @@ func _test_mines_and_emp() -> void:
 		75.0,
 		0.0
 	)
-	_check(player_mine != null and enemy_mine != null, "both factions can place mines")
+	_check(player_mine != null and enemy_mine == null, "mine deployment permits the player and rejects enemies")
 	_check(
 		field.take_triggered(
 			Vector3.ZERO, CombatEnumsRef.Faction.ENEMY, 1.19
@@ -160,19 +160,20 @@ func _test_mines_and_emp() -> void:
 		triggered != null and _near(triggered.damage, 220.0),
 		"armed player mine triggers once on an enemy"
 	)
-	var unarmed_enemy = field.try_place(
+	var armed_player = field.try_place(2, CombatEnumsRef.Faction.PLAYER, Vector3(10, 0, 0), 220.0, 0.0)
+	var unarmed_player = field.try_place(
 		3,
-		CombatEnumsRef.Faction.ENEMY,
+		CombatEnumsRef.Faction.PLAYER,
 		Vector3(20.0, 0.0, 0.0),
 		75.0,
 		2.0,
 		10.0
 	)
-	_check(unarmed_enemy != null, "enemy can deploy an unarmed mine")
+	_check(unarmed_player != null and armed_player != null, "player can deploy mines with independent arming clocks")
 	_check(
 		field.clear_with_emp(Vector3.ZERO, 30.0, 2.1) == 2
 		and field.mines.is_empty(),
-		"EMP clears armed and unarmed mines from both factions"
+		"EMP clears both armed and unarmed player mines"
 	)
 	var expiring = field.try_place(
 		4,

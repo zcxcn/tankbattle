@@ -11,6 +11,7 @@ const MissionTarget = preload("res://actors/mission_target.gd")
 const ArenaScript = preload("res://scenes/missions/industrial_arena.gd")
 const Deployment = preload("res://scripts/battle_deployment.gd")
 const WreckScript = preload("res://actors/tank_wreck.gd")
+const TrackMarksScript = preload("res://scripts/track_marks.gd")
 
 var mission_index := 0
 var selected_mission := 0
@@ -67,7 +68,7 @@ func _ready() -> void:
 	get_tree().auto_accept_quit = false
 	Input.joy_connection_changed.connect(_on_joy_connection_changed)
 	_smoke_test = "--smoke-test" in OS.get_cmdline_user_args()
-	print("IRON_EMBERS_PC_READY | Godot native | Campaign 0.4.1 | mouse orbit + recoil + controller input")
+	print("IRON_EMBERS_PC_READY | Godot native | Campaign 0.4.2 | rain + track marks + vertical cookoff")
 	if _smoke_test:
 		call_deferred("start_game")
 
@@ -80,6 +81,11 @@ func _build_arena() -> void:
 	arena.game = self
 	arena.mission_index = mission_index
 	add_child(arena)
+	var tracks := TrackMarksScript.new()
+	tracks.game = self
+	var weather_kind: String = MissionCatalog.get_mission(mission_index).get("weather", "dry")
+	tracks.set_wetness(1.0 if weather_kind == "heavy_rain" else (0.55 if weather_kind == "light_rain" else 0.0))
+	arena.add_child(tracks)
 
 
 func _create_ui() -> void:
@@ -395,6 +401,8 @@ func spawn_projectile(owner_tank: TankActor, at: Vector3, direction: Vector3, da
 
 
 func spawn_mine(source: TankActor, at: Vector3) -> void:
+	if not is_instance_valid(source) or not source.is_player or source.team != TankActor.TEAM_PLAYER:
+		return
 	var mine := MineScript.new() as TankMine
 	mine.name = "Mine_%d" % Time.get_ticks_usec()
 	mine.game = self

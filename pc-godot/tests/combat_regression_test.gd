@@ -113,12 +113,12 @@ func _run() -> void:
 	_check(is_equal_approx(old_life, shell.lifetime) and shell.global_position == old_position, "pause preserves shell lifetime and position")
 	game.resume_game()
 	var friendly := _new_mine(game.player.global_position + Vector3(5, 0, 0))
-	game.spawn_mine(enemy, game.player.global_position + Vector3(7, 0, 0))
-	var hostile := get_nodes_in_group("mines").back() as Node3D
+	game.spawn_mine(game.player, game.player.global_position + Vector3(7, 0, 0))
+	var second_mine := get_nodes_in_group("mines").back() as Node3D
 	enemy.global_position = game.player.global_position + Vector3(8, 0, 0)
 	health_before = enemy.hp
 	game.emit_emp(game.player, 28.0)
-	_check(friendly.is_queued_for_deletion() and hostile.is_queued_for_deletion(), "EMP defuses both factions inside its radius")
+	_check(friendly.is_queued_for_deletion() and second_mine.is_queued_for_deletion(), "EMP defuses both player mines inside its radius")
 	_check(not paused_mine.is_queued_for_deletion(), "EMP preserves a mine outside its radius")
 	friendly.explode()
 	_check(is_equal_approx(enemy.hp, health_before), "EMP disposal cannot later explode or damage nearby armor")

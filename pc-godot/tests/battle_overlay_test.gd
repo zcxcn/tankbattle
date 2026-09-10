@@ -42,7 +42,7 @@ func _run() -> void:
 	var friendly := 0
 	for mine: Dictionary in data["radar_mines"]:
 		friendly += int(mine["friendly"])
-	check(data["radar_mines"].size() == 2 and friendly == 1, "radar distinguishes friendly and hostile mines")
+	check(data["radar_mines"].size() == 1 and friendly == 1, "radar shows the player's mine while enemy placement is rejected")
 	game.emit_emp(game.player, 28.0)
 	check(telemetry.collect(game)["radar_mines"].is_empty(), "defused mines disappear from radar immediately")
 	game.player.aim_point = game.player.global_position + Vector3(0, 0, -24)

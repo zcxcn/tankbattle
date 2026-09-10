@@ -163,9 +163,14 @@ func _detonate() -> void:
 	if cooked_off or not _combat_running():
 		return
 	cooked_off = true
-	_launch_turret(9.0)
+	_launch_turret(12.5)
 	var at := global_position + Vector3.UP * 1.5
-	game.spawn_explosion(at, 1.35)
+	game.add_child(ExplosionFX.create_cookoff(at))
+	if "player" in game:
+		var player: Node = game.get("player")
+		if player is TankActor and not player.destroyed:
+			var distance: float = player.global_position.distance_to(at)
+			player.add_camera_shake(clampf(1.0 - distance / 58.0, 0.0, 1.0) * 1.05)
 	# Neutral secondary damage may hit either faction. The wreck's own hull
 	# is explicitly excluded from LOS; intervening buildings still shield tanks.
 	for node: Node in get_tree().get_nodes_in_group("tanks"):

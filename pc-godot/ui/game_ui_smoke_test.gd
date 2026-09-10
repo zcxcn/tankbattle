@@ -54,7 +54,7 @@ func _run() -> void:
 			"boss_phase": 2,
 			"boss_warning": true,
 			"objective": "歼灭守军并击毁铁牙",
-			"notice": "敌军正在布设地雷",
+			"notice": "残骸弹药正在燃烧",
 			"lifetime_kills": 17,
 			"tank_level": 4,
 			"best_score": 12000,

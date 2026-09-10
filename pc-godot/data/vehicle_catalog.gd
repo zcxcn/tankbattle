@@ -9,7 +9,7 @@ const PLAYER_VEHICLES := [
 ]
 
 const ENEMY_ROLES := {
-	"minelayer": {"name": "蛛网布雷车", "model": "kf51", "hp": 112.0, "armor": 0.06, "speed": 5.8, "interval": 5.4, "damage": 20.0, "acquire": 1.3, "vision": 44.0, "fov": 115.0, "ideal": 27.0, "weapon": "cannon"},
+	"escort": {"name": "铁卫巡护车", "model": "kf51", "hp": 112.0, "armor": 0.06, "speed": 5.8, "interval": 5.4, "damage": 20.0, "acquire": 1.3, "vision": 44.0, "fov": 115.0, "ideal": 27.0, "weapon": "cannon"},
 	"assault": {"name": "猎隼突击车", "model": "kf51", "hp": 128.0, "armor": 0.08, "speed": 6.8, "interval": 0.40, "damage": 6.5, "acquire": 1.0, "vision": 43.0, "fov": 110.0, "ideal": 23.0, "weapon": "machine_gun"},
 	"artillery": {"name": "雷鸣榴弹车", "model": "kv2", "hp": 150.0, "armor": 0.10, "speed": 3.8, "interval": 7.0, "damage": 38.0, "acquire": 1.8, "vision": 72.0, "fov": 90.0, "ideal": 52.0, "weapon": "he"},
 	"repair": {"name": "铁砧抢修车", "model": "challenger2", "hp": 130.0, "armor": 0.08, "speed": 4.6, "interval": 6.2, "damage": 14.0, "acquire": 1.6, "vision": 40.0, "fov": 110.0, "ideal": 36.0, "weapon": "cannon"},

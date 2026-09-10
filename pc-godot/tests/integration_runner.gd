@@ -275,9 +275,9 @@ func _run() -> void:
 	var enemy: TankActor = regular[0]
 	enemy.global_position = game.player.global_position + Vector3(7.0, 0.0, 0.0)
 	await _frames(1)
-	_check(enemy.try_place_mine(), "enemy uses the same physical mine system")
+	_check(not enemy.try_place_mine(), "enemy actors cannot deploy mines")
 	await _frames(2)
-	_check(get_tree().get_nodes_in_group("mines").size() == 2, "both faction mines exist in the world")
+	_check(get_tree().get_nodes_in_group("mines").size() == 1, "only the player's mine exists after enemy deployment is rejected")
 	var friendly_mine: TankMine
 	for node: Node in get_tree().get_nodes_in_group("mines"):
 		if node is TankMine and (node as TankMine).team == TankActor.TEAM_PLAYER:
@@ -296,7 +296,7 @@ func _run() -> void:
 	game.player.emp_cooldown = 0.0
 	_check(game.player.try_emp(), "player EMP activates through the tank ability")
 	await _frames(2)
-	_check(get_tree().get_nodes_in_group("mines").is_empty(), "EMP safely clears friendly and hostile mines")
+	_check(get_tree().get_nodes_in_group("mines").is_empty(), "EMP safely clears the player's deployed mines")
 	for tank: TankActor in regular:
 		tank.active = true
 		tank.receive_damage(10000.0, TankActor.TEAM_PLAYER, tank.global_position)

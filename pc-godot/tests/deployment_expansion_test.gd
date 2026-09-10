@@ -85,10 +85,19 @@ func run() -> void:
 	before = ally.hp
 	repair._repair_allies(5.0)
 	check(ally.hp == before, "exhausted repair stores cannot create infinite regeneration")
-	var mines = game._spawn_tank("MineLayerFixture", Vector3(96, 0.05, 72), 1, false, false, "minelayer")
-	mines.set_physics_process(false)
-	check(mines.mine_ammo == 12 and mines.find_child("ReserveMine", true, false) != null, "minelayer carries twelve mines and a visible mine rack")
-	check(mines.try_place_mine() and mines.mine_ammo == 11, "minelayer deploys a real finite-inventory mine")
+	var escort = game._spawn_tank("EscortFixture", Vector3(96, 0.05, 72), 1, false, false, "escort")
+	escort.set_physics_process(false)
+	check(escort.mine_ammo == 0 and escort.find_child("ReserveMine", true, false) == null and escort.find_child("EscortSideArmor", true, false) != null, "former minelayer is a cannon escort without mines or mine racks")
+	var no_enemy_mines := true
+	var mines_before := get_nodes_in_group("mines").size()
+	for enemy in game.enemies + [escort]:
+		no_enemy_mines = no_enemy_mines and enemy.mine_ammo == 0
+		# A stale or incorrectly granted inventory must not restore the ability.
+		enemy.mine_ammo = 12
+		no_enemy_mines = no_enemy_mines and not enemy.try_place_mine() and enemy.mine_ammo == 12
+		game.spawn_mine(enemy, enemy.global_position)
+		enemy.mine_ammo = 0
+	check(no_enemy_mines and get_nodes_in_group("mines").size() == mines_before, "every deployed enemy and boss is denied actor and game mine deployment even with forced ammunition")
 	var audio_service := root.get_node("AudioService")
 	var settings := root.get_node("SettingsService")
 	var track_before: int = audio_service.get_music_snapshot().index

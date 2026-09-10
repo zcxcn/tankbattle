@@ -26,7 +26,7 @@ func try_place(
 	lifetime: float = DEFAULT_LIFETIME_SECONDS
 ) -> MineStateRef:
 	prune_expired(now)
-	if faction == CombatEnumsRef.Faction.NEUTRAL or damage <= 0.0:
+	if faction != CombatEnumsRef.Faction.PLAYER or damage <= 0.0:
 		return null
 	if mines.size() >= max_total or count_for_owner(owner_id) >= max_per_owner:
 		return null

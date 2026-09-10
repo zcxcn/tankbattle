@@ -91,7 +91,6 @@ var _repair_reserve := 120.0
 var _repair_clock := 0.0
 var _ai_clock := 0.0
 var _salvo_clock := 5.0
-var _ai_mine_clock := 10.0
 var _charge_clock := 0.0
 var _salvo_recovery := 0.0
 var _aim_hold_time := 0.0
@@ -151,6 +150,7 @@ func _build_collision() -> void:
 
 
 func _apply_role_stats() -> void:
+	mine_ammo = 6 if is_player and team == TEAM_PLAYER else 0
 	if is_player:
 		var vehicle: Dictionary = VehicleCatalogScript.player_vehicle(archetype)
 		display_name = vehicle.name
@@ -205,11 +205,8 @@ func _apply_role_stats() -> void:
 		turret_turn_speed = 0.72
 	elif archetype == "sniper":
 		projectile_speed = 280.0
-	if archetype == "minelayer":
-		mine_ammo = 12
 	hp = max_hp
 	_ai_clock = _rng.randf_range(0.3, 1.2)
-	_ai_mine_clock = _rng.randf_range(10.0, 15.0)
 	reload = _rng.randf_range(1.8, 3.2)
 	_strafe_sign = -1.0 if _rng.randi() % 2 == 0 else 1.0
 
@@ -277,11 +274,9 @@ func _add_specialist_equipment() -> void:
 		return
 	var steel := ArtFactory.material(Color("39433c"), 0.7, 0.6)
 	var warning := ArtFactory.material(Color("d6ac52"), 0.35, 0.6)
-	if archetype == "minelayer":
+	if archetype == "escort":
 		for side in [-1.0, 1.0]:
-			ArtFactory.add_box(_model, "MineRack", Vector3(side * 1.2, 1.5, 2.0), Vector3(0.7, 0.16, 1.5), steel)
-			for offset in [-0.5, 0.0, 0.5]:
-				ArtFactory.add_cylinder(_model, "ReserveMine", Vector3(side * 1.2, 1.7, 2.0 + offset), 0.23, 0.14, warning, 16)
+			ArtFactory.add_box(_model, "EscortSideArmor", Vector3(side * 1.25, 1.1, 0.5), Vector3(0.18, 0.6, 2.6), steel)
 	elif archetype == "repair":
 		ArtFactory.add_box(_model, "RecoveryToolChest", Vector3(0.0, 1.4, 2.3), Vector3(2.0, 0.6, 0.65), steel)
 		var boom := ArtFactory.add_box(_turret, "RecoveryCrane", Vector3(-0.8, 1.7, 0.1), Vector3(0.22, 0.28, 2.1), warning)
@@ -512,7 +507,6 @@ func _ai_control(delta: float) -> void:
 	var visible_target := can_see_target(target)
 	_observation_clock -= delta
 	_salvo_clock -= delta
-	_ai_mine_clock -= delta
 	_ai_clock -= delta
 	if visible_target:
 		_has_contact = true
@@ -582,9 +576,6 @@ func _ai_control(delta: float) -> void:
 				_aim_hold_time = 0.0
 	else:
 		_aim_hold_time = 0.0
-	if mine_cooldown <= 0.0 and distance > 8.0 and distance < 25.0 and _ai_mine_clock <= 0.0:
-		try_place_mine()
-		_ai_mine_clock = _rng.randf_range(5.0, 8.0) if archetype == "minelayer" else _rng.randf_range(12.0, 17.0)
 
 
 func can_see_target(target: Node3D) -> bool:
@@ -608,9 +599,6 @@ func can_see_target(target: Node3D) -> bool:
 func _patrol_control(delta: float) -> void:
 	ai_state = "patrol"
 	_aim_hold_time = 0.0
-	if archetype == "minelayer" and _ai_mine_clock <= 0.0 and get_real_velocity().length() > 1.5:
-		try_place_mine()
-		_ai_mine_clock = _rng.randf_range(8.0, 12.0)
 	if patrol_route.is_empty():
 		# Standalone encounters still patrol locally; campaign spawns provide
 		# authored routes through streets and clearings.
@@ -1027,14 +1015,13 @@ func try_emp() -> bool:
 
 
 func try_place_mine() -> bool:
-	if mine_ammo <= 0 or mine_cooldown > 0.0 or stunned > 0.0 or destroyed or not active:
+	if not is_player or team != TEAM_PLAYER or mine_ammo <= 0 or mine_cooldown > 0.0 or stunned > 0.0 or destroyed or not active:
 		return false
 	var behind := global_position + global_basis.z * 3.4
 	game.spawn_mine(self, behind)
 	mine_ammo -= 1
-	mine_cooldown = 2.0 if is_player else 7.0
-	if is_player:
-		AudioService.radio("mine_deployed")
+	mine_cooldown = 2.0
+	AudioService.radio("mine_deployed")
 	return true
 
 

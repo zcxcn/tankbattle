@@ -20,7 +20,7 @@ static func get_mission(index: int) -> Dictionary:
 			"深入港区，占领东侧补给中继站，再击败港区守卫。遭遇机枪车时保持距离，导弹来袭时利用仓库掩护。",
 			"突入堡垒，摧毁西侧燃料库，最后击败堡垒指挥官。重装巡逻队、火箭车与机枪车交错守卫。",
 			"敌军增援重返钢厂。清除十五辆随机部署的战车，优先打掉会修复友军的抢修车，再迎击钢铁督军。",
-			"十八辆敌车封锁港口。占领东侧通信站，留意布雷车、突击车与远程榴弹车，摧毁封锁舰队的指挥坦克。",
+			"十八辆敌车封锁港口。占领东侧通信站，留意巡护车、突击车与远程榴弹车，摧毁封锁舰队的指挥坦克。",
 			"突入最后防线：二十二辆敌车巡守全区。摧毁西侧燃料库，击败黑曜指挥官，结束尘湾战役。利用整备点补充弹药。",
 		][chapter],
 		"player_start": Vector3(0, 0.05, 174),
@@ -31,6 +31,7 @@ static func get_mission(index: int) -> Dictionary:
 		"objective_radius": 10.0,
 		"objective_seconds": 12.0 + chapter if district == 1 else 0.0,
 		"enemy_count": [6, 9, 12, 15, 18, 22][chapter],
+		"weather": ["dry", "light_rain", "dry", "dry", "heavy_rain", "dry"][chapter],
 		"health_multiplier": 1.0 + chapter * 0.08,
 		"damage_multiplier": 1.0 + chapter * 0.04,
 		"reload_multiplier": 1.0 - chapter * 0.02,
@@ -50,7 +51,7 @@ static func get_mission(index: int) -> Dictionary:
 	if chapter >= 2:
 		enemies.append(_patrol(Vector3(96, 0.05, -30), "gunner", [Vector3(96, 0.05, -12), Vector3(96, 0.05, -54)]))
 		enemies.append(_patrol(Vector3(-48, 0.05, -72), "rocket", [Vector3(-68, 0.05, -72), Vector3(-28, 0.05, -72)]))
-	var added_roles := ["minelayer", "assault", "artillery", "repair", "destroyer", "heavy", "rocket", "line", "gunner", "artillery", "repair", "destroyer", "assault", "heavy"]
+	var added_roles := ["escort", "assault", "artillery", "repair", "destroyer", "heavy", "rocket", "line", "gunner", "artillery", "repair", "destroyer", "assault", "heavy"]
 	var extra := 0
 	while enemies.size() < int(mission.enemy_count):
 		var x: float = [-96.0, 0.0, 96.0][extra % 3]

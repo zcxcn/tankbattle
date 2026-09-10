@@ -86,11 +86,13 @@ func _run() -> void:
 	var ally := _tank(Vector3(-5, 0, 0), 0)
 	var enemy := _tank(Vector3(5, 0, 0), 1)
 	var protected := _tank(Vector3(0, 0, -7), 1)
+	var outside := _tank(Vector3(10, 0, 0), 1)
 	var wall := _box(Vector3(0, 2, -4.0), Vector3(4, 4, 0.4))
 	var floor_body := _box(Vector3(0, -0.5, 0), Vector3(100, 1, 100))
 	var wreck := TankWreck.create_from_tank(source, 2, 1)
 	add_child(wreck)
 	wreck.set_physics_process(false)
+	_check(TankWreck.COOKOFF_CHANCE == 0.25 and wreck.cookoff_time >= 3.3 and wreck.cookoff_time <= 7.2, "ammunition fires retain a 25 percent chance with a 3.3 to 7.2 second warning interval")
 	source.destroyed = true
 	source.hide()
 	var source_hull := source.get_node("ArmoredModel/Hull") as MeshInstance3D
@@ -106,13 +108,45 @@ func _run() -> void:
 	wreck._physics_process(10.0)
 	_check(wreck.age == 0.0 and not wreck.cooked_off and explosions == 1 and wreck._emitters[0].speed_scale == 0.0, "pause freezes cookoff, fragments and continuous fire simulation")
 	mode = "playing"
-	wreck._physics_process(2.1)
-	_check(wreck.cooked_off and explosions == 2 and wreck._turret.get_parent() == wreck and wreck._turret_airborne, "delayed ammunition cookoff occurs once and ejects the original modeled turret")
+	wreck.age = 1.99
+	wreck._physics_process(0.02)
+	_check(wreck.cooked_off and explosions == 1 and get_tree().get_nodes_in_group("cookoff_fx").size() == 1 and wreck._turret.get_parent() == wreck and wreck._turret_airborne, "delayed ammunition cookoff occurs once with its own effect and ejects the original modeled turret")
+	_check(wreck._turret_velocity.y > 12.0, "ammunition pressure launches the real modeled turret high above the vehicle")
 	_check(ally.hits == 1 and enemy.hits == 1 and ally.last_attacker == -1 and enemy.last_attacker == -1, "neutral secondary explosion damages both nearby factions without awarding a player kill")
 	_check(protected.hits == 0, "a solid building shields a nearby tank from cookoff blast damage")
+	_check(outside.hits == 0 and TankWreck.COOKOFF_RADIUS == 9.0, "more violent fire visuals do not enlarge the established 9 meter damage boundary")
 	wreck._physics_process(0.1)
-	_check(explosions == 2 and ally.hits == 1 and enemy.hits == 1, "cookoff cannot apply repeated explosions or damage on later frames")
-	for frame in 180:
+	_check(explosions == 1 and get_tree().get_nodes_in_group("cookoff_fx").size() == 1 and ally.hits == 1 and enemy.hits == 1, "cookoff cannot apply repeated explosions or damage on later frames")
+	var plume := get_tree().get_nodes_in_group("cookoff_fx")[0] as ExplosionFX
+	plume.set_process(false)
+	var fire := plume.get_node("CookoffFireColumn") as GPUParticles3D
+	var fire_process := fire.process_material as ParticleProcessMaterial
+	_check(fire_process.direction == Vector3.UP and fire_process.spread <= 15.0 and fire_process.initial_velocity_min >= 11.0 and fire.lifetime > 1.5, "cookoff ejects substantial narrow upward fire instead of a second spherical impact")
+	_check(plume._muzzle_jet.name == "UpwardFlameJet" and (-plume._muzzle_jet.global_basis.z).normalized().dot(Vector3.UP) > 0.999 and plume._jet_duration >= 1.0, "crossed textured flame cards follow the vertical turret-ring vent for more than a brief flash")
+	var smoke := plume.get_node("CookoffSmokeColumn") as GPUParticles3D
+	_check(smoke.lifetime > 5.0 and plume._duration > smoke.lifetime and plume.get_node("CookoffBurningFragments") is GPUParticles3D, "the fire column leaves lingering dark smoke and finite ballistic glowing fragments")
+	var dust := plume.get_node("CookoffPressureDust") as GPUParticles3D
+	_check(is_equal_approx(dust.global_position.y, 0.16) and (dust.process_material as ParticleProcessMaterial).radial_velocity_max >= 8.0, "large pressure dust expands across the floor rather than floating at the turret height")
+	mode = "paused"
+	var age_before := plume._age
+	var jet_scale_before := plume._muzzle_jet.scale
+	plume._process(0.4)
+	_check(plume._age == age_before and plume._muzzle_jet.scale == jet_scale_before and fire.speed_scale == 0.0 and smoke.speed_scale == 0.0, "pause freezes every part of the upward jet and smoke without consuming their lifetime")
+	mode = "playing"
+	plume._process(0.14)
+	_check(plume._muzzle_jet.scale.z > 1.0 and plume._muzzle_jet.visible and fire.speed_scale == 1.0, "resume restores particles and rapidly drives the fire jet above ten meters")
+	plume._process(1.25)
+	_check(not plume._muzzle_jet.visible and not plume.is_queued_for_deletion(), "the pressure jet burns out before its dark smoke instead of leaving a permanent flame column")
+	var cookoff_particles := 0
+	var cookoff_rgb := true
+	for child: Node in plume.get_children():
+		if child is GPUParticles3D:
+			cookoff_particles += child.amount
+			var process := child.process_material as ParticleProcessMaterial
+			if process.scale_curve != null:
+				cookoff_rgb = cookoff_rgb and process.scale_curve.texture_mode == CurveTexture.TEXTURE_MODE_RGB
+	_check(cookoff_particles <= 144 and cookoff_rgb, "all five cookoff layers fit 144 GPU particles and preserve RGB scale channels")
+	for frame in 300:
 		wreck._physics_process(1.0 / 60.0)
 	_check(not wreck._turret_airborne and wreck._turret.global_position.y >= 0.25, "thrown turret falls under gravity, bounces once and settles above the floor")
 	wreck._physics_process(35.0)
@@ -142,13 +176,48 @@ func _run() -> void:
 			count += emitter.amount
 			rgb = rgb and (emitter.process_material as ParticleProcessMaterial).scale_curve.texture_mode == CurveTexture.TEXTURE_MODE_RGB
 	_check(count <= TankWreck.MAX_BURNING_WRECKS * 40 and rgb, "persistent debris uses no rigid bodies and at most 240 RGB-scaled GPU particles")
+	for index in ExplosionFX.MAX_COOKOFFS + 3:
+		var extra_plume := ExplosionFX.create_cookoff(Vector3(index * 12.0, 1.5, 0))
+		add_child(extra_plume)
+		extra_plume.set_process(false)
+	await get_tree().process_frame
+	_check(get_tree().get_nodes_in_group("cookoff_fx").size() == ExplosionFX.MAX_COOKOFFS, "simultaneous ammunition fires obey an independent three-column performance limit")
+	for index in ExplosionFX.MAX_BLASTS + 2:
+		var blast := ExplosionFX.create(Vector3(index * 12.0, 1, 20))
+		add_child(blast)
+		blast.set_process(false)
+	await get_tree().process_frame
+	_check(get_tree().get_nodes_in_group("blast_fx").size() == ExplosionFX.MAX_BLASTS and get_tree().get_nodes_in_group("impact_flash_lights").size() <= ExplosionFX.MAX_FLASH_LIGHTS, "cookoffs share the eight-blast and five-flash-light limits with ordinary explosions")
 	for node: Node in get_tree().get_nodes_in_group("combat_effects"):
 		node.free()
-	_check(get_tree().get_nodes_in_group("tank_wrecks").is_empty() and get_tree().get_nodes_in_group("burning_wrecks").is_empty(), "standard mission cleanup removes all wreck collision, fire, turret and pending cookoff state")
-	for tank in [source, ally, enemy, protected]:
+	await _test_cookoff_priority()
+	_check(get_tree().get_nodes_in_group("tank_wrecks").is_empty() and get_tree().get_nodes_in_group("burning_wrecks").is_empty() and get_tree().get_nodes_in_group("cookoff_fx").is_empty(), "standard mission cleanup removes all wreck collision, fire, turret and pending cookoff state")
+	for tank in [source, ally, enemy, protected, outside]:
 		tank.free()
 	wall.free()
 	floor_body.free()
 	await get_tree().process_frame
 	print("TANK_WRECK_RESULT: %d passed, %d failed" % [passed, failed])
 	await preload("res://tests/test_shutdown.gd").finish(get_tree(), 0 if failed == 0 else 1)
+
+
+func _test_cookoff_priority() -> void:
+	var ordinary: Array[ExplosionFX] = []
+	for index in ExplosionFX.MAX_BLASTS:
+		var blast := ExplosionFX.create(Vector3(index * 12.0, 1, 20))
+		add_child(blast)
+		blast.set_process(false)
+		blast._age = 3.4 - index * 0.01
+		ordinary.append(blast)
+	var priority := ExplosionFX.create_cookoff(Vector3(0, 1.5, 0))
+	add_child(priority)
+	priority.set_process(false)
+	_check(not priority.is_queued_for_deletion() and priority.get_node_or_null("UpwardFlameJet") != null and ordinary[0].is_queued_for_deletion() and not ordinary[1].is_queued_for_deletion() and get_tree().get_nodes_in_group("blast_fx").size() == ExplosionFX.MAX_BLASTS and get_tree().get_nodes_in_group("impact_flash_lights").size() <= ExplosionFX.MAX_FLASH_LIGHTS, "a full eight-death burst gives the imminent cookoff a visible fire column by retiring only the oldest ordinary blast")
+	for index in ExplosionFX.MAX_COOKOFFS:
+		var followup := ExplosionFX.create_cookoff(Vector3(index * 12.0, 1.5, 0))
+		add_child(followup)
+		followup.set_process(false)
+	await get_tree().process_frame
+	_check(is_instance_valid(priority) and not priority.is_queued_for_deletion() and get_tree().get_nodes_in_group("cookoff_fx").size() == ExplosionFX.MAX_COOKOFFS and get_tree().get_nodes_in_group("blast_fx").size() == ExplosionFX.MAX_BLASTS and not is_instance_valid(ordinary[0]) and is_instance_valid(ordinary[3]), "successive priority cookoffs preserve existing fire columns and still obey three-cookoff and eight-blast limits")
+	for effect: Node in get_tree().get_nodes_in_group("combat_effects"):
+		effect.free()

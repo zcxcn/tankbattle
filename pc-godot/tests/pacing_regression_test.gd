@@ -171,7 +171,6 @@ func _check_enemy_acquisition() -> void:
 	enemy._aim_hold_time = 0.0
 	enemy._observation_clock = 0.0
 	enemy._salvo_clock = 99.0
-	enemy._ai_mine_clock = 99.0
 	await _frames(3)
 	_clear_shots()
 	var observed_at := clock
