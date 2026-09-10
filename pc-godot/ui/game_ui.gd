@@ -308,7 +308,7 @@ func _build_title_layer() -> void:
 	layout.add_child(HSeparator.new())
 	var footer := HBoxContainer.new()
 	layout.add_child(footer)
-	footer.add_child(_label("BUILD 0.4.5 · FORWARD+ / PBR ARMOR", &"Micro"))
+	footer.add_child(_label("BUILD 0.4.6 · FORWARD+ / PBR ARMOR", &"Micro"))
 	footer.add_child(_spacer(true, false))
 	var asset_credit := _label("3D：tomm8 · GRIP420 / David Falke · Comrade1280 · CC BY 4.0\n机枪录音：KuraiWolf / Nightshade Game Studios · CC BY 4.0", &"Micro")
 	asset_credit.name = "AssetCredit"
@@ -531,7 +531,7 @@ func _build_pause_layer() -> void:
 	_wire_vertical_focus([resume_button, retry_button, settings_button, menu_button])
 	_focus_targets["paused"] = resume_button
 	box.add_child(_spacer(false, true))
-	var hint := _label("ESC / START  继续    A / ENTER  确认", &"Micro")
+	var hint := _label("ESC / START  继续    A / ENTER  确认    F8  远程鼠标", &"Micro")
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(hint)
 
@@ -564,8 +564,8 @@ func _build_settings_layer() -> void:
 	var settings_box := VBoxContainer.new()
 	settings_box.add_theme_constant_override(&"separation", 13)
 	panel.add_child(settings_box)
-	settings_box.add_child(_label("画面、声音与天气", &"SectionTitle"))
-	var explanation := _label("设置立即生效并在本机保存。F11 可切换显示模式。", &"Muted")
+	settings_box.add_child(_label("画面、声音与操作", &"SectionTitle"))
+	var explanation := _label("设置立即生效并在本机保存。F8 切换远程鼠标，F11 切换显示模式。", &"Muted")
 	explanation.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	settings_box.add_child(explanation)
 	settings_box.add_child(HSeparator.new())
@@ -588,6 +588,7 @@ func _build_settings_layer() -> void:
 		["radio_volume", "战场通信", "真人战术语音独立音量，每次调整 10%"],
 		["music_track", "选择音乐", "轮换三首战斗配乐，也可按 N 切换"],
 		["weather_mode", "战场天气", "随机 / 晴天 / 小雨 / 大雨 / 雪天 / 雾天；立即生效，随机在每次出击时重新选择"],
+		["remote_mouse", "第三人称鼠标", "远程桌面：移动鼠标调整准星，靠近屏幕边缘转动视角。F8 切换本地 / 远程桌面。"],
 	]:
 		var id := String(entry[0])
 		var button := _button("", &"SettingButton", setting_requested.emit.bind(id))
@@ -810,6 +811,7 @@ func _update_settings() -> void:
 		"radio_volume": ["战场通信", "%d%%" % _int_value("radio_volume", 85)],
 		"music_track": ["选择音乐 · N", str((_snapshot.get("music", {}) as Dictionary).get("name", "战斗音乐"))],
 		"weather_mode": ["战场天气", str(_snapshot.get("weather_label", "随机"))],
+		"remote_mouse": ["第三人称鼠标", "远程桌面" if _bool_value("remote_mouse", false) else "本地"],
 	}
 	for id: String in _setting_buttons:
 		var parts: Array = values[id]

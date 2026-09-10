@@ -86,7 +86,7 @@ func run() -> void:
 	game.ui.update_snapshot(game.get_ui_snapshot())
 	var weather_button: Button = game.ui._setting_buttons["weather_mode"]
 	check(weather_button.text.contains("晴天"), "settings button names the applied weather")
-	check(weather_button.get_node(weather_button.focus_neighbor_right) is Button and weather_button.get_node(weather_button.focus_neighbor_top) is Button, "the odd final settings row has valid controller focus neighbors")
+	check(weather_button.get_node(weather_button.focus_neighbor_right) is Button and weather_button.get_node(weather_button.focus_neighbor_top) is Button, "the final settings row has valid controller focus neighbors")
 	var selected: String = game.current_weather
 	game.ui.setting_requested.emit("radio_volume")
 	check(game.current_weather == selected, "audio settings do not reroll weather")

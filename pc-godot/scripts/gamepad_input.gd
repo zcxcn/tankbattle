@@ -7,6 +7,7 @@ var active_device := -1
 var using_controller := false
 var _known_devices: Array[int] = []
 var _last_mode := ""
+var _last_mouse_position := Vector2.INF
 
 
 func _ready() -> void:
@@ -30,8 +31,11 @@ func _input(event: InputEvent) -> void:
 		using_controller = false
 	elif event is InputEventMouseButton and event.pressed:
 		using_controller = false
-	elif event is InputEventMouseMotion and event.relative.length_squared() > 9.0:
-		using_controller = false
+	elif event is InputEventMouseMotion:
+		var absolute_changed: bool = SettingsService.remote_mouse and event.position.is_finite() and (not _last_mouse_position.is_finite() or event.position.distance_squared_to(_last_mouse_position) > 0.0001)
+		_last_mouse_position = event.position
+		if absolute_changed or event.relative.length_squared() > 9.0 or event.screen_relative.length_squared() > 9.0:
+			using_controller = false
 
 
 func _process(_delta: float) -> void:

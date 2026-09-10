@@ -382,6 +382,10 @@ func _input(event: InputEvent) -> void:
 	if not is_player or game == null or not game.is_combat_running():
 		return
 	if event is InputEventMouseMotion:
+		if is_third_person() and SettingsService.remote_mouse:
+			if _camera_pivot.handle_absolute_pointer(event.position, not event.relative.is_zero_approx() or not event.screen_relative.is_zero_approx()):
+				_controller_aim_active = false
+			return
 		# Raw screen deltas avoid stretch/DPI scaling. Some backends and injected
 		# events only provide relative; accept those and sub-pixel fine movement.
 		var motion: Vector2 = event.screen_relative
@@ -395,6 +399,8 @@ func _input(event: InputEvent) -> void:
 			_camera_pivot.handle_look(motion * lerpf(1.0, 0.55, precision))
 	elif event is InputEventMouseButton and event.pressed:
 		_controller_aim_active = false
+		if is_third_person() and SettingsService.remote_mouse and event.button_index == MOUSE_BUTTON_LEFT:
+			_camera_pivot.handle_absolute_pointer(event.position, true)
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
 			_camera_pivot.zoom(-1.0)
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
@@ -464,8 +470,12 @@ func _player_control(delta: float) -> void:
 	if is_third_person():
 		_controller_aim_active = false
 		if pad_aim.length() > 0.01:
+			_camera_pivot.reset_remote_pointer(false)
 			var precision := Input.get_action_strength("precision_aim") if InputMap.has_action("precision_aim") else 0.0
 			_camera_pivot.handle_look(pad_aim * delta * 820.0 * lerpf(1.0, 0.35, precision))
+		else:
+			var precision := Input.get_action_strength("precision_aim") if InputMap.has_action("precision_aim") else 0.0
+			_camera_pivot.update_remote_look(delta, precision)
 	elif pad_aim.length() > 0.01:
 		_controller_aim_active = true
 		_controller_aim_direction = Vector3(pad_aim.x, 0, pad_aim.y).normalized()

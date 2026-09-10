@@ -16,6 +16,9 @@ var _hit_kick := 0.0
 var _hit_age := 0.0
 var _hit_side := 0.0
 var _precision := 0.0
+var _remote_pointer := Vector2.ZERO
+var _remote_last_position := Vector2.INF
+var _remote_pointer_active := false
 
 func _ready() -> void:
 	top_level = true
@@ -52,7 +55,10 @@ func set_third_person(value: bool) -> void:
 		yaw = turret.global_rotation.y if is_instance_valid(turret) else tank.rotation.y
 		pitch = -0.18
 	if is_instance_valid(tank) and tank.get("game") != null:
-		tank.game.notify("第三人称 · 鼠标观察/瞄准 · 滚轮调距离 · C 俯视" if value else "俯视战术镜头 · 滚轮拉近进入第三人称 · C 切换", 3.0)
+		var instructions := "第三人称 · 中心准星，鼠标转动视角 · F8 远程鼠标" if value else "俯视战术镜头 · 滚轮拉近进入第三人称 · C 切换"
+		if value and SettingsService.remote_mouse:
+			instructions = "远程鼠标 · 移动准星，靠近画面边缘转向 · F8 本地鼠标"
+		tank.game.notify(instructions, 4.0)
 
 func toggle() -> void:
 	set_third_person(not third_person)
@@ -74,6 +80,43 @@ func handle_look(motion: Vector2) -> void:
 		return
 	yaw = wrapf(yaw - motion.x * 0.0023, -PI, PI)
 	pitch = clampf(pitch - motion.y * 0.0021, -0.72, 0.12)
+
+func reset_remote_pointer(forget_position := true) -> void:
+	_remote_pointer_active = false
+	if forget_position:
+		_remote_last_position = Vector2.INF
+
+func handle_absolute_pointer(position: Vector2, relative_motion := false) -> bool:
+	if not third_person or not SettingsService.remote_mouse or not position.is_finite():
+		return false
+	var moved := not _remote_last_position.is_finite() or position.distance_squared_to(_remote_last_position) > 0.0001 or relative_motion
+	_remote_last_position = position
+	if not moved:
+		return false
+	_remote_pointer = position
+	_remote_pointer_active = get_viewport().get_visible_rect().has_point(position)
+	return true
+
+func update_remote_look(delta: float, precision := 0.0) -> void:
+	if not third_person or not SettingsService.remote_mouse or not _remote_pointer_active:
+		return
+	if not is_instance_valid(tank.game) or not tank.game.is_combat_running():
+		return
+	var bounds := get_viewport().get_visible_rect()
+	if not bounds.has_point(_remote_pointer) or bounds.size.x <= 0.0 or bounds.size.y <= 0.0:
+		return
+	var fraction := (_remote_pointer - bounds.position) / bounds.size
+	var edge := Vector2(_edge_turn(fraction.x), _edge_turn(fraction.y))
+	# Absolute input cannot wrap around the screen. Holding the pointer near
+	# an edge turns continuously without recentering or raw-motion capture.
+	handle_look(edge * Vector2(620.0, 320.0) * minf(delta, 0.1) * lerpf(1.0, 0.55, precision))
+
+static func _edge_turn(fraction: float) -> float:
+	if fraction < 0.12:
+		return -clampf((0.12 - fraction) / 0.12, 0.0, 1.0)
+	if fraction > 0.88:
+		return clampf((fraction - 0.88) / 0.12, 0.0, 1.0)
+	return 0.0
 
 func kick_shot(strength: float) -> void:
 	_shot_kick = minf(1.4, _shot_kick + strength)
@@ -119,4 +162,6 @@ func update_view(delta: float, shake: Vector3) -> void:
 	camera.fov += _hit_kick * 2.5
 
 func aim_screen_point() -> Vector2:
+	if SettingsService.remote_mouse and _remote_pointer_active and get_viewport().get_visible_rect().has_point(_remote_pointer):
+		return _remote_pointer
 	return get_viewport().get_visible_rect().size * 0.5

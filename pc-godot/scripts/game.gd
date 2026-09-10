@@ -46,6 +46,7 @@ var notice := ""
 var notice_time := 0.0
 var pause_reason := "manual"
 var _settings_return_mode := "title"
+var _pointer_context := ""
 var _title_rig: Node3D
 var _cleanup: Array[Dictionary] = []
 var _smoke_test := false
@@ -69,10 +70,11 @@ func _ready() -> void:
 	_create_ui()
 	_show_title_tank()
 	get_window().focus_exited.connect(_on_focus_lost)
+	get_window().mouse_exited.connect(_on_mouse_exited)
 	get_tree().auto_accept_quit = false
 	Input.joy_connection_changed.connect(_on_joy_connection_changed)
 	_smoke_test = "--smoke-test" in OS.get_cmdline_user_args()
-	print("IRON_EMBERS_PC_READY | Godot native | Campaign 0.4.5 | stronger armor impacts + recorded hit audio + directional camera shock")
+	print("IRON_EMBERS_PC_READY | Godot native | Campaign 0.4.6 | remote desktop mouse aiming + edge camera turn")
 	if _smoke_test:
 		call_deferred("start_game")
 
@@ -257,7 +259,7 @@ func pause_game(reason := "manual") -> void:
 	pause_reason = reason
 	mode = "paused"
 	AudioService.set_game_state(mode)
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	sync_pointer_mode()
 	notify("行动已暂停", 1.2)
 
 
@@ -333,13 +335,23 @@ func _process(delta: float) -> void:
 
 func sync_pointer_mode() -> void:
 	var desired := Input.MOUSE_MODE_VISIBLE
+	var chase := is_instance_valid(player) and player.is_third_person()
 	if mode == "playing":
-		desired = Input.MOUSE_MODE_CAPTURED if is_instance_valid(player) and player.is_third_person() else Input.MOUSE_MODE_HIDDEN
+		desired = Input.MOUSE_MODE_CAPTURED if chase and not SettingsService.remote_mouse else Input.MOUSE_MODE_HIDDEN
+	var context := "%s:%s:%s" % [mode, chase, SettingsService.remote_mouse]
+	if _pointer_context != context:
+		_pointer_context = context
+		if is_instance_valid(player) and is_instance_valid(player._camera_pivot):
+			player._camera_pivot.reset_remote_pointer()
 	if Input.mouse_mode != desired:
 		Input.mouse_mode = desired
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and (event.physical_keycode == KEY_F8 or event.keycode == KEY_F8):
+		_toggle_remote_mouse()
+		get_viewport().set_input_as_handled()
+		return
 	if event.is_action_pressed("music_next"):
 		_cycle_music()
 		get_viewport().set_input_as_handled()
@@ -363,7 +375,7 @@ func _update_mouse_aim() -> void:
 		return
 	if player.is_controller_aiming() and not player.is_third_person():
 		return
-	var mouse := get_viewport().get_visible_rect().size * 0.5 if player.is_third_person() else get_viewport().get_mouse_position()
+	var mouse: Vector2 = player._camera_pivot.aim_screen_point() if player.is_third_person() else get_viewport().get_mouse_position()
 	var origin := player.camera.project_ray_origin(mouse)
 	var ray := player.camera.project_ray_normal(mouse)
 	var muzzle := player.get_node_or_null("ArmoredModel/TurretPivot/GunRecoil/Muzzle") as Node3D
@@ -717,6 +729,7 @@ func get_ui_snapshot() -> Dictionary:
 		"fps_cap": SettingsService.fps_cap,
 		"vsync": SettingsService.vsync,
 		"screen_shake": SettingsService.screen_shake,
+		"remote_mouse": SettingsService.remote_mouse,
 		"weather_mode": SettingsService.weather_mode,
 		"weather_label": WeatherCatalog.mode_label(SettingsService.weather_mode, current_weather),
 		"current_weather": current_weather,
@@ -771,6 +784,8 @@ func _on_setting_requested(id: String) -> void:
 		"shake":
 			SettingsService.screen_shake = not SettingsService.screen_shake
 			SettingsService.apply()
+		"remote_mouse":
+			_toggle_remote_mouse()
 		"master_volume":
 			SettingsService.master_volume = _next_volume(SettingsService.master_volume)
 			SettingsService.apply()
@@ -794,6 +809,23 @@ func _on_setting_requested(id: String) -> void:
 
 func _next_volume(current: int) -> int:
 	return 0 if current >= 100 else mini(100, current + 10)
+
+
+func _toggle_remote_mouse() -> void:
+	SettingsService.remote_mouse = not SettingsService.remote_mouse
+	# This input preference does not need to reset the window or graphics.
+	SettingsService.save_settings()
+	sync_pointer_mode()
+	notify("远程鼠标已开启 · 移动准星，靠近画面边缘转向 · F8 切回本地" if SettingsService.remote_mouse else "本地鼠标已开启 · 第三人称中心准星，鼠标转动视角 · F8 远程模式", 5.0)
+	if is_instance_valid(ui):
+		ui.update_snapshot(get_ui_snapshot())
+
+
+func _on_mouse_exited() -> void:
+	# Windows can send mouse_exited without a final out-of-bounds motion event.
+	# Disarm edge turning even when the game window keeps keyboard focus.
+	if is_instance_valid(player) and is_instance_valid(player._camera_pivot):
+		player._camera_pivot.reset_remote_pointer()
 
 
 func _on_focus_lost() -> void:
