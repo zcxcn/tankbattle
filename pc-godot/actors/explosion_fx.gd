@@ -20,6 +20,10 @@ var _weapon_kind := "cannon"
 var _heavy := false
 var _light_peak := 0.0
 var _muzzle_forward := Vector3.FORWARD
+var _muzzle_jet: Node3D
+var _jet_materials: Array[StandardMaterial3D] = []
+var _jet_duration := 0.13
+var _flash_duration := 0.09
 
 
 static func create(at: Vector3, scale_factor := 1.0, destructive := true) -> ExplosionFX:
@@ -50,7 +54,7 @@ static func create_muzzle(at: Vector3, forward: Vector3, strength := 1.0, weapon
 	effect.scale = Vector3.ONE * strength
 	effect._profile = "muzzle"
 	effect._weapon_kind = weapon_kind
-	effect._muzzle_forward = forward.normalized()
+	effect._muzzle_forward = forward.normalized() if forward.length_squared() > 0.01 else Vector3.FORWARD
 	effect.set_meta("destructive", false)
 	return effect
 
@@ -153,12 +157,75 @@ func _build_explosive_impact() -> void:
 
 func _build_muzzle() -> void:
 	var machine := _weapon_kind == "machine_gun"
-	_duration = 0.45 if machine else 0.8
-	_add_flash(0.17 if machine else 0.65, _muzzle_forward * 0.16)
-	if not machine:
-		_add_light(4.5, 6.0)
-		_spawn_particles("Fire", 5, 0.12, Color("ffddab"), Color.TRANSPARENT, 9.0, 0.0, 0.15, true, false, _muzzle_forward)
-		_spawn_particles("Smoke", 7, 0.7, Color.GRAY, Color.TRANSPARENT, 2.8, 0.0, 0.23, true, false, _muzzle_forward)
+	var rocket := _weapon_kind == "rocket"
+	_duration = 0.32 if machine else (1.15 if rocket else 1.45)
+	_flash_duration = 0.05 if machine else (0.075 if rocket else 0.12)
+	_jet_duration = 0.05 if machine else (0.10 if rocket else 0.15)
+	_add_flash(0.28 if machine else (0.46 if rocket else 1.12), _muzzle_forward * 0.20)
+	_build_muzzle_jet(0.55 if machine else (1.6 if rocket else 2.9), 0.18 if machine else (0.45 if rocket else 1.05))
+	if machine:
+		var haze := _spawn_particles("Smoke", 3, 0.28, Color.GRAY, Color.TRANSPARENT, 1.8, 0.0, 0.08, true, false, _muzzle_forward)
+		_tint_muzzle_smoke(haze, 0.18)
+		return
+	_add_light(3.2 if rocket else 10.0, 5.5 if rocket else 11.0)
+	var flame := _spawn_particles("Fire", 6 if rocket else 12, 0.18 if rocket else 0.22, Color("ffddab"), Color.TRANSPARENT, 8.0 if rocket else 18.0, 0.0, 0.24 if rocket else 0.42, true, false, _muzzle_forward)
+	var flame_process := flame.process_material as ParticleProcessMaterial
+	flame_process.spread = 10.0 if rocket else 13.0
+	flame_process.damping_min = 8.0
+	flame_process.damping_max = 13.0
+	var smoke := _spawn_particles("Smoke", 8 if rocket else 12, 1.05 if rocket else 1.3, Color.GRAY, Color.TRANSPARENT, 3.5 if rocket else 5.8, 0.0, 0.27 if rocket else 0.50, true, false, _muzzle_forward)
+	(smoke.process_material as ParticleProcessMaterial).spread = 19.0
+	_tint_muzzle_smoke(smoke, 0.30 if rocket else 0.32)
+	# The pressure front stirs loose ground below the bore. Elevated launchers
+	# and roof-mounted rockets do not conjure floating circles of dust.
+	if not rocket and global_position.y >= 0.0 and global_position.y <= 4.2:
+		var dust := _spawn_particles("Dust", 12, 1.1, Color.GRAY, Color.TRANSPARENT, 3.0, 0.0, 0.38, true, true)
+		dust.name = "MuzzlePressure"
+		dust.position = _muzzle_forward * 0.65
+		dust.position.y = (0.16 - global_position.y) / maxf(absf(global_basis.get_scale().y), 0.01)
+		var pressure := dust.process_material as ParticleProcessMaterial
+		pressure.emission_ring_radius = 0.65
+		pressure.emission_ring_inner_radius = 0.25
+		pressure.radial_velocity_min = 2.2
+		pressure.radial_velocity_max = 4.5
+		pressure.color_ramp.gradient.set_color(1, Color(0.46, 0.40, 0.32, 0.21))
+		pressure.color_ramp.gradient.set_color(2, Color(0.46, 0.40, 0.32, 0.12))
+
+
+func _tint_muzzle_smoke(particles: GPUParticles3D, opacity: float) -> void:
+	var process := particles.process_material as ParticleProcessMaterial
+	process.color_ramp.gradient.set_color(1, Color(0.58, 0.55, 0.49, opacity))
+	process.color_ramp.gradient.set_color(2, Color(0.62, 0.60, 0.55, opacity * 0.55))
+	process.scale_curve = _growth_curve([Vector2(0.0, 0.35), Vector2(0.20, 1.0), Vector2(1.0, 2.0)])
+
+
+func _build_muzzle_jet(length_m: float, width_m: float) -> void:
+	# Two intersecting textured flame tongues retain the barrel's axis from
+	# tactical and chase cameras. Their short lifetime leaves the aim line clear.
+	_muzzle_jet = Node3D.new()
+	_muzzle_jet.name = "DirectionalFlame"
+	var up := Vector3.RIGHT if absf(_muzzle_forward.dot(Vector3.UP)) > 0.98 else Vector3.UP
+	_muzzle_jet.basis = Basis.looking_at(_muzzle_forward, up)
+	add_child(_muzzle_jet)
+	for angle in [0.0, PI * 0.5]:
+		var card := MeshInstance3D.new()
+		card.name = "FlameTongue"
+		card.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		card.basis = Basis(Vector3.RIGHT, Vector3.FORWARD, Vector3.UP).rotated(Vector3.FORWARD, angle)
+		card.position.z = -length_m * 0.48
+		var quad := QuadMesh.new()
+		quad.size = Vector2(width_m, length_m)
+		var material := StandardMaterial3D.new()
+		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		material.cull_mode = BaseMaterial3D.CULL_DISABLED
+		material.albedo_texture = particle_sprite("Muzzle")
+		material.albedo_color = Color(2.6, 1.65, 0.60, 0.85)
+		quad.material = material
+		card.mesh = quad
+		_jet_materials.append(material)
+		_muzzle_jet.add_child(card)
 
 
 func _process(delta: float) -> void:
@@ -181,13 +248,19 @@ func _process(delta: float) -> void:
 			_light.queue_free()
 	if is_instance_valid(_flash):
 		_flash.scale = Vector3.ONE * (0.7 + _age * 3.0)
-		_flash.visible = _age < 0.09
-		((_flash.mesh as QuadMesh).material as StandardMaterial3D).albedo_color.a = exp(-_age * 48.0)
+		_flash.visible = _age < _flash_duration
+		((_flash.mesh as QuadMesh).material as StandardMaterial3D).albedo_color.a = exp(-_age * (26.0 if _profile == "muzzle" else 48.0))
+	if is_instance_valid(_muzzle_jet):
+		_muzzle_jet.visible = _age < _jet_duration
+		var phase := clampf(_age / _jet_duration, 0.0, 1.0)
+		_muzzle_jet.scale = Vector3.ONE * (0.78 + sin(phase * PI) * 0.26)
+		for material: StandardMaterial3D in _jet_materials:
+			material.albedo_color = Color(2.6 - phase, 1.65 - phase * 1.25, 0.60 - phase * 0.50, pow(1.0 - phase, 1.4) * 0.85)
 	if _age >= _duration:
 		queue_free()
 
 
-func _spawn_particles(label: String, amount: int, lifetime: float, start: Color, finish: Color, speed: float, gravity: float, size: float, billboard: bool, horizontal := false, outward := Vector3.UP) -> void:
+func _spawn_particles(label: String, amount: int, lifetime: float, start: Color, finish: Color, speed: float, gravity: float, size: float, billboard: bool, horizontal := false, outward := Vector3.UP) -> GPUParticles3D:
 	var particles := GPUParticles3D.new()
 	particles.name = label
 	if label == "Dust":
@@ -273,6 +346,7 @@ func _spawn_particles(label: String, amount: int, lifetime: float, start: Color,
 	particles.draw_pass_1 = quad
 	add_child(particles)
 	particles.emitting = true
+	return particles
 
 
 func _spawn_debris(amount: int, size: float) -> void:
@@ -363,7 +437,16 @@ static func particle_sprite(kind: String) -> ImageTexture:
 			var alpha := softness * cloud
 			if kind == "Sparks":
 				alpha = pow(maxf(0.0, 1.0 - absf(uv.x)), 2.5) * (1.0 - smoothstep(0.05, 1.0, absf(uv.y)))
-			image.set_pixel(x, y, Color(1.0, 1.0, 1.0, alpha))
+			var color := Color(1.0, 1.0, 1.0, alpha)
+			if kind == "Muzzle":
+				# Quad +Y points down the barrel, and its texture V starts at 0.
+				var along := (1.0 - uv.y) * 0.5
+				var width := (0.22 + sin(along * PI) * 0.65) * (1.0 - along * 0.72)
+				var waviness := noise.get_noise_2d(float(x), float(y)) * 0.12 * sin(along * PI)
+				var lateral := 1.0 - smoothstep(width * 0.12, width, absf(uv.x + waviness))
+				var ends := smoothstep(0.0, 0.06, along) * (1.0 - smoothstep(0.65, 1.0, along))
+				color = Color(1.0, lerpf(0.92, 0.34, along), lerpf(0.68, 0.06, along), lateral * ends * cloud)
+			image.set_pixel(x, y, color)
 	image.generate_mipmaps()
 	var texture := ImageTexture.create_from_image(image)
 	texture.resource_name = "Explosion%sSoftSprite" % kind

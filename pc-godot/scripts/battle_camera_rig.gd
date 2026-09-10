@@ -11,6 +11,8 @@ var chase_distance := 11.5
 var yaw := 0.0
 var pitch := -0.22
 var _blend := 0.0
+var _shot_kick := 0.0
+var _precision := 0.0
 
 func _ready() -> void:
 	top_level = true
@@ -39,6 +41,8 @@ func set_third_person(value: bool) -> void:
 	if third_person == value:
 		return
 	third_person = value
+	if is_instance_valid(tank) and tank.get("game") != null and tank.game.has_method("sync_pointer_mode"):
+		tank.game.sync_pointer_mode()
 	if value:
 		# Enter looking along the turret so the view never starts behind the shot.
 		var turret: Node3D = tank.get("_turret")
@@ -68,6 +72,9 @@ func handle_look(motion: Vector2) -> void:
 	yaw = wrapf(yaw - motion.x * 0.0023, -PI, PI)
 	pitch = clampf(pitch - motion.y * 0.0021, -0.72, 0.12)
 
+func kick_shot(strength: float) -> void:
+	_shot_kick = minf(1.4, _shot_kick + strength)
+
 func movement(axis: Vector2) -> Vector3:
 	var direction := Vector3(axis.x, 0.0, axis.y)
 	return Basis(Vector3.UP, yaw) * direction if third_person else direction
@@ -76,12 +83,19 @@ func update_view(delta: float, shake: Vector3) -> void:
 	if not is_instance_valid(tank) or not is_instance_valid(arm):
 		return
 	_blend = move_toward(_blend, 1.0 if third_person else 0.0, delta * 3.0)
+	if not SettingsService.screen_shake:
+		_shot_kick = 0.0
+	var running: bool = is_instance_valid(tank.game) and tank.game.is_combat_running()
+	if running:
+		_shot_kick = move_toward(_shot_kick, 0.0, delta * 5.0)
+		var held := Input.get_action_strength("precision_aim") if InputMap.has_action("precision_aim") else 0.0
+		_precision = move_toward(_precision, held, delta * 5.0)
 	var pivot := Vector3(0.0, 1.25, -3.0).lerp(Vector3(0.0, 2.6, 0.0), _blend)
 	global_position = tank.global_position + pivot + shake * lerpf(1.0, 0.36, _blend)
 	rotation = Vector3.ZERO
-	arm.rotation = Vector3(lerpf(deg_to_rad(-55.0), pitch, _blend), lerp_angle(0.0, yaw, _blend), 0.0)
-	arm.spring_length = lerpf(tactical_distance, chase_distance, _blend)
-	camera.fov = lerpf(59.0, 66.0, _blend)
+	arm.rotation = Vector3(lerpf(deg_to_rad(-55.0), pitch + _shot_kick * 0.025, _blend), lerp_angle(0.0, yaw, _blend), 0.0)
+	arm.spring_length = lerpf(tactical_distance, chase_distance + _shot_kick * 0.3, _blend)
+	camera.fov = lerpf(59.0, 66.0 - _precision * 12.0 + _shot_kick, _blend)
 
 func aim_screen_point() -> Vector2:
 	return get_viewport().get_visible_rect().size * 0.5

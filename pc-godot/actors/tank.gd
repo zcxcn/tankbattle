@@ -109,6 +109,12 @@ var _base_barrel_z := 0.0
 var _base_barrel_pitch := 0.0
 var _barrel_pitch := 0.0
 var _recoil := 0.0
+var _recoil_peak := 0.0
+var _recoil_time := 1.0
+var _base_barrel_position := Vector3.ZERO
+var _hull_body: Node3D
+var _hull_base_rotation := Vector3.ZERO
+var _hull_recoil_axis := Vector3.RIGHT
 var _last_move := Vector3.FORWARD
 var _camera_shake := 0.0
 var _camera_base_position := Vector3.ZERO
@@ -237,11 +243,14 @@ func _build_model() -> void:
 	# by projectiles, tests and Boss rocket launchers.
 	body.reparent(_model, true)
 	body.name = "Hull"
+	_hull_body = body
+	_hull_base_rotation = body.rotation
 	body.set_meta("source_model", model_key)
 	_turret.reparent(_model, true)
 	_turret.name = "TurretPivot"
 	_barrel.name = "GunRecoil"
 	_base_barrel_z = _barrel.position.z
+	_base_barrel_position = _barrel.position
 	_base_barrel_pitch = _barrel.rotation.x
 	if imported != body and imported != _turret:
 		imported.free()
@@ -374,10 +383,18 @@ func _process(delta: float) -> void:
 func _input(event: InputEvent) -> void:
 	if not is_player or game == null or not game.is_combat_running():
 		return
-	if event is InputEventMouseMotion and event.relative.length_squared() > 1.0:
+	if event is InputEventMouseMotion:
+		# Raw screen deltas avoid stretch/DPI scaling. Some backends and injected
+		# events only provide relative; accept those and sub-pixel fine movement.
+		var motion: Vector2 = event.screen_relative
+		if motion.is_zero_approx():
+			motion = event.relative
+		if motion.is_zero_approx():
+			return
 		_controller_aim_active = false
-		if is_third_person() and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-			_camera_pivot.handle_look(event.screen_relative)
+		if is_third_person():
+			var precision := Input.get_action_strength("precision_aim") if InputMap.has_action("precision_aim") else 0.0
+			_camera_pivot.handle_look(motion * lerpf(1.0, 0.55, precision))
 	elif event is InputEventMouseButton and event.pressed:
 		_controller_aim_active = false
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
@@ -387,7 +404,7 @@ func _input(event: InputEvent) -> void:
 
 
 func is_controller_aiming() -> bool:
-	return _controller_aim_active or Input.get_vector("aim_left", "aim_right", "aim_up", "aim_down").length() > 0.24
+	return _controller_aim_active or Input.get_vector("aim_left", "aim_right", "aim_up", "aim_down").length() > 0.01
 
 
 func _physics_process(delta: float) -> void:
@@ -409,9 +426,7 @@ func _physics_process(delta: float) -> void:
 	_dash_remaining = maxf(0.0, _dash_remaining - delta)
 	stunned = maxf(0.0, stunned - delta)
 	invulnerable = maxf(0.0, invulnerable - delta)
-	_recoil = move_toward(_recoil, 0.0, delta * 4.5)
-	if is_instance_valid(_barrel):
-		_barrel.position.z = _base_barrel_z + _recoil
+	_update_recoil(delta)
 	if active and stunned <= 0.0:
 		if is_player:
 			_player_control(delta)
@@ -449,9 +464,10 @@ func _player_control(delta: float) -> void:
 	var pad_aim := Input.get_vector("aim_left", "aim_right", "aim_up", "aim_down")
 	if is_third_person():
 		_controller_aim_active = false
-		if pad_aim.length() > 0.24:
-			_camera_pivot.handle_look(pad_aim * delta * 820.0)
-	elif pad_aim.length() > 0.24:
+		if pad_aim.length() > 0.01:
+			var precision := Input.get_action_strength("precision_aim") if InputMap.has_action("precision_aim") else 0.0
+			_camera_pivot.handle_look(pad_aim * delta * 820.0 * lerpf(1.0, 0.35, precision))
+	elif pad_aim.length() > 0.01:
 		_controller_aim_active = true
 		_controller_aim_direction = Vector3(pad_aim.x, 0, pad_aim.y).normalized()
 	if _controller_aim_active:
@@ -476,6 +492,10 @@ func _player_control(delta: float) -> void:
 		try_place_mine()
 	if Input.is_action_just_pressed("camera"):
 		toggle_camera()
+	if InputMap.has_action("zoom_in") and Input.is_action_just_pressed("zoom_in"):
+		_camera_pivot.zoom(-1.0)
+	if InputMap.has_action("zoom_out") and Input.is_action_just_pressed("zoom_out"):
+		_camera_pivot.zoom(1.0)
 
 
 func _ai_control(delta: float) -> void:
@@ -917,19 +937,47 @@ func try_fire() -> bool:
 	if kind == "machine_gun":
 		game.spawn_muzzle_flash(launch_position, Color("ffd8a2"), 0.85, direction, kind)
 		add_camera_shake(0.012)
+		_rumble(0.07, 0.12, 0.065)
 		AudioService.play_3d("machine_gun", launch_position, -16.0, _rng.randf_range(0.96, 1.04))
 	elif kind == "rocket":
 		game.spawn_muzzle_flash(launch_position, Color("ffc392"), 0.7, direction, kind)
 		add_camera_shake(0.08)
+		_rumble(0.25, 0.4, 0.18)
 		AudioService.play_3d("rocket", launch_position, -6.0, 0.95)
 	else:
 		game.spawn_muzzle_flash(launch_position, Color("ffcc6d") if team == TEAM_PLAYER else Color("ff5c43"), 1.0 if not is_boss else 1.5, direction, kind)
-		_recoil = 0.46 if is_boss or archetype == "heavy" else 0.34
-		add_camera_shake(0.16)
+		_recoil_peak = 0.75 if is_boss or archetype == "heavy" else 0.6
+		_recoil_time = 0.0
+		_hull_recoil_axis = Vector3.UP.cross(global_basis.inverse() * -direction).normalized()
+		add_camera_shake(0.24)
+		if is_player and SettingsService.screen_shake:
+			_camera_pivot.kick_shot(1.25 if archetype == "heavy" else 1.0)
+		_rumble(0.45, 0.82, 0.24)
 		var firing_pitch := 1.04 if is_player else (0.72 if is_boss else 0.9)
 		AudioService.play_3d("cannon", launch_position, -3.0 if not is_boss else -1.0, firing_pitch)
 		AudioService.play_3d("cannon_tail", launch_position, -7.0 if not is_boss else -4.0, firing_pitch)
 	return true
+
+
+func _update_recoil(delta: float) -> void:
+	_recoil_time += delta
+	if _recoil_time < 0.065:
+		_recoil = _recoil_peak * sin(_recoil_time / 0.065 * PI * 0.5)
+	else:
+		_recoil = _recoil_peak * pow(maxf(0.0, 1.0 - (_recoil_time - 0.065) / 0.56), 2.0)
+	if is_instance_valid(_barrel):
+		_barrel.position = _base_barrel_position + _barrel.basis.z * _recoil
+	if is_instance_valid(_hull_body):
+		# Only the suspension artwork rocks; the physical hull stays authoritative.
+		_hull_body.rotation = _hull_base_rotation + _hull_recoil_axis * _recoil * 0.06
+
+
+func _rumble(weak: float, strong: float, duration: float) -> void:
+	if not is_player or not is_instance_valid(game):
+		return
+	var pad := game.get_node_or_null("GamepadInput")
+	if pad != null:
+		pad.rumble(weak, strong, duration)
 
 
 func _launch_weapon(origin: Vector3, muzzle: Vector3, direction: Vector3, damage: float, speed: float, splash: float, kind: String) -> Vector3:
@@ -1023,6 +1071,8 @@ func receive_damage(amount: float, attacker_team: int, hit_position := Vector3.Z
 			game.alert_enemy(self)
 	var accepted := maxf(1.0, amount * (1.0 - armor))
 	hp = maxf(0.0, hp - accepted)
+	if is_player:
+		_rumble(0.35, clampf(accepted / 70.0, 0.2, 0.9), 0.18)
 	if is_player and hp > 0.0 and hp <= max_hp * 0.3:
 		AudioService.radio("player_critical")
 	AudioService.play_3d("hit", hit_position if hit_position != Vector3.ZERO else global_position, -9.0, _rng.randf_range(0.9, 1.12))

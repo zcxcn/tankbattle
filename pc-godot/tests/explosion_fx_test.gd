@@ -19,7 +19,7 @@ func _check(condition: bool, label: String) -> void:
 
 
 func _run() -> void:
-	for kind in ["Fire", "Smoke", "Sparks"]:
+	for kind in ["Fire", "Smoke", "Sparks", "Muzzle"]:
 		var texture := ExplosionFX.particle_sprite(kind)
 		var image := texture.get_image()
 		var edges_clear := true
@@ -89,6 +89,47 @@ func _run() -> void:
 	_check(spark_process.direction.is_equal_approx(Vector3.RIGHT), "impact spark direction follows the real collision surface normal")
 	armor.free()
 	earth.free()
+	var firing_direction := Vector3(0.4, 0.15, -1.0).normalized()
+	var muzzle := ExplosionFX.create_muzzle(Vector3(0, 2.2, 0), firing_direction, 1.5, "he")
+	add_child(muzzle)
+	muzzle.set_process(false)
+	var flame_jet := muzzle.get_node("DirectionalFlame") as Node3D
+	var tongue := flame_jet.get_child(0) as MeshInstance3D
+	var tongue_mesh := tongue.mesh as QuadMesh
+	_check((-flame_jet.basis.z).is_equal_approx(firing_direction) and flame_jet.get_child_count() == 2, "crossed flame tongues follow the real barrel elevation and heading")
+	_check(tongue_mesh.size.y >= 2.5 and tongue_mesh.size.x <= 1.2 and (tongue_mesh.material as StandardMaterial3D).billboard_mode == BaseMaterial3D.BILLBOARD_DISABLED, "main cannon flash has a long directional jet rather than a view-facing fireball")
+	var muzzle_fire := muzzle.get_node("Fire") as GPUParticles3D
+	var muzzle_fire_process := muzzle_fire.process_material as ParticleProcessMaterial
+	_check(muzzle_fire_process.direction.is_equal_approx(firing_direction) and muzzle_fire_process.spread <= 15.0 and muzzle_fire_process.initial_velocity_max >= 16.0, "visible hot gas is ejected forward in a narrow high-speed cone")
+	_check(muzzle_fire_process.scale_curve.texture_mode == CurveTexture.TEXTURE_MODE_RGB, "muzzle flames preserve all particle scale channels")
+	var pressure := muzzle.get_node("MuzzlePressure") as GPUParticles3D
+	_check(is_equal_approx(pressure.global_position.y, 0.16) and (pressure.process_material as ParticleProcessMaterial).radial_velocity_max >= 4.0, "scaled heavy-gun pressure dust remains on the ground and expands away from the bore")
+	var muzzle_particles := 0
+	for child: Node in muzzle.get_children():
+		if child is GPUParticles3D:
+			muzzle_particles += child.amount
+	_check(muzzle_particles <= 40 and muzzle._duration <= 1.5, "enlarged cannon discharge stays within 40 particles and expires promptly")
+	var machine_muzzle := ExplosionFX.create_muzzle(Vector3.ZERO, Vector3.FORWARD, 1.0, "machine_gun")
+	add_child(machine_muzzle)
+	machine_muzzle.set_process(false)
+	_check((muzzle._flash.mesh as QuadMesh).size.x >= (machine_muzzle._flash.mesh as QuadMesh).size.x * 3.0 and machine_muzzle._light == null and machine_muzzle.get_node_or_null("MuzzlePressure") == null, "main-gun flash is much larger than the compact light-free machine-gun discharge")
+	var rocket_muzzle := ExplosionFX.create_muzzle(Vector3.ZERO, Vector3.FORWARD, 1.0, "rocket")
+	add_child(rocket_muzzle)
+	rocket_muzzle.set_process(false)
+	_check(rocket_muzzle.get_node_or_null("MuzzlePressure") == null and (rocket_muzzle.get_node("Fire") as GPUParticles3D).amount < muzzle_fire.amount, "rocket ignition uses a smaller forward plume without a tank-cannon pressure blast")
+	muzzle._process(0.16)
+	_check(not flame_jet.visible and not muzzle._flash.visible and muzzle.get_node("Smoke") != null, "fire tongue and flash clear the aim line quickly while light propellant smoke remains")
+	muzzle.free()
+	machine_muzzle.free()
+	rocket_muzzle.free()
+	var muzzle_effects: Array[ExplosionFX] = []
+	for index in ExplosionFX.MAX_MUZZLES + 3:
+		var discharge := ExplosionFX.create_muzzle(Vector3.ZERO, Vector3.FORWARD)
+		add_child(discharge)
+		muzzle_effects.append(discharge)
+	_check(get_tree().get_nodes_in_group("muzzle_fx").size() == ExplosionFX.MAX_MUZZLES and get_tree().get_nodes_in_group("impact_flash_lights").size() <= ExplosionFX.MAX_FLASH_LIGHTS, "concurrent discharges and local flash lights remain capped in a large battle")
+	for discharge: ExplosionFX in muzzle_effects:
+		discharge.free()
 	var effects: Array[ExplosionFX] = []
 	for index in ExplosionFX.MAX_IMPACTS + 6:
 		var impact := ExplosionFX.create_impact(Vector3.ZERO, false, "ground", Vector3.UP, "machine_gun")

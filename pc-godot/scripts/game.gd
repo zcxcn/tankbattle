@@ -56,6 +56,10 @@ func _ready() -> void:
 	selected_chassis = clampi(int(SaveService.profile.get("selected_chassis", 1)), 0, 2)
 	selected_mission = unlocked_mission_count() - 1
 	_setup_inputs()
+	var gamepad := preload("res://scripts/gamepad_input.gd").new()
+	gamepad.name = "GamepadInput"
+	gamepad.game = self
+	add_child(gamepad)
 	mission_data = MissionCatalog.get_mission(selected_mission)
 	_create_ui()
 	_show_title_tank()
@@ -63,7 +67,7 @@ func _ready() -> void:
 	get_tree().auto_accept_quit = false
 	Input.joy_connection_changed.connect(_on_joy_connection_changed)
 	_smoke_test = "--smoke-test" in OS.get_cmdline_user_args()
-	print("IRON_EMBERS_PC_READY | Godot native | Campaign 0.4 | random patrols + wrecks + battlefield audio")
+	print("IRON_EMBERS_PC_READY | Godot native | Campaign 0.4.1 | mouse orbit + recoil + controller input")
 	if _smoke_test:
 		call_deferred("start_game")
 
@@ -205,7 +209,7 @@ func start_game() -> void:
 	AudioService.radio("mission_start")
 	_update_encounter_objective()
 	notify("第 %02d 章 · %s\n%s" % [mission_index + 1, mission_data.name, mission_data.briefing], 6.0)
-	Input.mouse_mode = Input.MOUSE_MODE_HIDDEN
+	sync_pointer_mode()
 	if _smoke_test:
 		get_tree().create_timer(1.5).timeout.connect(_finish_smoke_test)
 
@@ -238,7 +242,7 @@ func resume_game() -> void:
 		return
 	mode = "playing"
 	AudioService.set_game_state(mode)
-	Input.mouse_mode = Input.MOUSE_MODE_HIDDEN
+	sync_pointer_mode()
 
 
 func open_settings() -> void:
@@ -289,11 +293,7 @@ func _process(delta: float) -> void:
 	AudioService.set_game_state(mode)
 	if mode in ["won", "lost"]:
 		result_delay = maxf(0.0, result_delay - delta)
-	var mouse_mode := Input.MOUSE_MODE_VISIBLE
-	if mode == "playing":
-		mouse_mode = Input.MOUSE_MODE_CAPTURED if is_instance_valid(player) and player.is_third_person() else Input.MOUSE_MODE_HIDDEN
-	if Input.mouse_mode != mouse_mode:
-		Input.mouse_mode = mouse_mode
+	sync_pointer_mode()
 	notice_time = maxf(0.0, notice_time - delta)
 	if notice_time <= 0.0:
 		notice = ""
@@ -305,6 +305,14 @@ func _process(delta: float) -> void:
 	_update_cleanup(delta)
 	if is_instance_valid(ui) and ui.has_method("update_snapshot"):
 		ui.call("update_snapshot", get_ui_snapshot())
+
+
+func sync_pointer_mode() -> void:
+	var desired := Input.MOUSE_MODE_VISIBLE
+	if mode == "playing":
+		desired = Input.MOUSE_MODE_CAPTURED if is_instance_valid(player) and player.is_third_person() else Input.MOUSE_MODE_HIDDEN
+	if Input.mouse_mode != desired:
+		Input.mouse_mode = desired
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -717,6 +725,9 @@ func get_ui_snapshot() -> Dictionary:
 		if not supply.used:
 			snapshot["supply_positions"].append(Vector2(supply.position.x, supply.position.z))
 	snapshot.merge(preload("res://scripts/battle_telemetry.gd").collect(self))
+	var gamepad := get_node_or_null("GamepadInput")
+	if is_instance_valid(gamepad):
+		snapshot.merge(gamepad.get_snapshot())
 	return snapshot
 
 
@@ -757,8 +768,10 @@ func _on_focus_lost() -> void:
 		pause_game("focus_lost")
 
 
-func _on_joy_connection_changed(_device: int, connected: bool) -> void:
-	if not connected and mode == "playing":
+func _on_joy_connection_changed(device: int, connected: bool) -> void:
+	var gamepad := get_node_or_null("GamepadInput")
+	var disconnected_active := bool(gamepad.connection_changed(device, connected)) if is_instance_valid(gamepad) else false
+	if disconnected_active and mode == "playing":
 		pause_game("controller_disconnected")
 
 
@@ -791,6 +804,7 @@ func _setup_inputs() -> void:
 		"weapon_1": [KEY_1], "weapon_2": [KEY_2], "weapon_3": [KEY_3], "weapon_4": [KEY_4], "weapon_next": [KEY_R],
 		"camera": [KEY_C], "pause": [KEY_ESCAPE], "confirm": [KEY_ENTER],
 		"music_next": [KEY_N],
+		"precision_aim": [], "zoom_in": [], "zoom_out": [],
 		"menu_up": [KEY_UP, KEY_W], "menu_down": [KEY_DOWN, KEY_S],
 	}
 	for action: String in keyboard:
@@ -799,13 +813,15 @@ func _setup_inputs() -> void:
 		for keycode: int in keyboard[action]:
 			var key := InputEventKey.new()
 			key.physical_keycode = keycode
-			InputMap.action_add_event(action, key)
-	if not InputMap.has_action("aim_left"):
-		for action in ["aim_left", "aim_right", "aim_up", "aim_down"]:
-			InputMap.add_action(action, 0.24)
+			if not InputMap.action_has_event(action, key):
+				InputMap.action_add_event(action, key)
+	for action in ["aim_left", "aim_right", "aim_up", "aim_down"]:
+		if not InputMap.has_action(action):
+			InputMap.add_action(action, 0.20)
 	var mouse := InputEventMouseButton.new()
 	mouse.button_index = MOUSE_BUTTON_LEFT
-	InputMap.action_add_event("fire", mouse)
+	if not InputMap.action_has_event("fire", mouse):
+		InputMap.action_add_event("fire", mouse)
 	_add_joy_button("dash", JOY_BUTTON_LEFT_SHOULDER)
 	_add_joy_button("emp", JOY_BUTTON_RIGHT_SHOULDER)
 	_add_joy_button("place_mine", JOY_BUTTON_RIGHT_STICK)
@@ -813,6 +829,22 @@ func _setup_inputs() -> void:
 	_add_joy_button("weapon_next", JOY_BUTTON_X)
 	_add_joy_button("pause", JOY_BUTTON_START)
 	_add_joy_button("confirm", JOY_BUTTON_A)
+	# The UI provides radial deadzone + repeat for menu sticks. Removing the
+	# built-in axis bindings avoids moving focus twice for one physical nudge.
+	for action in ["ui_left", "ui_right", "ui_up", "ui_down"]:
+		for existing: InputEvent in InputMap.action_get_events(action):
+			if existing is InputEventJoypadMotion:
+				InputMap.action_erase_event(action, existing)
+	_add_joy_button("ui_accept", JOY_BUTTON_A)
+	_add_joy_button("ui_cancel", JOY_BUTTON_B)
+	_add_joy_button("ui_left", JOY_BUTTON_DPAD_LEFT)
+	_add_joy_button("ui_right", JOY_BUTTON_DPAD_RIGHT)
+	_add_joy_button("ui_up", JOY_BUTTON_DPAD_UP)
+	_add_joy_button("ui_down", JOY_BUTTON_DPAD_DOWN)
+	_add_joy_button("zoom_in", JOY_BUTTON_DPAD_UP)
+	_add_joy_button("zoom_out", JOY_BUTTON_DPAD_DOWN)
+	_add_joy_button("music_next", JOY_BUTTON_DPAD_LEFT)
+	_add_joy_button("weapon_next", JOY_BUTTON_DPAD_RIGHT)
 	_add_joy_axis("move_left", JOY_AXIS_LEFT_X, -1.0)
 	_add_joy_axis("move_right", JOY_AXIS_LEFT_X, 1.0)
 	_add_joy_axis("move_forward", JOY_AXIS_LEFT_Y, -1.0)
@@ -822,19 +854,24 @@ func _setup_inputs() -> void:
 	_add_joy_axis("aim_up", JOY_AXIS_RIGHT_Y, -1.0)
 	_add_joy_axis("aim_down", JOY_AXIS_RIGHT_Y, 1.0)
 	_add_joy_axis("fire", JOY_AXIS_TRIGGER_RIGHT, 1.0)
+	_add_joy_axis("precision_aim", JOY_AXIS_TRIGGER_LEFT, 1.0)
 
 
 func _add_joy_button(action: String, button: JoyButton) -> void:
 	var event := InputEventJoypadButton.new()
+	event.device = -1
 	event.button_index = button
-	InputMap.action_add_event(action, event)
+	if not InputMap.action_has_event(action, event):
+		InputMap.action_add_event(action, event)
 
 
 func _add_joy_axis(action: String, axis: JoyAxis, value: float) -> void:
 	var event := InputEventJoypadMotion.new()
+	event.device = -1
 	event.axis = axis
 	event.axis_value = value
-	InputMap.action_add_event(action, event)
+	if not InputMap.action_has_event(action, event):
+		InputMap.action_add_event(action, event)
 
 
 func _finish_smoke_test() -> void:

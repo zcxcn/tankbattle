@@ -31,6 +31,9 @@ var _focus_targets: Dictionary = {}
 var _setting_buttons: Dictionary = {}
 var _pulse := 0.0
 var _shake_enabled := true
+var _menu_stick := Vector2.ZERO
+var _menu_direction := Vector2i.ZERO
+var _menu_repeat := 0.0
 
 var _title_layer: Control
 var _hud_layer: Control
@@ -76,6 +79,7 @@ var _hud_emp: Label
 var _hud_dash: Label
 var _hud_music: Label
 var _hud_radio: Label
+var _hud_controls: Label
 
 var _pause_notice: Label
 var _result_panel: PanelContainer
@@ -108,6 +112,7 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	_update_controller_menu(delta)
 	if not _hud_boss_panel or not _hud_boss_panel.visible:
 		return
 	_pulse = fmod(_pulse + delta, TAU)
@@ -116,6 +121,56 @@ func _process(delta: float) -> void:
 		_hud_boss_panel.modulate = Color(1.0, strength, strength, 1.0)
 	else:
 		_hud_boss_panel.modulate = Color.WHITE
+
+
+func _input(event: InputEvent) -> void:
+	if not event is InputEventJoypadMotion or event.axis not in [JOY_AXIS_LEFT_X, JOY_AXIS_LEFT_Y]:
+		return
+	if event.axis == JOY_AXIS_LEFT_X:
+		_menu_stick.x = event.axis_value
+	else:
+		_menu_stick.y = event.axis_value
+	# Axis-driven UI navigation is handled by our repeat timer. Leave the event
+	# available to device detection and gameplay; D-pad uses native GUI actions.
+
+
+func _update_controller_menu(delta: float) -> void:
+	if _mode == "playing" or (_mode in ["won", "lost"] and not _result_layer.visible):
+		_menu_direction = Vector2i.ZERO
+		_menu_repeat = 0.0
+		return
+	var direction := Vector2i.ZERO
+	if _menu_stick.length() > 0.55:
+		if absf(_menu_stick.x) > absf(_menu_stick.y):
+			direction.x = 1 if _menu_stick.x > 0.0 else -1
+		else:
+			direction.y = 1 if _menu_stick.y > 0.0 else -1
+	if direction == Vector2i.ZERO:
+		_menu_direction = direction
+		_menu_repeat = 0.0
+		return
+	_menu_repeat -= delta
+	if direction != _menu_direction:
+		_menu_direction = direction
+		_move_controller_focus(direction)
+		_menu_repeat = 0.36
+	elif _menu_repeat <= 0.0:
+		_move_controller_focus(direction)
+		_menu_repeat = 0.16
+
+
+func _move_controller_focus(direction: Vector2i) -> void:
+	var focused := get_viewport().gui_get_focus_owner()
+	if not is_instance_valid(focused) or not focused.is_visible_in_tree():
+		_focus_current_mode()
+		return
+	var side := SIDE_LEFT if direction.x < 0 else SIDE_RIGHT
+	if direction.y != 0:
+		side = SIDE_TOP if direction.y < 0 else SIDE_BOTTOM
+	var neighbor := focused.get_focus_neighbor(side)
+	var target := focused.get_node_or_null(neighbor) as Control
+	if is_instance_valid(target) and target.is_visible_in_tree():
+		target.grab_focus()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -253,7 +308,7 @@ func _build_title_layer() -> void:
 	layout.add_child(HSeparator.new())
 	var footer := HBoxContainer.new()
 	layout.add_child(footer)
-	footer.add_child(_label("BUILD 0.4.0 · FORWARD+ / PBR ARMOR", &"Micro"))
+	footer.add_child(_label("BUILD 0.4.1 · FORWARD+ / PBR ARMOR", &"Micro"))
 	footer.add_child(_spacer(true, false))
 	var asset_credit := _label("3D：tomm8 · GRIP420 / David Falke · Comrade1280 · CC BY 4.0\n机枪录音：KuraiWolf / Nightshade Game Studios · CC BY 4.0", &"Micro")
 	asset_credit.name = "AssetCredit"
@@ -417,7 +472,8 @@ func _build_hud_layer() -> void:
 	weapon_box.add_child(_hud_reload)
 	_hud_weapon_slots = _label("1 穿甲弹  2 机枪  3 榴弹  4 火箭", &"Micro")
 	weapon_stack.add_child(_hud_weapon_slots)
-	weapon_stack.add_child(_label("R / X 切换武器    C / Y 第三人称    滚轮 拉近 / 拉远", &"Micro"))
+	_hud_controls = _label("左键 开火 · R 武器 · C 视角 · ESC 暂停", &"Micro")
+	weapon_stack.add_child(_hud_controls)
 
 	var ability_panel := _panel(&"HUDPanel")
 	_hud_panels.append(ability_panel)
@@ -456,7 +512,7 @@ func _build_pause_layer() -> void:
 	_pause_notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_pause_notice.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(_pause_notice)
-	var controls := _label("WASD / 左摇杆：移动    鼠标 / 右摇杆：瞄准\n左键 / RT：开火    C / Y：俯视 / 第三人称    滚轮：变焦\n1–4：选择武器    R / X：切换武器\nM / R3：布雷    E / RB：脉冲排雷    空格 / LB：短时加速", &"Muted")
+	var controls := _label("WASD / 左摇杆：移动    鼠标 / 右摇杆：瞄准    LT：精细瞄准\n左键 / RT：开火    C / Y：切换视角    滚轮 / 十字键上下：变焦\n1–4：选择武器    R / X / 十字键右：切武器    N / 十字键左：音乐\nM / R3：布雷    E / RB：脉冲排雷    空格 / LB：短时加速", &"Muted")
 	controls.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(controls)
 	var tactics := _label("N：切换战斗音乐。绿色整备点提供补给；起火残骸可能殉爆，保持距离。", &"Muted")
@@ -545,8 +601,7 @@ func _build_settings_layer() -> void:
 	var note := _label("F11：切换显示模式    ESC：返回    音量调至 0% 时静音", &"Micro")
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	settings_box.add_child(note)
-	buttons.append(back_button)
-	_wire_vertical_focus(buttons)
+	_wire_settings_focus(buttons, back_button)
 	_focus_targets["settings"] = _setting_buttons["display_mode"]
 
 
@@ -626,6 +681,9 @@ func _apply_snapshot() -> void:
 	_update_pause()
 	_update_result()
 	if _focused_mode != _mode or (_result_layer.visible and not result_was_visible):
+		_menu_stick = Vector2.ZERO
+		_menu_direction = Vector2i.ZERO
+		_menu_repeat = 0.0
 		_focused_mode = _mode
 		call_deferred("_focus_current_mode")
 
@@ -711,12 +769,15 @@ func _update_hud() -> void:
 	if not slot_names.is_empty():
 		_hud_weapon_slots.text = "  ".join(slot_names)
 	var mine_cooldown := maxf(0.0, _float_value("mine_cooldown", 0.0))
-	_hud_mine.text = "M  地雷 × %d%s" % [
+	var pad := str(_snapshot.get("input_device", "keyboard")) == "controller"
+	_hud_mine.text = "%s  地雷 × %d%s" % [
+		"R3" if pad else "M",
 		maxi(0, _int_value("mine_ammo", 0)),
 		" · %.1fs" % mine_cooldown if mine_cooldown > 0.01 else "",
 	]
-	_hud_emp.text = _cooldown_text("E  EMP", _float_value("emp_cooldown", 0.0))
-	_hud_dash.text = _cooldown_text("SPACE  短时加速", _float_value("dash_cooldown", 0.0))
+	_hud_emp.text = _cooldown_text("RB  EMP" if pad else "E  EMP", _float_value("emp_cooldown", 0.0))
+	_hud_dash.text = _cooldown_text("LB  短时加速" if pad else "SPACE  短时加速", _float_value("dash_cooldown", 0.0))
+	_hud_controls.text = "RT 开火 · LT 精瞄 · X 武器 · Y 视角 · START 暂停" if pad else "左键 开火 · R 武器 · C 视角 · ESC 暂停"
 	var regions: Array[Rect2] = []
 	for panel: Control in _hud_panels:
 		if panel.is_visible_in_tree():
@@ -762,7 +823,7 @@ func _update_pause() -> void:
 		"focus_lost":
 			_pause_notice.text = "窗口失去焦点，战场已自动暂停。请主动继续行动。"
 		"controller_disconnected":
-			_pause_notice.text = "手柄连接已中断。重新连接后再继续行动。"
+			_pause_notice.text = "手柄连接已中断，战场已暂停。重新连接手柄按 A / START，或用键鼠继续。"
 		_:
 			_pause_notice.text = "战斗已暂停。按 ESC 或选择继续行动返回战场。"
 
@@ -922,6 +983,22 @@ func _wire_vertical_focus(buttons: Array[Button]) -> void:
 		button.focus_neighbor_bottom = button.get_path_to(following)
 		button.focus_neighbor_left = button.get_path_to(previous)
 		button.focus_neighbor_right = button.get_path_to(following)
+
+
+func _wire_settings_focus(buttons: Array[Button], back_button: Button) -> void:
+	for index in buttons.size():
+		var button := buttons[index]
+		var beside := buttons[index + 1 if index % 2 == 0 else index - 1]
+		var above := buttons[index - 2] if index >= 2 else back_button
+		var below := buttons[index + 2] if index + 2 < buttons.size() else back_button
+		button.focus_neighbor_top = button.get_path_to(above)
+		button.focus_neighbor_bottom = button.get_path_to(below)
+		button.focus_neighbor_left = button.get_path_to(beside)
+		button.focus_neighbor_right = button.get_path_to(beside)
+	back_button.focus_neighbor_bottom = back_button.get_path_to(buttons[0])
+	back_button.focus_neighbor_top = back_button.get_path_to(buttons[-1])
+	back_button.focus_neighbor_left = back_button.get_path_to(buttons[-1])
+	back_button.focus_neighbor_right = back_button.get_path_to(buttons[0])
 
 
 func _set_mouse_passthrough(root: Node) -> void:

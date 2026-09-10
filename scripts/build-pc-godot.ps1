@@ -132,6 +132,10 @@ if (-not $SkipTests) {
     Assert-LastExitCode -Action "Godot campaign progression tests"
     & $GodotPath --headless --path $projectRoot --script "res://tests/camera_regression_test.gd" -- --test
     Assert-LastExitCode -Action "Godot camera collision tests"
+    & $GodotPath --headless --path $projectRoot --script "res://tests/recoil_regression_test.gd" -- --test
+    Assert-LastExitCode -Action "Godot mechanical and camera recoil tests"
+    & $GodotPath --headless --path $projectRoot --script "res://tests/gamepad_regression_test.gd" -- --test
+    Assert-LastExitCode -Action "Godot controller input and menu tests"
 
     Write-Host "Running expanded deployment, wreck and battlefield audio tests..."
     & $GodotPath --headless --path $projectRoot --script "res://tests/deployment_expansion_test.gd" -- --test
@@ -188,7 +192,7 @@ foreach ($credit in $creditSources.GetEnumerator()) {
     }
 }
 
-$productVersion = "0.4.0"
+$productVersion = "0.4.1"
 $manifestPath = Join-Path $artifactDirectory "build-manifest.json"
 $payloadFiles = @(Get-ChildItem -LiteralPath $artifactDirectory -File -Recurse | Sort-Object FullName)
 $manifestFiles = @(

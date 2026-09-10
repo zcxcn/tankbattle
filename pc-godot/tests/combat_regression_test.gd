@@ -167,7 +167,9 @@ func _run() -> void:
 	game.spawn_emp_visual(Vector3(300, 0, 0))
 	var old_effects: Array[Node] = []
 	for child: Node in game.get_children():
-		if child == game.arena or child == game.ui or child.is_in_group("tanks"):
+		# Persistent UI/input services survive a restart; this contract covers
+		# spatial combat visuals, including rigid debris and objective markers.
+		if not child is Node3D or child == game.arena or child.is_in_group("tanks"):
 			continue
 		old_effects.append(child)
 	_check(old_effects.size() >= 8, "restart test includes explosion, debris, muzzle flash and EMP")
