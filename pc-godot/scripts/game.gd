@@ -72,7 +72,7 @@ func _ready() -> void:
 	get_tree().auto_accept_quit = false
 	Input.joy_connection_changed.connect(_on_joy_connection_changed)
 	_smoke_test = "--smoke-test" in OS.get_cmdline_user_args()
-	print("IRON_EMBERS_PC_READY | Godot native | Campaign 0.4.4 | audible weapons + visible muzzle + stronger recoil")
+	print("IRON_EMBERS_PC_READY | Godot native | Campaign 0.4.5 | stronger armor impacts + recorded hit audio + directional camera shock")
 	if _smoke_test:
 		call_deferred("start_game")
 
@@ -447,7 +447,7 @@ func emit_emp(source: TankActor, radius: float) -> void:
 	notify("电磁脉冲释放 · 排除 %d 枚地雷" % removed, 2.0)
 
 
-func radial_damage(at: Vector3, radius: float, damage: float, attacker_team: int, contact_positions: Dictionary = {}) -> void:
+func radial_damage(at: Vector3, radius: float, damage: float, attacker_team: int, contact_positions: Dictionary = {}, weapon_kind := "blast") -> void:
 	for node: Node in get_tree().get_nodes_in_group("tanks"):
 		if not is_combat_running():
 			break
@@ -462,7 +462,7 @@ func radial_damage(at: Vector3, radius: float, damage: float, attacker_team: int
 		var distance := at.distance_to(target_position)
 		if distance <= radius and has_line_of_sight(at + Vector3.UP * 0.2, target_position + Vector3.UP):
 			var falloff := lerpf(0.35, 1.0, 1.0 - distance / maxf(radius, 0.01))
-			tank.receive_damage(damage * falloff, attacker_team, target_position)
+			tank.receive_damage(damage * falloff, attacker_team, at if tank.is_player else target_position, weapon_kind)
 
 
 func spawn_explosion(at: Vector3, scale_factor := 1.0) -> void:
@@ -479,8 +479,8 @@ func spawn_tank_wreck(source: TankActor) -> void:
 	add_child(wreck)
 
 
-func spawn_impact(at: Vector3, heavy: bool, surface_kind := "ground", normal := Vector3.UP, weapon_kind := "cannon") -> void:
-	add_child(ExplosionScript.create_impact(at, heavy, surface_kind, normal, weapon_kind))
+func spawn_impact(at: Vector3, heavy: bool, surface_kind := "ground", normal := Vector3.UP, weapon_kind := "cannon", player_priority := false) -> void:
+	add_child(ExplosionScript.create_impact(at, heavy, surface_kind, normal, weapon_kind, player_priority))
 
 
 func spawn_muzzle_flash(at: Vector3, _color: Color, scale_factor: float, forward := Vector3.FORWARD, weapon_kind := "cannon", player_priority := false) -> void:

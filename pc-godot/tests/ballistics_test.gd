@@ -11,7 +11,7 @@ class TestTank extends TankActor:
 		shape.shape = box
 		add_child(shape)
 		set_physics_process(false)
-	func receive_damage(amount: float, _team: int, _at := Vector3.ZERO) -> float:
+	func receive_damage(amount: float, _team: int, _at := Vector3.ZERO, _weapon_kind := "blast") -> float:
 		hp -= amount
 		return amount
 
@@ -30,11 +30,11 @@ func is_combat_running() -> bool:
 	return running
 
 
-func spawn_impact(at: Vector3, heavy: bool, surface_kind := "ground", normal := Vector3.UP, weapon_kind := "cannon") -> void:
+func spawn_impact(at: Vector3, heavy: bool, surface_kind := "ground", normal := Vector3.UP, weapon_kind := "cannon", _player_priority := false) -> void:
 	impacts.append({"at": at, "heavy": heavy, "surface": surface_kind, "normal": normal, "weapon": weapon_kind})
 
 
-func radial_damage(_at: Vector3, _radius: float, _damage: float, _team: int) -> void:
+func radial_damage(_at: Vector3, _radius: float, _damage: float, _team: int, _contacts: Dictionary = {}, _weapon_kind := "blast") -> void:
 	damage_events += 1
 
 

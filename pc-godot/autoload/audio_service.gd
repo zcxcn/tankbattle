@@ -4,6 +4,7 @@ extends Node
 const SAMPLE_RATE := 44100
 const MAX_VOICES := 24
 const PLAYER_WEAPON_LIMITS := {"cannon": 4, "machine_gun": 6, "rocket": 4}
+const PLAYER_IMPACT_LIMITS := {"light_metal": 2, "heavy_metal": 3, "blast": 2}
 const CANNON_RECORDING := preload("res://assets/audio/recorded/tank_shots_preview_hq.mp3")
 const EXPLOSION_RECORDING := preload("res://assets/audio/recorded/muffled_distant_explosion.wav")
 const CANNON_VARIANTS := [preload("res://assets/audio/combat/cannon-01.wav"), preload("res://assets/audio/combat/cannon-02.wav"), preload("res://assets/audio/combat/cannon-03.wav")]
@@ -77,6 +78,7 @@ var _audio_clock := 0.0
 var _loop_cache: Dictionary = {}
 var _weapon_duck_remaining := 0.0
 var _weapon_duck_db := 0.0
+var _impact_duck_remaining := 0.0
 
 
 func _ready() -> void:
@@ -102,6 +104,13 @@ func _ready() -> void:
 	_ensure_bus("Radio")
 	_ensure_bus("WorldSFX", "SFX")
 	_ensure_bus("PlayerWeapons", "SFX")
+	_ensure_bus("PlayerImpacts", "SFX")
+	# Cabin impacts have their own reserved mix and ceiling. A burst cannot
+	# accumulate enough low-frequency energy to obscure the gun or radio.
+	var impact_limiter := AudioEffectLimiter.new()
+	impact_limiter.ceiling_db = -3.5
+	impact_limiter.threshold_db = -3.5
+	AudioServer.add_bus_effect(AudioServer.get_bus_index("PlayerImpacts"), impact_limiter)
 	var world_bus := AudioServer.get_bus_index("WorldSFX")
 	var world_compressor := AudioEffectCompressor.new()
 	world_compressor.threshold = -12.0
@@ -180,7 +189,9 @@ func shutdown() -> void:
 func _tick_audio(delta: float) -> void:
 	if _game_mode not in ["paused", "settings"]:
 		_weapon_duck_remaining = maxf(0.0, _weapon_duck_remaining - delta)
-	var weapon_target := -5.0 if _weapon_duck_remaining > 0.0 else 0.0
+		_impact_duck_remaining = maxf(0.0, _impact_duck_remaining - delta)
+		_tick_player_impacts(delta)
+	var weapon_target := minf(-5.0 if _weapon_duck_remaining > 0.0 else 0.0, -4.0 if _impact_duck_remaining > 0.0 else 0.0)
 	_weapon_duck_db = move_toward(_weapon_duck_db, weapon_target, delta * 18.0)
 	AudioServer.set_bus_volume_db(AudioServer.get_bus_index("WorldSFX"), _weapon_duck_db)
 	if _game_mode not in ["paused", "settings"]:
@@ -211,7 +222,7 @@ func set_game_state(mode: String) -> void:
 	var paused := mode in ["paused", "settings"]
 	_radio_player.stream_paused = paused
 	for node: Node in get_children():
-		if node is AudioStreamPlayer3D or node.get_meta("player_weapon", false) or node.get_meta("battlefield_notice", false):
+		if node is AudioStreamPlayer3D or node.get_meta("player_weapon", false) or node.get_meta("player_impact", false) or node.get_meta("battlefield_notice", false):
 			node.stream_paused = paused
 			if mode == "title":
 				node.queue_free()
@@ -221,6 +232,7 @@ func set_game_state(mode: String) -> void:
 	if mode == "title" or (mode == "playing" and previous not in ["paused", "settings"]):
 		_weapon_duck_remaining = 0.0
 		_weapon_duck_db = 0.0
+		_impact_duck_remaining = 0.0
 		AudioServer.set_bus_volume_db(AudioServer.get_bus_index("WorldSFX"), 0.0)
 		_clear_radio()
 		_radio_cooldowns.clear()
@@ -381,6 +393,67 @@ func _stop_local_voice(voice: AudioStreamPlayer) -> void:
 	voice.stream = null
 
 
+func play_player_hit(kind: String, severity: float) -> void:
+	if _game_mode != "playing" or not is_finite(severity) or severity <= 0.0:
+		return
+	if kind not in ["machine_gun", "cannon", "he", "rocket", "blast"]:
+		return
+	severity = clampf(severity, 0.0, 1.0)
+	if kind == "machine_gun":
+		# Brief steel strike, without a cannon-sized explosion on each bullet.
+		_start_player_impact("light_metal", kind, _select_stream("armor_hit"), lerpf(-16.0, -10.0, severity), 1.18, 0.24, 0.08)
+		return
+	var explosive := kind in ["he", "rocket", "blast"]
+	_start_player_impact("heavy_metal", kind, _select_stream("armor_hit"), lerpf(-7.0, -2.0, severity), lerpf(0.97, 0.82, severity), lerpf(0.65, 0.95, severity), 0.24)
+	_start_player_impact("blast", kind, _select_stream("explosion"), lerpf(-13.0, -6.0 if explosive else -8.0, severity), 0.82 if explosive else 0.92, lerpf(0.9, 1.65 if explosive else 1.35, severity), 0.45)
+	_impact_duck_remaining = maxf(_impact_duck_remaining, lerpf(0.16, 0.28, severity))
+	_weapon_duck_db = minf(_weapon_duck_db, -4.0)
+	AudioServer.set_bus_volume_db(AudioServer.get_bus_index("WorldSFX"), _weapon_duck_db)
+
+
+func _start_player_impact(pool: String, kind: String, source: AudioStream, gain: float, pitch: float, duration: float, fade: float) -> void:
+	var same: Array[Node] = []
+	for node: Node in get_children():
+		if node.get_meta("impact_pool", "") == pool and not node.is_queued_for_deletion():
+			same.append(node)
+	if same.size() >= int(PLAYER_IMPACT_LIMITS[pool]):
+		same[0].stop()
+		same[0].queue_free()
+	var voice := AudioStreamPlayer.new()
+	voice.name = "PlayerImpact"
+	voice.set_meta("audio_kind", "player_hit_" + kind)
+	voice.set_meta("player_impact", true)
+	voice.set_meta("impact_pool", pool)
+	voice.set_meta("impact_remaining", duration)
+	voice.set_meta("impact_fade", fade)
+	voice.set_meta("impact_gain", gain)
+	voice.add_to_group("combat_effects")
+	voice.stream = source
+	voice.volume_db = gain
+	voice.pitch_scale = pitch
+	voice.bus = "PlayerImpacts"
+	add_child(voice)
+	voice.tree_exiting.connect(_stop_local_voice.bind(voice))
+	voice.finished.connect(voice.queue_free)
+	voice.play()
+
+
+func _tick_player_impacts(delta: float) -> void:
+	# Explicit envelopes share the stream's pause clock. A real-time tween
+	# on this always-processing autoload would silently expire paused tails.
+	for node: Node in get_children():
+		if not node.get_meta("player_impact", false) or node.is_queued_for_deletion():
+			continue
+		var remaining := maxf(0.0, float(node.get_meta("impact_remaining")) - delta)
+		node.set_meta("impact_remaining", remaining)
+		if remaining <= 0.0:
+			node.stop()
+			node.queue_free()
+		else:
+			var envelope := minf(1.0, remaining / float(node.get_meta("impact_fade")))
+			node.volume_db = float(node.get_meta("impact_gain")) + linear_to_db(maxf(0.0001, envelope))
+
+
 func play_3d(kind: String, world_position: Vector3, volume_db := -5.0, pitch := 1.0, priority := 40) -> void:
 	if not streams.has(kind) or _game_mode in ["paused", "settings"]:
 		return
@@ -388,7 +461,7 @@ func play_3d(kind: String, world_position: Vector3, volume_db := -5.0, pitch := 
 	var same_voices := 0
 	var effect_voices := 0
 	for node: Node in get_children():
-		if node.get_meta("player_weapon", false):
+		if node.get_meta("player_weapon", false) or node.get_meta("player_impact", false):
 			continue
 		if node.has_meta("audio_kind") and not node.is_queued_for_deletion():
 			effect_voices += 1
@@ -400,7 +473,7 @@ func play_3d(kind: String, world_position: Vector3, volume_db := -5.0, pitch := 
 	if effect_voices >= MAX_VOICES:
 		var released := false
 		for node: Node in get_children():
-			if node.has_meta("audio_kind") and not node.get_meta("player_weapon", false) and not node.is_queued_for_deletion() and int(node.get_meta("audio_priority", 20)) <= priority:
+			if node.has_meta("audio_kind") and not node.get_meta("player_weapon", false) and not node.get_meta("player_impact", false) and not node.is_queued_for_deletion() and int(node.get_meta("audio_priority", 20)) <= priority:
 				node.free()
 				released = true
 				break
@@ -458,7 +531,7 @@ func _stop_spatial_voice(voice: AudioStreamPlayer3D) -> void:
 func play_ui(kind: String, volume_db := -8.0, pitch := 1.0, battlefield_notice := false) -> void:
 	if not streams.has(kind):
 		return
-	var ui_voices := get_children().filter(func(node: Node) -> bool: return node is AudioStreamPlayer and node.has_meta("audio_kind") and not node.get_meta("player_weapon", false) and not node.is_queued_for_deletion())
+	var ui_voices := get_children().filter(func(node: Node) -> bool: return node is AudioStreamPlayer and node.has_meta("audio_kind") and not node.get_meta("player_weapon", false) and not node.get_meta("player_impact", false) and not node.is_queued_for_deletion())
 	if ui_voices.size() >= 4:
 		return
 	var voice := AudioStreamPlayer.new()

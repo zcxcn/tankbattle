@@ -86,6 +86,11 @@ func _run() -> void:
 	var visible_height: float = he_fire.position.y + initial_size.y * (0.5 - hot_bounds.get_center().y)
 	_check(visible_width > 2.0 and visible_height > 0.3, "actual first-frame HE hot pixels span over two metres and remain above the impact floor even at minimum particle scale")
 	_check(heavy.get_node("BlastSmoke") != null and heavy.get_node("Debris") != null and heavy._duration > 3.0, "HE blast separates fire, lingering smoke and finite fragments")
+	var heavy_particles := 0
+	for child: Node in heavy.get_children():
+		if child is GPUParticles3D:
+			heavy_particles += child.amount
+	_check(heavy_particles <= 96 and blast_fire_process.scale_max >= 9.0 and (heavy.get_node("Sparks") as GPUParticles3D).amount >= 28, "stronger HE retains one substantial fluid body and bounded sparks, dust and fragments")
 	_check(blast_dust_process.scale_curve.texture_mode == CurveTexture.TEXTURE_MODE_RGB and blast_fire_process.scale_curve.texture_mode == CurveTexture.TEXTURE_MODE_RGB, "enlarged HE layers retain RGB particle scale curves")
 	heavy.free()
 	var armor := ExplosionFX.create_impact(Vector3.ZERO, false, "armor", Vector3.RIGHT, "machine_gun")
@@ -96,10 +101,30 @@ func _run() -> void:
 	earth.set_process(false)
 	_check(armor.get_node_or_null("Sparks") != null and armor.get_node_or_null("Dust") == null and earth.get_node_or_null("Dust") != null and earth.get_node_or_null("Sparks") == null, "armor produces directional metal sparks while ground hits displace dust")
 	_check(armor._light == null and earth._light == null and armor.get_node_or_null("Fire") == null, "machine-gun impacts create no lights or explosive fireballs")
+	_check((armor.get_node("Sparks") as GPUParticles3D).amount >= 10 and (armor.get_node("Sparks") as GPUParticles3D).lifetime <= 0.35, "machine-gun armor strikes use dense short metal sparks rather than lingering explosive fire")
 	var spark_process := (armor.get_node("Sparks") as GPUParticles3D).process_material as ParticleProcessMaterial
 	_check(spark_process.direction.is_equal_approx(Vector3.RIGHT), "impact spark direction follows the real collision surface normal")
 	armor.free()
 	earth.free()
+	var cannon_hit := ExplosionFX.create_impact(Vector3(0, 1.6, 0), false, "armor", Vector3.RIGHT, "cannon")
+	add_child(cannon_hit)
+	cannon_hit.set_process(false)
+	var armor_fire := cannon_hit.get_node("Fire") as GPUParticles3D
+	var armor_fire_process := armor_fire.process_material as ParticleProcessMaterial
+	var armor_sparks := (cannon_hit.get_node("Sparks") as GPUParticles3D).process_material as ParticleProcessMaterial
+	_check(armor_fire.amount == 1 and armor_fire.lifetime < 1.0 and armor_fire_process.scale_max >= 5.5 and (armor_fire.draw_pass_1 as QuadMesh).material is ShaderMaterial, "AP armor strike emits a broad short-lived simulated pressure body without becoming a sustained HE blast")
+	_check(armor_fire_process.direction.is_equal_approx(Vector3.RIGHT) and armor_sparks.direction.is_equal_approx(Vector3.RIGHT) and armor_sparks.initial_velocity_max >= 18.0 and cannon_hit.get_node_or_null("Debris") != null, "armor fire, hot metal and fragments escape outward from the real impact surface")
+	var armor_particles := 0
+	for child: Node in cannon_hit.get_children():
+		if child is GPUParticles3D:
+			armor_particles += child.amount
+	_check(armor_particles <= 48 and cannon_hit._duration <= 2.1, "AP impact remains within 48 particles and a short smoke cleanup lifetime")
+	cannon_hit._process(0.075)
+	var armor_flash := (cannon_hit._flash.mesh as QuadMesh).material as StandardMaterial3D
+	_check(cannon_hit._flash.visible and armor_flash.albedo_color.a > 0.5 and cannon_hit._light.light_energy > 8.0, "white-hot armor flash and local illumination remain strong through the first impact frames")
+	cannon_hit._process(0.125)
+	_check(not cannon_hit._flash.visible and cannon_hit.get_node_or_null("Smoke") != null, "initial impact flash clears quickly while the pressure body cools into smoke")
+	cannon_hit.free()
 	var firing_direction := Vector3(0.4, 0.15, -1.0).normalized()
 	var muzzle := ExplosionFX.create_muzzle(Vector3(0, 2.2, 0), firing_direction, 1.5, "he")
 	add_child(muzzle)
@@ -171,6 +196,22 @@ func _run() -> void:
 		add_child(impact)
 		effects.append(impact)
 	_check(get_tree().get_nodes_in_group("impact_fx").size() == ExplosionFX.MAX_IMPACTS, "simultaneous impact effects are capped under sustained machine-gun fire")
+	var impact_lights: Array[ExplosionFX] = []
+	for index in ExplosionFX.MAX_FLASH_LIGHTS:
+		var lit_blast := ExplosionFX.create(Vector3.ZERO)
+		add_child(lit_blast)
+		impact_lights.append(lit_blast)
+	var player_hit := ExplosionFX.create_impact(Vector3.ZERO, false, "armor", Vector3.RIGHT, "cannon", true)
+	add_child(player_hit)
+	_check(not player_hit.is_queued_for_deletion() and player_hit._flash != null and player_hit._light != null and effects[0].is_queued_for_deletion(), "a player armor hit replaces old ordinary impact smoke and a flash light when both pools are full")
+	_check(get_tree().get_nodes_in_group("impact_fx").size() == ExplosionFX.MAX_IMPACTS and get_tree().get_nodes_in_group("impact_flash_lights").size() == ExplosionFX.MAX_FLASH_LIGHTS, "prioritizing the player's hit does not increase impact or light budgets")
+	var ordinary_hit := ExplosionFX.create_impact(Vector3.ZERO, false, "armor", Vector3.RIGHT, "cannon")
+	add_child(ordinary_hit)
+	_check(ordinary_hit.is_queued_for_deletion() and not player_hit.is_queued_for_deletion(), "an ordinary new impact cannot evict the player's feedback from a full pool")
+	ordinary_hit.free()
+	player_hit.free()
+	for lit_blast: ExplosionFX in impact_lights:
+		lit_blast.free()
 	for impact: ExplosionFX in effects:
 		impact.free()
 	print("EXPLOSION_FX_RESULT: %d passed, %d failed" % [passed, failed])

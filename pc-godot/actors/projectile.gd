@@ -113,11 +113,13 @@ func _impact(hit: Dictionary) -> void:
 	var collider: Object = hit.get("collider")
 	var armored: bool = collider is TankActor or (collider is Node and collider.is_in_group("tank_wrecks"))
 	var surface_kind := "armor" if armored else ("ground" if normal.y > 0.55 else "stone")
-	if collider != null and collider.has_method("receive_damage"):
+	if collider is TankActor:
+		collider.receive_damage(damage, team, at, weapon_kind)
+	elif collider != null and collider.has_method("receive_damage"):
 		collider.call("receive_damage", damage, team, at)
 	if splash_radius > 0.0:
-		game.radial_damage(at, splash_radius, damage * 0.55, team)
-	game.spawn_impact(at, splash_radius > 0.0, surface_kind, normal, weapon_kind)
+		game.radial_damage(at, splash_radius, damage * 0.55, team, {}, weapon_kind)
+	game.spawn_impact(at, splash_radius > 0.0, surface_kind, normal, weapon_kind, collider is TankActor and collider.is_player)
 	_finish()
 
 

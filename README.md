@@ -12,7 +12,7 @@
 
 ## Godot PC 原生重制
 
-`pc-godot/` 是用 **Godot 4.7.2、Forward+ 和 Jolt Physics** 制作的 Windows 原生坦克游戏。PC **0.4.4** 提供六关连续战役，每张地图 **288 × 384 米**：工业外围、补给港区、指挥堡垒、钢厂反击、港口封锁和最后壁垒，分别执行肃清、占领或摧毁任务，然后迎战各关首领。普通敌车逐关增加到 **6 / 9 / 12 / 15 / 18 / 22 辆**，装甲、火力和装填能力逐步增强；通关解锁、整备补给和重玩奖励均独立结算。
+`pc-godot/` 是用 **Godot 4.7.2、Forward+ 和 Jolt Physics** 制作的 Windows 原生坦克游戏。PC **0.4.5** 提供六关连续战役，每张地图 **288 × 384 米**：工业外围、补给港区、指挥堡垒、钢厂反击、港口封锁和最后壁垒，分别执行肃清、占领或摧毁任务，然后迎战各关首领。普通敌车逐关增加到 **6 / 9 / 12 / 15 / 18 / 22 辆**，装甲、火力和装填能力逐步增强；通关解锁、整备补给和重玩奖励均独立结算。
 
 主菜单可选择 KF51、Challenger 2 和 KV-2 三种授权写实 PBR 底盘，分别偏重机动、均衡和重装甲。敌军扩展为 **11 种作战角色**：原有侦察、主战、重装、远射、机枪和火箭车，加上巡护、突击、榴弹、抢修和重型歼击车。它们共用三种原始车体，具有不同装备外观和实际行为；抢修车消耗有限维修储备修复附近可见友军；原布雷车改为主炮巡护车，敌人和 Boss 均不再具备布雷能力。单车原始模型为 63,016–176,035 三角面，保留完整 PBR 材质、独立炮塔与炮管。作者与许可见 [`资产来源`](pc-godot/assets/THIRD_PARTY_ASSETS.md)。
 
@@ -30,6 +30,8 @@
 
 自己的主炮、机枪和火箭使用独立保留的武器声道，拉远镜头不会压低本车炮声，敌方音效也不能占掉玩家的发射声。实录炮声保留爆发瞬态与户外余响，开炮时短暂压低发动机和远处战斗声音，最终输出限制峰值；音效与总音量设置仍然生效。
 
+0.4.5 加强被击中的反馈：主炮撞击装甲出现白热闪光、短促流体火团、外抛金属火星和碎屑；榴弹与火箭产生更大的爆燃和压力尘浪，机枪为连续短火星。玩家受击优先获得命中特效及独立录音声道，重击叠加钢铁冲击与低频闷爆。镜头按命中方向抬动、侧倾和衰减振荡，约半秒恢复，手柄受击震动也更强。直击与同帧溅射合并为一次反馈，原有伤害分别结算；暂停冻结，屏幕震动关闭时保留声音和外部火光。
+
 标准手柄支持任意设备编号和重连，左右摇杆分别移动、瞄准，RT 开火、LT 精瞄、X 换武器、Y 换视角；十字键上下变焦、左切 BGM、右换武器。菜单支持摇杆/十字键、A 确认、B 返回、START 暂停。HUD 自动切换操作提示；使用中的手柄断开会清除残留输入并暂停。射击和受击向支持震动的手柄发送不同强度反馈。自动化覆盖非 0 号设备的完整输入流程，本机没有实体手柄，尚未完成实体手柄兼容性实测。
 
 六关采用三类工业街区的不同光照和战斗配置。下载并整合 Poly Haven CC0 工厂模块，加入有立体窗框、门洞和装卸口的砖墙外立面；七类建筑包括装卸仓库、烟囱工厂、办公楼、公寓、拱顶机库、变电站和维修车库，并保留油罐、集装箱、龙门吊和观察塔。使用实际 Jolt 空间验证道路及出生净空，门窗合批、共享网格和 LOD，175 米外停止绘制细小立面。
@@ -44,7 +46,7 @@
 
 按 **N** 切换三首原创循环 BGM，设置中可分别调整音乐、战斗音效和通信音量。通信改用 Kenney CC0 语音包中男女演员的 **13 段英文真人录音**，保留自然语调，中文字幕对应实际台词；开局为简短的 **Ready／准备就绪**。弹药不足、弹药耗尽、装甲补给和排雷四项没有对应真人台词，使用准确状态字幕与轻提示音。播报保留优先级、限频和暂停处理，人声期间音乐自动降低。实录发动机、履带拟音、转向摩擦和碰撞声根据实际运动变化，停车、暂停或摧毁时正确停止。完整许可及制作方式见 [`战斗录音`](pc-godot/assets/audio/combat/README.md) 和 [`音乐与战场通信`](pc-godot/assets/audio/battlefield/README.md)。
 
-[0.4.4 炮声、炮口火焰与后坐自检](docs/pc-realistic/SELF_CHECK_0.4.4.md) · [0.4.3 真人语音、流体烟火与可选天气自检](docs/pc-realistic/SELF_CHECK_0.4.3.md) · [0.4.2 雨景、车辙与殉爆自检](docs/pc-realistic/SELF_CHECK_0.4.2.md) · [0.4.1 鼠标、炮口效果、后坐力与手柄自检](docs/pc-realistic/SELF_CHECK_0.4.1.md)
+[0.4.5 装甲受击与声音震动自检](docs/pc-realistic/SELF_CHECK_0.4.5.md) · [0.4.4 炮声、炮口火焰与后坐自检](docs/pc-realistic/SELF_CHECK_0.4.4.md) · [0.4.3 真人语音、流体烟火与可选天气自检](docs/pc-realistic/SELF_CHECK_0.4.3.md) · [0.4.2 雨景、车辙与殉爆自检](docs/pc-realistic/SELF_CHECK_0.4.2.md) · [0.4.1 鼠标、炮口效果、后坐力与手柄自检](docs/pc-realistic/SELF_CHECK_0.4.1.md)
 
 Godot PC 实际渲染截图（Challenger 2：tomm8，CC BY 4.0；完整来源见上方资产说明）：
 
@@ -95,7 +97,7 @@ $godot = (Resolve-Path .\work\tools\godot-4.7.2\editor\Godot_v4.7.2-stable_win64
 pwsh -NoProfile -File .\scripts\build-pc-godot.ps1 -Configuration Release
 ```
 
-构建脚本固定校验官方 Godot 可执行文件和模板的 SHA-256；其他位置的同版 console 程序可通过 `-GodotPath <路径>` 指定，Windows 模板仍放在 `work/tools/godot-4.7.2/templates/`。Release 成品位于 `outputs/pc-godot/windows-x86_64/`，可分发压缩包为 `outputs/pc-godot/Iron-Embers-Windows-x86_64-0.4.4.zip`。解压后双击 `IronEmbers.exe`，保留同目录 `IronEmbers.pck` 和 `credits/` 即可离线运行。当前 Windows 可执行文件未做代码签名，首次运行可能显示系统信誉提示。
+构建脚本固定校验官方 Godot 可执行文件和模板的 SHA-256；其他位置的同版 console 程序可通过 `-GodotPath <路径>` 指定，Windows 模板仍放在 `work/tools/godot-4.7.2/templates/`。Release 成品位于 `outputs/pc-godot/windows-x86_64/`，可分发压缩包为 `outputs/pc-godot/Iron-Embers-Windows-x86_64-0.4.5.zip`。解压后双击 `IronEmbers.exe`，保留同目录 `IronEmbers.pck` 和 `credits/` 即可离线运行。当前 Windows 可执行文件未做代码签名，首次运行可能显示系统信誉提示。
 
 本次 PC 重制的源码集中在 `pc-godot/`，构建与验收脚本为 `scripts/build-pc-godot.ps1`、`scripts/smoke-pc-godot.ps1`；`mobile/baseline/` 和 `android/` 未改动。
 

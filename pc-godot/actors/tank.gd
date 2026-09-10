@@ -116,6 +116,9 @@ var _hull_base_rotation := Vector3.ZERO
 var _hull_recoil_axis := Vector3.RIGHT
 var _last_move := Vector3.FORWARD
 var _camera_shake := 0.0
+var _camera_shake_offset := Vector3.ZERO
+var _hit_feedback_remaining := 0.0
+var _last_hit_severity := 0.0
 var _camera_base_position := Vector3.ZERO
 var _controller_aim_active := false
 var _controller_aim_direction := Vector3.FORWARD
@@ -416,6 +419,7 @@ func _physics_process(delta: float) -> void:
 	else:
 		reload = maxf(0.0, reload - delta)
 	mine_cooldown = maxf(0.0, mine_cooldown - delta)
+	_hit_feedback_remaining = maxf(0.0, _hit_feedback_remaining - delta)
 	emp_cooldown = maxf(0.0, emp_cooldown - delta)
 	dash_cooldown = maxf(0.0, dash_cooldown - delta)
 	_dash_remaining = maxf(0.0, _dash_remaining - delta)
@@ -984,13 +988,15 @@ func _launch_weapon(origin: Vector3, muzzle: Vector3, direction: Vector3, damage
 	if not obstruction.is_empty():
 		var impact_position: Vector3 = obstruction["position"]
 		var collider: Object = obstruction.get("collider")
-		if collider != null and collider.has_method("receive_damage"):
+		if collider is TankActor:
+			collider.receive_damage(damage, team, impact_position, kind)
+		elif collider != null and collider.has_method("receive_damage"):
 			collider.call("receive_damage", damage, team, impact_position)
 		if splash > 0.0:
-			game.radial_damage(impact_position, splash, damage * 0.55, team)
+			game.radial_damage(impact_position, splash, damage * 0.55, team, {}, kind)
 		var normal: Vector3 = obstruction.get("normal", Vector3.UP)
 		var surface := "armor" if collider is TankActor else ("ground" if normal.y > 0.55 else "stone")
-		game.spawn_impact(impact_position, splash > 0.0, surface, normal, kind)
+		game.spawn_impact(impact_position, splash > 0.0, surface, normal, kind, collider is TankActor and collider.is_player)
 		return impact_position
 	game.spawn_projectile(self, muzzle, direction, damage, speed, splash, kind)
 	return muzzle
@@ -1053,7 +1059,7 @@ func activate_boss() -> void:
 	game.spawn_emp_visual(global_position, 1.4)
 
 
-func receive_damage(amount: float, attacker_team: int, hit_position := Vector3.ZERO) -> float:
+func receive_damage(amount: float, attacker_team: int, hit_position := Vector3.ZERO, weapon_kind := "blast") -> float:
 	if destroyed or attacker_team == team or invulnerable > 0.0 or not active:
 		return 0.0
 	if not is_player:
@@ -1063,10 +1069,9 @@ func receive_damage(amount: float, attacker_team: int, hit_position := Vector3.Z
 	var accepted := maxf(1.0, amount * (1.0 - armor))
 	hp = maxf(0.0, hp - accepted)
 	if is_player:
-		_rumble(0.35, clampf(accepted / 70.0, 0.2, 0.9), 0.18)
+		_player_hit_feedback(accepted, hit_position, weapon_kind)
 	if is_player and hp > 0.0 and hp <= max_hp * 0.3:
 		AudioService.radio("player_critical")
-	AudioService.play_3d("hit", hit_position if hit_position != Vector3.ZERO else global_position, -9.0, _rng.randf_range(0.9, 1.12))
 	if is_boss:
 		var fraction := hp / max_hp
 		var next_phase := 3 if fraction <= 0.35 else (2 if fraction <= 0.70 else 1)
@@ -1080,6 +1085,27 @@ func receive_damage(amount: float, attacker_team: int, hit_position := Vector3.Z
 	return accepted
 
 
+func _player_hit_feedback(accepted: float, hit_position: Vector3, weapon_kind: String) -> void:
+	if not is_instance_valid(game) or not game.is_combat_running():
+		return
+	var machine := weapon_kind == "machine_gun"
+	var explosive := weapon_kind in ["he", "rocket", "blast"]
+	var severity := clampf(accepted / 65.0, 0.0, 1.0)
+	severity = clampf(0.12 + severity * 0.4, 0.12, 0.24) if machine else clampf((0.62 if explosive else 0.48) + severity * 0.4, 0.48, 1.0)
+	# Direct damage and its same-frame splash are still both resolved, but
+	# report one impact. A genuinely heavier simultaneous hit can take over.
+	if _hit_feedback_remaining > 0.0 and severity <= _last_hit_severity + 0.08:
+		return
+	_hit_feedback_remaining = 0.09
+	_last_hit_severity = severity
+	AudioService.play_player_hit(weapon_kind, severity)
+	_rumble(0.22 if machine else 0.72, severity if machine else minf(1.0, severity + 0.22), 0.09 if machine else 0.38)
+	add_camera_shake(severity * (0.55 if machine else 0.95))
+	if SettingsService.screen_shake and is_instance_valid(_camera_pivot):
+		var force := global_position - hit_position if hit_position != Vector3.ZERO else -global_basis.z
+		_camera_pivot.kick_hit(severity, force)
+
+
 func add_camera_shake(strength: float) -> void:
 	if not is_player or not SettingsService.screen_shake:
 		return
@@ -1089,13 +1115,15 @@ func add_camera_shake(strength: float) -> void:
 func _update_camera_shake(delta: float) -> void:
 	if not SettingsService.screen_shake:
 		_camera_shake = 0.0
-	_camera_shake = move_toward(_camera_shake, 0.0, delta * 2.9)
-	var offset := Vector3(
-		_rng.randf_range(-1.0, 1.0),
-		_rng.randf_range(-0.58, 0.58),
-		_rng.randf_range(-0.35, 0.35)
-	) * _camera_shake
-	_camera_pivot.update_view(delta, offset)
+		_camera_shake_offset = Vector3.ZERO
+	if is_instance_valid(game) and game.is_combat_running():
+		_camera_shake = move_toward(_camera_shake, 0.0, delta * 2.9)
+		_camera_shake_offset = Vector3(
+			_rng.randf_range(-1.0, 1.0),
+			_rng.randf_range(-0.58, 0.58),
+			_rng.randf_range(-0.35, 0.35)
+		) * _camera_shake
+	_camera_pivot.update_view(delta, _camera_shake_offset)
 
 
 func _die(attacker_team: int) -> void:

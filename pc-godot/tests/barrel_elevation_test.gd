@@ -40,11 +40,11 @@ func spawn_muzzle_flash(_at: Vector3, _color: Color, _scale: float, _direction: 
 	pass
 
 
-func spawn_impact(at: Vector3, _heavy: bool, surface: String, _normal: Vector3, weapon: String) -> void:
+func spawn_impact(at: Vector3, _heavy: bool, surface: String, _normal: Vector3, weapon: String, _player_priority := false) -> void:
 	impacts.append({"position": at, "surface": surface, "weapon": weapon})
 
 
-func radial_damage(_at: Vector3, _radius: float, _damage: float, _team: int) -> void:
+func radial_damage(_at: Vector3, _radius: float, _damage: float, _team: int, _contacts: Dictionary = {}, _weapon_kind := "blast") -> void:
 	pass
 
 

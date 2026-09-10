@@ -26,7 +26,7 @@ class TestTank extends TankActor:
 		ArtFactory.add_box(turret, "Turret", Vector3.ZERO, Vector3(1.8, 0.6, 2.0), ArtFactory.material(Color("687547")))
 		set_physics_process(false)
 		set_process(false)
-	func receive_damage(amount: float, attacker: int, _at := Vector3.ZERO) -> float:
+	func receive_damage(amount: float, attacker: int, _at := Vector3.ZERO, _weapon_kind := "blast") -> float:
 		hits += 1
 		last_attacker = attacker
 		hp -= amount

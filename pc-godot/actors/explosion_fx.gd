@@ -20,6 +20,7 @@ var _surface_kind := "ground"
 var _normal := Vector3.UP
 var _weapon_kind := "cannon"
 var _heavy := false
+var _impact_priority := false
 var _light_peak := 0.0
 var _muzzle_forward := Vector3.FORWARD
 var _muzzle_priority := false
@@ -39,11 +40,12 @@ static func create(at: Vector3, scale_factor := 1.0, destructive := true) -> Exp
 	return effect
 
 
-static func create_impact(at: Vector3, heavy := false, surface_kind := "ground", normal := Vector3.UP, weapon_kind := "cannon") -> ExplosionFX:
+static func create_impact(at: Vector3, heavy := false, surface_kind := "ground", normal := Vector3.UP, weapon_kind := "cannon", player_priority := false) -> ExplosionFX:
 	var effect := ExplosionFX.new()
 	effect.position = at + normal * 0.035
 	effect._profile = "impact"
 	effect._heavy = heavy
+	effect._impact_priority = player_priority
 	effect._surface_kind = surface_kind
 	effect._normal = normal.normalized() if normal.length_squared() > 0.01 else Vector3.UP
 	effect._weapon_kind = weapon_kind
@@ -81,7 +83,7 @@ func _ready() -> void:
 		queue_free()
 		return
 	if get_tree().get_nodes_in_group(group).size() >= maximum:
-		var reclaimed := (_profile == "cookoff" and _retire_oldest_destruction()) or (_profile == "muzzle" and _muzzle_priority and _retire_oldest_muzzle())
+		var reclaimed := (_profile == "cookoff" and _retire_oldest_destruction()) or (_profile == "muzzle" and _muzzle_priority and _retire_oldest_muzzle()) or (_profile == "impact" and _impact_priority and _retire_oldest_impact())
 		if not reclaimed:
 			queue_free()
 			return
@@ -119,6 +121,23 @@ func _retire_oldest_muzzle() -> bool:
 	if oldest == null:
 		return false
 	oldest.remove_from_group("muzzle_fx")
+	if is_instance_valid(oldest._light):
+		oldest._light.remove_from_group("impact_flash_lights")
+	oldest.queue_free()
+	return true
+
+
+func _retire_oldest_impact() -> bool:
+	# Smoke from distant hits must not suppress the player's current impact.
+	# Prefer ordinary impacts, then replace the oldest player impact if needed.
+	var oldest: ExplosionFX
+	for candidate: Node in get_tree().get_nodes_in_group("impact_fx"):
+		if candidate is ExplosionFX:
+			if oldest == null or (oldest._impact_priority and not candidate._impact_priority) or (oldest._impact_priority == candidate._impact_priority and candidate._age > oldest._age):
+				oldest = candidate
+	if oldest == null:
+		return false
+	oldest.remove_from_group("impact_fx")
 	if is_instance_valid(oldest._light):
 		oldest._light.remove_from_group("impact_flash_lights")
 	oldest.queue_free()
@@ -205,7 +224,7 @@ func _build_cookoff() -> void:
 
 func _add_light(energy: float, distance: float) -> void:
 	if get_tree().get_nodes_in_group("impact_flash_lights").size() >= MAX_FLASH_LIGHTS:
-		if not _muzzle_priority or not _retire_flash_light():
+		if not (_muzzle_priority or _impact_priority) or not _retire_flash_light():
 			return
 	_light = OmniLight3D.new()
 	_light.add_to_group("impact_flash_lights")
@@ -251,40 +270,56 @@ func _build_impact() -> void:
 	if _heavy and not machine:
 		_build_explosive_impact()
 		return
-	_duration = 0.7 if machine else 1.75
+	_duration = 0.7 if machine else 2.0
 	if _surface_kind == "armor":
-		_spawn_particles("Sparks", 7 if machine else 18, 0.34 if machine else 0.6, Color("ffe69c"), Color(1, 0.22, 0.02, 0), 6.5 if machine else 12.0, 12.0, 0.035 if machine else 0.065, false, false, _normal)
-		_spawn_particles("Smoke", 3 if machine else 10, 0.62 if machine else 1.4, Color.GRAY, Color.TRANSPARENT, 1.0, 0.2, 0.12 if machine else 0.46, true, false, _normal)
-	else:
-		_spawn_particles("Dust", 6 if machine else 20, 0.6 if machine else 1.6, Color("81705b"), Color.TRANSPARENT, 3.0, 1.0, 0.13 if machine else 0.62, true, _surface_kind == "ground", _normal)
+		var sparks := _spawn_particles("Sparks", 10 if machine else 28, 0.30 if machine else 0.85, Color("ffe69c"), Color(1, 0.22, 0.02, 0), 9.0 if machine else 19.0, 12.0, 0.045 if machine else 0.11, false, false, _normal)
+		(sparks.process_material as ParticleProcessMaterial).spread = 42.0 if machine else 58.0
+		_spawn_particles("Smoke", 3 if machine else 6, 0.62 if machine else 1.85, Color.GRAY, Color.TRANSPARENT, 1.0 if machine else 2.2, 0.2, 0.12 if machine else 1.7, true, false, _normal)
 		if not machine:
-			_spawn_debris(5, 0.06)
-	if _heavy:
-		_add_light(4.0, 7.0)
-		_add_flash(0.9)
-		_spawn_particles("Fire", 12, 0.4, Color("ffd596"), Color.TRANSPARENT, 4.0, 1.8, 0.24, true)
-		_spawn_particles("BlastSmoke", 12, 1.6, Color.GRAY, Color.TRANSPARENT, 2.1, 0.4, 0.48, true)
-	elif not machine and _surface_kind == "armor":
-		_add_flash(0.38)
-	AudioService.play_3d("armor_hit" if _surface_kind == "armor" else "ground_hit", global_position, -13.0 if machine else (-3.5 if _heavy else -7.5), randf_range(0.94, 1.07))
-	if _heavy:
-		AudioService.play_3d("explosion", global_position, -8.0, 1.15)
+			# Kinetic armor impact is a brief pressure/metal flash. The single
+			# fluid lobe cools quickly; it is smaller and shorter than HE.
+			_flash_duration = 0.15
+			_add_impact_flash(2.5, 14.0, 15.0)
+			var fire := _spawn_particles("Fire", 1, 0.82, Color.WHITE, Color.TRANSPARENT, 2.4, 0.0, 5.8, true, false, _normal)
+			fire.position += _normal * 0.30
+			_spawn_debris(7, 0.14)
+			var fragments := (get_node("Debris") as GPUParticles3D).process_material as ParticleProcessMaterial
+			fragments.initial_velocity_max = 9.0
+	else:
+		_spawn_particles("Dust", 7 if machine else 24, 0.6 if machine else 1.9, Color("81705b"), Color.TRANSPARENT, 3.0 if machine else 5.5, 1.0, 0.15 if machine else 1.2, true, _surface_kind == "ground", _normal)
+		if not machine:
+			_spawn_debris(7, 0.11)
+			_flash_duration = 0.11
+			_add_impact_flash(1.35, 5.0, 9.0)
+	AudioService.play_3d("armor_hit" if _surface_kind == "armor" else "ground_hit", global_position, -12.0 if machine else -5.0, randf_range(0.94, 1.07))
+
+
+func _add_impact_flash(size: float, energy: float, distance: float) -> void:
+	_add_flash(size, _normal * 0.25 + Vector3.UP * 0.12)
+	var material := (_flash.mesh as QuadMesh).material as StandardMaterial3D
+	material.albedo_texture = particle_sprite("MuzzleCore")
+	material.albedo_color = Color(3.5, 2.6, 1.25, 1.0)
+	_add_light(energy, distance)
+	if is_instance_valid(_light):
+		_light.position = _normal * 0.65 + Vector3.UP * 0.4
 
 
 func _build_explosive_impact() -> void:
 	# A short overpressure flash gives way to a rolling fire front, expanding
 	# earth/dust and a longer smoke column. HE's 8 m damage radius stays in the
 	# same scale as the visible pressure-driven dust; it is not a glowing ring.
-	_duration = 3.7
-	_add_light(8.5, 16.0)
-	_add_flash(2.5, Vector3.UP * 0.22)
-	_spawn_particles("Fire", 1, 1.65, Color.WHITE, Color.TRANSPARENT, 1.4, -0.3, 7.2, true)
-	_spawn_particles("BlastSmoke", 6, 3.35, Color.WHITE, Color.TRANSPARENT, 2.0, 0.4, 3.0, true)
-	_spawn_particles("Dust", 24, 2.25, Color.WHITE, Color.TRANSPARENT, 9.0, 0.2, 2.1, true, _surface_kind == "ground", _normal)
-	_spawn_particles("Sparks", 18, 0.9, Color("ffe69c"), Color.TRANSPARENT, 14.0, 10.0, 0.065, false, false, _normal)
-	_spawn_debris(12, 0.13)
-	AudioService.play_3d("explosion", global_position, -1.8, 0.96 if _weapon_kind == "he" else 1.04)
-	AudioService.play_3d("armor_hit" if _surface_kind == "armor" else "ground_hit", global_position, -6.0, 0.94)
+	_duration = 3.9
+	_flash_duration = 0.18
+	_add_impact_flash(3.8, 20.0, 21.0)
+	_spawn_particles("Fire", 1, 1.8, Color.WHITE, Color.TRANSPARENT, 1.8, -0.3, 8.4 if _weapon_kind == "rocket" else 9.2, true)
+	_spawn_particles("BlastSmoke", 7, 3.55, Color.WHITE, Color.TRANSPARENT, 2.4, 0.4, 3.5, true)
+	_spawn_particles("Dust", 26, 2.5, Color.WHITE, Color.TRANSPARENT, 11.0, 0.2, 2.6, true, _surface_kind == "ground", _normal)
+	_spawn_particles("Sparks", 32, 1.1, Color("ffe69c"), Color.TRANSPARENT, 20.0, 10.0, 0.10, false, false, _normal)
+	_spawn_debris(18, 0.19)
+	var fragments := (get_node("Debris") as GPUParticles3D).process_material as ParticleProcessMaterial
+	fragments.initial_velocity_max = 12.0
+	AudioService.play_3d("explosion", global_position, -0.5, 0.96 if _weapon_kind == "he" else 1.04)
+	AudioService.play_3d("armor_hit" if _surface_kind == "armor" else "ground_hit", global_position, -5.0, 0.94)
 
 
 func _build_muzzle() -> void:
@@ -382,9 +417,14 @@ func _process(delta: float) -> void:
 		var light_fade := exp(-_age * (7.0 if _profile == "cookoff" else 24.0))
 		if _profile == "muzzle":
 			light_fade = 1.0 - smoothstep(0.035, _jet_duration + 0.04, _age)
+		elif _profile == "impact":
+			light_fade = 1.0 - smoothstep(0.025, 0.34 if _heavy else 0.27, _age)
 		_light.light_energy = _light_peak * light_fade
 		_light.light_color = Color("ffe0aa").lerp(Color("df5629"), clampf(_age * 3.0, 0.0, 1.0))
-		if _age > (0.7 if _profile == "cookoff" else (_jet_duration + 0.04 if _profile == "muzzle" else 0.22)):
+		var light_duration := 0.7 if _profile == "cookoff" else (_jet_duration + 0.04 if _profile == "muzzle" else 0.22)
+		if _profile == "impact":
+			light_duration = 0.34 if _heavy else 0.27
+		if _age > light_duration:
 			_light.queue_free()
 	if is_instance_valid(_flash):
 		_flash.visible = _age < _flash_duration
@@ -392,6 +432,10 @@ func _process(delta: float) -> void:
 			var core_phase := clampf(_age / _flash_duration, 0.0, 1.0)
 			_flash.scale = Vector3.ONE * (0.80 + sin(core_phase * PI * 0.75) * 0.38)
 			((_flash.mesh as QuadMesh).material as StandardMaterial3D).albedo_color = Color(3.8 - core_phase * 1.2, 2.8 - core_phase * 1.7, 1.5 - core_phase * 1.3, 1.0 - smoothstep(0.23, 1.0, core_phase))
+		elif _profile == "impact":
+			var impact_phase := clampf(_age / _flash_duration, 0.0, 1.0)
+			_flash.scale = Vector3.ONE * (0.85 + impact_phase * 0.45)
+			((_flash.mesh as QuadMesh).material as StandardMaterial3D).albedo_color = Color(3.5 - impact_phase, 2.6 - impact_phase * 1.6, 1.25 - impact_phase, 1.0 - smoothstep(0.15, 1.0, impact_phase))
 		else:
 			_flash.scale = Vector3.ONE * (0.7 + _age * 3.0)
 			((_flash.mesh as QuadMesh).material as StandardMaterial3D).albedo_color.a = exp(-_age * 48.0)

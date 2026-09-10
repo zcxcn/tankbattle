@@ -1,0 +1,381 @@
+{
+  "capture_point": "Bus effects precede their own volume/mute. SFX volume/mute are measured at the downstream Master bus; Master final mute is verified by routing.",
+  "failed": 0,
+  "measurements": [
+    {
+      "Master": {
+        "frames": 45056,
+        "onset_ms": 1.83333333333333,
+        "peak": 0.668343901634216,
+        "rms": 0.168495626505058,
+        "tail_rms": 0.129988705778063
+      },
+      "PlayerImpacts": {
+        "frames": 45056,
+        "onset_ms": 1.83333333333333,
+        "peak": 0.668343901634216,
+        "rms": 0.168495626505058,
+        "tail_rms": 0.129988705778063
+      },
+      "PlayerWeapons": {
+        "frames": 45056,
+        "onset_ms": -1.0,
+        "peak": 0.0,
+        "rms": 0.0,
+        "tail_rms": 0.0
+      },
+      "Radio": {
+        "frames": 45056,
+        "onset_ms": -1.0,
+        "peak": 0.0,
+        "rms": 0.0,
+        "tail_rms": 0.0
+      },
+      "camera_height_m": 32.0,
+      "kind": "he",
+      "label": "tactical_heavy",
+      "severity": 1.0
+    },
+    {
+      "Master": {
+        "frames": 45056,
+        "onset_ms": 1.83333333333333,
+        "peak": 0.668343901634216,
+        "rms": 0.168435341427078,
+        "tail_rms": 0.129852022478824
+      },
+      "PlayerImpacts": {
+        "frames": 40960,
+        "onset_ms": 1.83333333333333,
+        "peak": 0.668343901634216,
+        "rms": 0.174858755973443,
+        "tail_rms": 0.137309999624074
+      },
+      "PlayerWeapons": {
+        "frames": 45056,
+        "onset_ms": -1.0,
+        "peak": 0.0,
+        "rms": 0.0,
+        "tail_rms": 0.0
+      },
+      "Radio": {
+        "frames": 45056,
+        "onset_ms": -1.0,
+        "peak": 0.0,
+        "rms": 0.0,
+        "tail_rms": 0.0
+      },
+      "camera_height_m": 5.0,
+      "kind": "he",
+      "label": "camera_independence",
+      "severity": 1.0
+    },
+    {
+      "Master": {
+        "frames": 42496,
+        "onset_ms": 33.8333333333333,
+        "peak": 0.668343901634216,
+        "rms": 0.171594242075042,
+        "tail_rms": 0.137125233983795
+      },
+      "PlayerImpacts": {
+        "frames": 41984,
+        "onset_ms": 23.1666666666667,
+        "peak": 0.668343901634216,
+        "rms": 0.172637377774727,
+        "tail_rms": 0.137125233983795
+      },
+      "PlayerWeapons": {
+        "frames": 41984,
+        "onset_ms": -1.0,
+        "peak": 0.0,
+        "rms": 0.0,
+        "tail_rms": 0.0
+      },
+      "Radio": {
+        "frames": 41984,
+        "onset_ms": -1.0,
+        "peak": 0.0,
+        "rms": 0.0,
+        "tail_rms": 0.0
+      },
+      "camera_height_m": 220.0,
+      "kind": "he",
+      "label": "camera_independence",
+      "severity": 1.0
+    },
+    {
+      "Master": {
+        "frames": 20480,
+        "onset_ms": 1.83333333333333,
+        "peak": 0.163892418146133,
+        "rms": 0.0297976565992064,
+        "tail_rms": 0.0
+      },
+      "PlayerImpacts": {
+        "frames": 20480,
+        "onset_ms": 1.83333333333333,
+        "peak": 0.163892418146133,
+        "rms": 0.0297976565992064,
+        "tail_rms": 0.0
+      },
+      "PlayerWeapons": {
+        "frames": 20480,
+        "onset_ms": -1.0,
+        "peak": 0.0,
+        "rms": 0.0,
+        "tail_rms": 0.0
+      },
+      "Radio": {
+        "frames": 24576,
+        "onset_ms": -1.0,
+        "peak": 0.0,
+        "rms": 0.0,
+        "tail_rms": 0.0
+      },
+      "camera_height_m": 32.0,
+      "kind": "machine_gun",
+      "label": "light_machine_gun",
+      "severity": 0.3
+    },
+    {
+      "Master": {
+        "frames": 45056,
+        "onset_ms": 1.8125,
+        "peak": 0.668343901634216,
+        "rms": 0.141417488009307,
+        "tail_rms": 0.104625802834545
+      },
+      "PlayerImpacts": {
+        "frames": 45056,
+        "onset_ms": 1.8125,
+        "peak": 0.668343901634216,
+        "rms": 0.141417488009307,
+        "tail_rms": 0.104625802834545
+      },
+      "PlayerWeapons": {
+        "frames": 45056,
+        "onset_ms": -1.0,
+        "peak": 0.0,
+        "rms": 0.0,
+        "tail_rms": 0.0
+      },
+      "Radio": {
+        "frames": 45056,
+        "onset_ms": -1.0,
+        "peak": 0.0,
+        "rms": 0.0,
+        "tail_rms": 0.0
+      },
+      "camera_height_m": 32.0,
+      "kind": "cannon",
+      "label": "weapon_kind",
+      "severity": 0.85
+    },
+    {
+      "Master": {
+        "frames": 45056,
+        "onset_ms": 1.8125,
+        "peak": 0.668343901634216,
+        "rms": 0.146436278167794,
+        "tail_rms": 0.114688531867009
+      },
+      "PlayerImpacts": {
+        "frames": 40960,
+        "onset_ms": 1.8125,
+        "peak": 0.668343901634216,
+        "rms": 0.151962110450288,
+        "tail_rms": 0.121255809334574
+      },
+      "PlayerWeapons": {
+        "frames": 45056,
+        "onset_ms": -1.0,
+        "peak": 0.0,
+        "rms": 0.0,
+        "tail_rms": 0.0
+      },
+      "Radio": {
+        "frames": 45056,
+        "onset_ms": -1.0,
+        "peak": 0.0,
+        "rms": 0.0,
+        "tail_rms": 0.0
+      },
+      "camera_height_m": 32.0,
+      "kind": "rocket",
+      "label": "weapon_kind",
+      "severity": 0.85
+    },
+    {
+      "Master": {
+        "frames": 40960,
+        "onset_ms": 1.8125,
+        "peak": 0.668343901634216,
+        "rms": 0.151815795603087,
+        "tail_rms": 0.120908933067968
+      },
+      "PlayerImpacts": {
+        "frames": 40960,
+        "onset_ms": 1.8125,
+        "peak": 0.668343901634216,
+        "rms": 0.151815795603087,
+        "tail_rms": 0.120908933067968
+      },
+      "PlayerWeapons": {
+        "frames": 42496,
+        "onset_ms": -1.0,
+        "peak": 0.0,
+        "rms": 0.0,
+        "tail_rms": 0.0
+      },
+      "Radio": {
+        "frames": 45056,
+        "onset_ms": -1.0,
+        "peak": 0.0,
+        "rms": 0.0,
+        "tail_rms": 0.0
+      },
+      "camera_height_m": 32.0,
+      "kind": "blast",
+      "label": "weapon_kind",
+      "severity": 0.85
+    },
+    {
+      "Master": {
+        "frames": 45056,
+        "onset_ms": 1.8125,
+        "peak": 0.441007167100906,
+        "rms": 0.087299466471243,
+        "tail_rms": 0.0521611744323427
+      },
+      "PlayerImpacts": {
+        "frames": 45056,
+        "onset_ms": 1.8125,
+        "peak": 0.441007167100906,
+        "rms": 0.087299466471243,
+        "tail_rms": 0.0521611744323427
+      },
+      "PlayerWeapons": {
+        "frames": 45056,
+        "onset_ms": -1.0,
+        "peak": 0.0,
+        "rms": 0.0,
+        "tail_rms": 0.0
+      },
+      "Radio": {
+        "frames": 45056,
+        "onset_ms": -1.0,
+        "peak": 0.0,
+        "rms": 0.0,
+        "tail_rms": 0.0
+      },
+      "camera_height_m": 32.0,
+      "kind": "he",
+      "label": "low_severity",
+      "severity": 0.15
+    },
+    {
+      "Master": {
+        "frames": 20480,
+        "onset_ms": 1.83333333333333,
+        "peak": 0.891250908374786,
+        "rms": 0.312261149209585,
+        "tail_rms": 0.217570569882494
+      },
+      "PlayerImpacts": {
+        "frames": 20480,
+        "onset_ms": 1.83333333333333,
+        "peak": 0.668343901634216,
+        "rms": 0.206027812211838,
+        "tail_rms": 0.146413195387295
+      },
+      "PlayerWeapons": {
+        "frames": 20992,
+        "onset_ms": 10.7291666666667,
+        "peak": 0.594992458820343,
+        "rms": 0.151075133747389,
+        "tail_rms": 0.110389789727198
+      },
+      "Radio": {
+        "frames": 24576,
+        "onset_ms": 58.75,
+        "peak": 0.695496201515198,
+        "rms": 0.150816445371951,
+        "tail_rms": 0.0889269083566105
+      },
+      "camera_height_m": 32.0,
+      "kind": "he",
+      "label": "world_full_with_gun_and_radio",
+      "severity": 1.0
+    },
+    {
+      "Master": {
+        "frames": 45056,
+        "onset_ms": 2.0625,
+        "peak": 0.167085975408554,
+        "rms": 0.0421048702379493,
+        "tail_rms": 0.0324588862655651
+      },
+      "PlayerImpacts": {
+        "frames": 45056,
+        "onset_ms": 1.83333333333333,
+        "peak": 0.668343901634216,
+        "rms": 0.168419480951797,
+        "tail_rms": 0.129816046523155
+      },
+      "PlayerWeapons": {
+        "frames": 45056,
+        "onset_ms": -1.0,
+        "peak": 0.0,
+        "rms": 0.0,
+        "tail_rms": 0.0
+      },
+      "Radio": {
+        "frames": 45056,
+        "onset_ms": -1.0,
+        "peak": 0.0,
+        "rms": 0.0,
+        "tail_rms": 0.0
+      },
+      "camera_height_m": 32.0,
+      "kind": "he",
+      "label": "effects_quarter",
+      "severity": 1.0
+    },
+    {
+      "Master": {
+        "frames": 20480,
+        "onset_ms": -1.0,
+        "peak": 0.0,
+        "rms": 0.0,
+        "tail_rms": 0.0
+      },
+      "PlayerImpacts": {
+        "frames": 16384,
+        "onset_ms": 1.83333333333333,
+        "peak": 0.668343901634216,
+        "rms": 0.210563986706803,
+        "tail_rms": 0.0
+      },
+      "PlayerWeapons": {
+        "frames": 20480,
+        "onset_ms": -1.0,
+        "peak": 0.0,
+        "rms": 0.0,
+        "tail_rms": 0.0
+      },
+      "Radio": {
+        "frames": 20480,
+        "onset_ms": -1.0,
+        "peak": 0.0,
+        "rms": 0.0,
+        "tail_rms": 0.0
+      },
+      "camera_height_m": 32.0,
+      "kind": "he",
+      "label": "mute_SFX",
+      "severity": 1.0
+    }
+  ],
+  "passed": 32
+}

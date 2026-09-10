@@ -17,9 +17,9 @@ class CombatFixture extends Node3D:
 		shots.append({"owner": owner_tank, "at": at, "direction": direction, "damage": damage, "speed": speed, "splash": splash, "kind": kind})
 	func spawn_muzzle_flash(_at: Vector3, _color: Color, _scale: float, _direction := Vector3.FORWARD, _kind := "cannon", _player_priority := false) -> void:
 		pass
-	func spawn_impact(_at: Vector3, _heavy: bool, _surface := "ground", _normal := Vector3.UP, _kind := "cannon") -> void:
+	func spawn_impact(_at: Vector3, _heavy: bool, _surface := "ground", _normal := Vector3.UP, _kind := "cannon", _player_priority := false) -> void:
 		pass
-	func radial_damage(_at: Vector3, _radius: float, _damage: float, _team: int) -> void:
+	func radial_damage(_at: Vector3, _radius: float, _damage: float, _team: int, _contacts: Dictionary = {}, _weapon_kind := "blast") -> void:
 		pass
 	func spawn_mine(_owner: Node3D, _at: Vector3) -> void:
 		pass

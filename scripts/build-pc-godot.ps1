@@ -134,6 +134,8 @@ if (-not $SkipTests) {
     Assert-LastExitCode -Action "Godot camera collision tests"
     & $GodotPath --headless --path $projectRoot --script "res://tests/recoil_regression_test.gd" -- --test
     Assert-LastExitCode -Action "Godot mechanical and camera recoil tests"
+    & $GodotPath --headless --path $projectRoot "res://tests/hit_feedback_test.tscn" -- --test
+    Assert-LastExitCode -Action "Godot incoming damage feedback tests"
     & $GodotPath --headless --path $projectRoot --script "res://tests/gamepad_regression_test.gd" -- --test
     Assert-LastExitCode -Action "Godot controller input and menu tests"
 
@@ -146,6 +148,8 @@ if (-not $SkipTests) {
     Assert-LastExitCode -Action "Godot battlefield audio tests"
     & $GodotPath --headless --path $projectRoot "res://tests/weapon_audio_test.tscn" -- --test
     Assert-LastExitCode -Action "Godot recorded weapon mixer capture tests"
+    & $GodotPath --headless --path $projectRoot "res://tests/impact_audio_test.tscn" -- --test
+    Assert-LastExitCode -Action "Godot incoming armor impact mixer capture tests"
     & $GodotPath --headless --path $projectRoot --script "res://tests/weather_regression_test.gd" -- --test
     Assert-LastExitCode -Action "Godot rain, roof shelter and wet terrain tests"
     & $GodotPath --headless --path $projectRoot --script "res://tests/track_marks_test.gd" -- --test
@@ -204,7 +208,7 @@ foreach ($credit in $creditSources.GetEnumerator()) {
     }
 }
 
-$productVersion = "0.4.4"
+$productVersion = "0.4.5"
 $manifestPath = Join-Path $artifactDirectory "build-manifest.json"
 $payloadFiles = @(Get-ChildItem -LiteralPath $artifactDirectory -File -Recurse | Sort-Object FullName)
 $manifestFiles = @(
