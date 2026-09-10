@@ -32,7 +32,11 @@ func run() -> void:
 		InputMap.action_erase_events(action)
 		Input.action_release(action)
 	var results: Array[Dictionary] = []
-	for chapter in [0, 4]:
+	var directory := ProjectSettings.globalize_path("res://../work/asset-review/pc-0.4.3")
+	DirAccess.make_dir_recursive_absolute(directory)
+	for weather_case in [[0, 1], [4, 3], [4, 4], [4, 5]]:
+		var chapter: int = weather_case[0]
+		settings.weather_mode = weather_case[1]
 		game.selected_mission = chapter
 		game.set_meta("deployment_seed", 40910 + chapter)
 		game.start_game()
@@ -73,7 +77,7 @@ func run() -> void:
 		for sample in samples:
 			sum += sample
 		samples.sort()
-		var result := {"chapter": chapter + 1, "weather": game.mission_data.weather,
+		var result := {"chapter": chapter + 1, "weather": game.current_weather,
 			"window": [root.size.x, root.size.y], "render_scale": root.scaling_3d_scale,
 			"quality": settings.quality, "samples": samples.size(), "average_fps": 240000.0 / sum,
 			"p95_frame_ms": samples[227], "mean_physics_ms": physics_total / 240.0,
@@ -81,8 +85,10 @@ func run() -> void:
 			"vehicles": get_nodes_in_group("tanks").size(), "mode": game.mode}
 		results.append(result)
 		print("WEATHER_TRACKS_PERFORMANCE: " + JSON.stringify(result))
-	var directory := ProjectSettings.globalize_path("res://../work/asset-review/pc-0.4.2")
-	DirAccess.make_dir_recursive_absolute(directory)
+		# Evidence of terrain projection and accumulated snow/track interaction.
+		# This readback happens after timing has ended, never inside the sample.
+		await RenderingServer.frame_post_draw
+		root.get_texture().get_image().save_png(directory.path_join("tracks-" + game.current_weather + ".png"))
 	var file := FileAccess.open(directory.path_join("performance.json"), FileAccess.WRITE)
 	file.store_string(JSON.stringify({"gpu": RenderingServer.get_video_adapter_name(),
 		"method": "1080p medium, uncapped/VSync off, stationary invulnerable player, live AI, synthetic print histories projected onto real terrain, 90 warmup + 240 sample frames; no captures or file writes during samples. Different chapters are separate workloads, not a controlled weather on/off comparison.",

@@ -1,0 +1,41 @@
+[
+  {
+    "file": "explosion.png",
+    "dimensions": [
+      1024,
+      1024
+    ],
+    "source_member": "Explosion00_5x5.tga",
+    "source": "https://unity3d.com/files/labs/downloads/vfx/assets01/Explosion00/Explosion00-flipbooks.zip",
+    "archive_sha256": "5931820e3e8f5062446b059bf4b0489a8fc56df5de35170721fe9cd4139d6d42",
+    "source_tga_sha256": "1b1ad36ff986e2b23d6c0dd4fff30b28cc77e102141db45c1f195ce527a95bb9",
+    "sha256": "d386ae2d6b2c94825e39c74980a6676366a4c8c47a85287fc0b9b20be2a05fb4",
+    "license": "CC0-1.0"
+  },
+  {
+    "file": "smoke.png",
+    "dimensions": [
+      1024,
+      1024
+    ],
+    "source_member": "Explosion01-nofire_5x5.tga",
+    "source": "https://unity3d.com/files/labs/downloads/vfx/assets01/Explosion01-nofire/Explosion01-nofire-flipbooks.zip",
+    "archive_sha256": "ada1640da1421a9861740ff6377a84bfa5fd7774d093ae24851849059e623dd4",
+    "source_tga_sha256": "42199142b9319ad2db2541920da8acd220f8aa9af9a2c96c9340e1d4dc5ca043",
+    "sha256": "d3fb2e6dd82f59bf371d614d24d9ae35f7bf1609358232fc3ad3a33986e1e365",
+    "license": "CC0-1.0"
+  },
+  {
+    "file": "flame.png",
+    "dimensions": [
+      2048,
+      1024
+    ],
+    "source_member": "Flame02_16x4.tga",
+    "source": "https://unity3d.com/files/labs/downloads/vfx/assets01/Flame02/Flame02-flipbooks.zip",
+    "archive_sha256": "f37b12cdae090591d537ed3bb50396f03833a49864362bf665d6817b7282c954",
+    "source_tga_sha256": "6ae2158bc06e0b035196db2695c19e7cb29a23f59b345d4c5c2764c6c10ce3a6",
+    "sha256": "b82cb3be29dc308d08f479df8261cdf15a7a12dd18a350cb7209f706a2bd334e",
+    "license": "CC0-1.0"
+  }
+]

@@ -308,7 +308,7 @@ func _build_title_layer() -> void:
 	layout.add_child(HSeparator.new())
 	var footer := HBoxContainer.new()
 	layout.add_child(footer)
-	footer.add_child(_label("BUILD 0.4.2 · FORWARD+ / PBR ARMOR", &"Micro"))
+	footer.add_child(_label("BUILD 0.4.3 · FORWARD+ / PBR ARMOR", &"Micro"))
 	footer.add_child(_spacer(true, false))
 	var asset_credit := _label("3D：tomm8 · GRIP420 / David Falke · Comrade1280 · CC BY 4.0\n机枪录音：KuraiWolf / Nightshade Game Studios · CC BY 4.0", &"Micro")
 	asset_credit.name = "AssetCredit"
@@ -564,7 +564,7 @@ func _build_settings_layer() -> void:
 	var settings_box := VBoxContainer.new()
 	settings_box.add_theme_constant_override(&"separation", 13)
 	panel.add_child(settings_box)
-	settings_box.add_child(_label("显示与图形", &"SectionTitle"))
+	settings_box.add_child(_label("画面、声音与天气", &"SectionTitle"))
 	var explanation := _label("设置立即生效并在本机保存。F11 可切换显示模式。", &"Muted")
 	explanation.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	settings_box.add_child(explanation)
@@ -585,8 +585,9 @@ func _build_settings_layer() -> void:
 		["master_volume", "总音量", "每次调整 10%"],
 		["effects_volume", "战斗音效", "炮声、爆炸、引擎与界面音效"],
 		["music_volume", "战斗音乐", "音乐独立音量，每次调整 10%"],
-		["radio_volume", "战场通信", "原创无线电语音独立音量，每次调整 10%"],
+		["radio_volume", "战场通信", "真人战术语音独立音量，每次调整 10%"],
 		["music_track", "选择音乐", "轮换三首战斗配乐，也可按 N 切换"],
+		["weather_mode", "战场天气", "随机 / 晴天 / 小雨 / 大雨 / 雪天 / 雾天；立即生效，随机在每次出击时重新选择"],
 	]:
 		var id := String(entry[0])
 		var button := _button("", &"SettingButton", setting_requested.emit.bind(id))
@@ -808,6 +809,7 @@ func _update_settings() -> void:
 		"music_volume": ["战斗音乐", "%d%%" % _int_value("music_volume", 45)],
 		"radio_volume": ["战场通信", "%d%%" % _int_value("radio_volume", 85)],
 		"music_track": ["选择音乐 · N", str((_snapshot.get("music", {}) as Dictionary).get("name", "战斗音乐"))],
+		"weather_mode": ["战场天气", str(_snapshot.get("weather_label", "随机"))],
 	}
 	for id: String in _setting_buttons:
 		var parts: Array = values[id]
@@ -988,7 +990,8 @@ func _wire_vertical_focus(buttons: Array[Button]) -> void:
 func _wire_settings_focus(buttons: Array[Button], back_button: Button) -> void:
 	for index in buttons.size():
 		var button := buttons[index]
-		var beside := buttons[index + 1 if index % 2 == 0 else index - 1]
+		var beside_index := index + 1 if index % 2 == 0 else index - 1
+		var beside := buttons[beside_index] if beside_index < buttons.size() else back_button
 		var above := buttons[index - 2] if index >= 2 else back_button
 		var below := buttons[index + 2] if index + 2 < buttons.size() else back_button
 		button.focus_neighbor_top = button.get_path_to(above)

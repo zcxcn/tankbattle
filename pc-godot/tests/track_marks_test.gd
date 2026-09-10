@@ -173,6 +173,7 @@ func frames(count: int) -> void:
 
 
 func run_scene_integration() -> void:
+	root.get_node("SettingsService").weather_mode = 1
 	root.get_node("SaveService").set("_directory", "user://tests/tracks_integration_042_%d" % OS.get_process_id())
 	root.get_node("SaveService").reset_for_tests()
 	var game = load("res://scenes/main/main.tscn").instantiate()
@@ -239,12 +240,14 @@ func run_scene_integration() -> void:
 	check(live_marks.get_snapshot().active == 0 and live_marks.get_snapshot().vehicles == 0, "retry starts with no old tread impressions or stale contact anchors")
 	check(live_marks.get_snapshot().wetness == 0.0, "retry retains the current mission's dry ground state")
 	game.mode = "won"
+	root.get_node("SettingsService").weather_mode = 2
 	game.next_mission()
 	live_marks = game.arena.get_node("TrackMarks")
 	check(game.mission_index == 1 and is_equal_approx(float(live_marks.get_snapshot().wetness), 0.55), "next_mission connects light rain to the new trail manager")
 	check(live_marks.get_snapshot().active == 0 and live_marks.get_snapshot().vehicles == 0, "entering the rain chapter never carries tracks from the previous map")
 	old_marks = live_marks
 	game.selected_mission = 4
+	root.get_node("SettingsService").weather_mode = 3
 	game.start_game()
 	live_marks = game.arena.get_node("TrackMarks")
 	check(not is_instance_valid(old_marks) and live_marks.get_snapshot().wetness == 1.0, "starting the heavy-rain chapter replaces old decals and applies maximum wetness")

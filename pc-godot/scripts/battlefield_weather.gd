@@ -1,10 +1,11 @@
 class_name BattlefieldWeather
 extends Node3D
-## Two bounded GPU-instanced rain layers and pooled surface ripples. No per-drop
+## Bounded GPU-instanced rain/snow and pooled rain surface ripples. No per-drop
 ## nodes, ray casts or physics bodies. The simulation clock follows combat pause.
 ## Rain noise is synthesized here from a deterministic seed: original audio.
 
 const RAIN_SHADER = preload("res://assets/shaders/battlefield_rain.gdshader")
+const SNOW_SHADER = preload("res://assets/shaders/battlefield_snow.gdshader")
 const SPLASH_SHADER = preload("res://assets/shaders/rain_splash.gdshader")
 const PUDDLE_SHADER = preload("res://assets/shaders/rain_puddle.gdshader")
 const MAP_ORIGIN := Vector2(-145.0, -193.0)
@@ -15,17 +16,20 @@ const RAIN_HEIGHT := 38.0
 const MAX_DROPS := 3200
 const MAX_SPLASHES := 260
 const MAX_PUDDLES := 84
+const MAX_SNOWFLAKES := 2300
 
 var game: Node
 var kind := "light_rain"
 var elapsed := 0.0
 var rain: MultiMeshInstance3D
+var snow: MultiMeshInstance3D
 var splashes: MultiMeshInstance3D
 var puddles: MultiMeshInstance3D
 var rain_audio: AudioStreamPlayer
 var roof_image: Image
 var roof_texture: ImageTexture
 var _rain_material: ShaderMaterial
+var _snow_material: ShaderMaterial
 var _splash_material: ShaderMaterial
 var _puddle_material: ShaderMaterial
 var _rng := RandomNumberGenerator.new()
@@ -35,10 +39,13 @@ var _follow_target := Vector3.ZERO
 func _ready() -> void:
 	_rng.seed = 426190
 	_build_roof_heightmap()
-	_build_rain()
-	_build_splashes()
-	_build_puddles()
-	_build_audio()
+	if kind == "snow":
+		_build_snow()
+	else:
+		_build_rain()
+		_build_splashes()
+		_build_puddles()
+		_build_audio()
 	_sync_follow_target()
 	_update_clock()
 
@@ -61,16 +68,33 @@ func _sync_follow_target() -> void:
 	# The camera's visible street ahead stays within a 94m square in either view.
 	# Mesh transforms stay fixed: only the field centre is uploaded each frame.
 	var center := Vector2(_follow_target.x, _follow_target.z)
-	_rain_material.set_shader_parameter("field_center", center)
-	_splash_material.set_shader_parameter("field_center", center)
+	for surface in [_rain_material, _splash_material, _snow_material]:
+		if is_instance_valid(surface):
+			surface.set_shader_parameter("field_center", center)
 	var aabb := AABB(Vector3(center.x - FIELD_RADIUS - 4, -1, center.y - FIELD_RADIUS - 4), Vector3(FIELD_RADIUS * 2 + 8, RAIN_HEIGHT + 4, FIELD_RADIUS * 2 + 8))
-	rain.custom_aabb = aabb
-	splashes.custom_aabb = aabb
+	for batch in [rain, splashes, snow]:
+		if is_instance_valid(batch):
+			batch.custom_aabb = aabb
 
 
 func _update_clock() -> void:
-	for surface in [_rain_material, _splash_material, _puddle_material]:
-		surface.set_shader_parameter("rain_time", elapsed)
+	for surface in [_rain_material, _splash_material, _puddle_material, _snow_material]:
+		if is_instance_valid(surface):
+			surface.set_shader_parameter("rain_time", elapsed)
+
+
+func _build_snow() -> void:
+	_snow_material = _common_material(SNOW_SHADER)
+	_snow_material.set_shader_parameter("fall_height", RAIN_HEIGHT)
+	_snow_material.set_shader_parameter("fall_speed", 1.55)
+	var mesh := QuadMesh.new()
+	# Soft irregular flakes have almost equal width/height: never rain streaks.
+	mesh.size = Vector2(0.12, 0.12)
+	var amount := int(MAX_SNOWFLAKES * (0.65 if SettingsService.quality == 0 else 1.0))
+	snow = _instance_batch("SnowFlakes", mesh, amount, _snow_material)
+	for index in amount:
+		snow.multimesh.set_instance_transform(index, Transform3D.IDENTITY)
+		snow.multimesh.set_instance_custom_data(index, Color(_rng.randf(), _rng.randf(), _rng.randf(), _rng.randf()))
 
 
 func _common_material(shader: Shader) -> ShaderMaterial:
@@ -229,9 +253,10 @@ func _build_audio() -> void:
 func get_snapshot() -> Dictionary:
 	return {
 		"kind": kind, "elapsed": elapsed, "center": _follow_target,
-		"drops": rain.multimesh.instance_count,
-		"splashes": splashes.multimesh.instance_count,
-		"puddles": puddles.multimesh.instance_count,
-		"draw_batches": 3, "roof_resolution": MAP_PIXELS,
-		"audio_paused": rain_audio.stream_paused,
+		"drops": rain.multimesh.instance_count if is_instance_valid(rain) else 0,
+		"snowflakes": snow.multimesh.instance_count if is_instance_valid(snow) else 0,
+		"splashes": splashes.multimesh.instance_count if is_instance_valid(splashes) else 0,
+		"puddles": puddles.multimesh.instance_count if is_instance_valid(puddles) else 0,
+		"draw_batches": 1 if kind == "snow" else 3, "roof_resolution": MAP_PIXELS,
+		"audio_paused": rain_audio.stream_paused if is_instance_valid(rain_audio) else true,
 	}

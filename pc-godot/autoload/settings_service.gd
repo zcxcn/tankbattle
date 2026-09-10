@@ -12,6 +12,7 @@ var quality := 2 # low, medium, high, ultra.
 var fps_cap := 60
 var vsync := true
 var screen_shake := true
+var weather_mode := 0 # Random, clear, light rain, heavy rain, snow, fog.
 var master_volume := 80
 var music_volume := 45
 var effects_volume := 85
@@ -41,6 +42,7 @@ func load_settings() -> void:
 		fps_cap = 60
 	vsync = bool(config.get_value("graphics", "vsync", vsync))
 	screen_shake = bool(config.get_value("gameplay", "screen_shake", screen_shake))
+	weather_mode = clampi(int(config.get_value("gameplay", "weather", 0)), 0, 5)
 	master_volume = clampi(int(config.get_value("audio", "master", master_volume)), 0, 100)
 	music_volume = clampi(int(config.get_value("audio", "music", music_volume)), 0, 100)
 	effects_volume = clampi(int(config.get_value("audio", "effects", effects_volume)), 0, 100)
@@ -57,6 +59,7 @@ func save_settings() -> void:
 	config.set_value("graphics", "fps_cap", fps_cap)
 	config.set_value("graphics", "vsync", vsync)
 	config.set_value("gameplay", "screen_shake", screen_shake)
+	config.set_value("gameplay", "weather", weather_mode)
 	config.set_value("audio", "master", master_volume)
 	config.set_value("audio", "music", music_volume)
 	config.set_value("audio", "effects", effects_volume)

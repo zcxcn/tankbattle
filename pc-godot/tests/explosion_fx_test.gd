@@ -50,22 +50,27 @@ func _run() -> void:
 			textured_layers = false
 			continue
 		total_particles += particles.amount
-		var material := (particles.draw_pass_1 as QuadMesh).material as StandardMaterial3D
-		textured_layers = textured_layers and material != null and material.albedo_texture != null and material.billboard_keep_scale
-	_check(textured_layers and total_particles <= 128, "all four bounded particle layers preserve simulated size and use soft textures within the 128-particle budget")
+		var material := (particles.draw_pass_1 as QuadMesh).material
+		textured_layers = textured_layers and ((material is ShaderMaterial and material.get_shader_parameter("flipbook") != null) or (material is StandardMaterial3D and material.albedo_texture != null and material.billboard_keep_scale))
+	_check(textured_layers and total_particles <= 128, "all four bounded particle layers preserve simulated size and use textured matter within the 128-particle budget")
 	for label in ["Smoke", "Dust"]:
 		var particles := effect.get_node(label) as GPUParticles3D
-		var material := (particles.draw_pass_1 as QuadMesh).material as StandardMaterial3D
+		var material := (particles.draw_pass_1 as QuadMesh).material as ShaderMaterial
 		var process := particles.process_material as ParticleProcessMaterial
-		_check(material.blend_mode == BaseMaterial3D.BLEND_MODE_MIX and not material.emission_enabled and material.shading_mode == BaseMaterial3D.SHADING_MODE_PER_PIXEL, label + " is lit matte matter instead of additive glowing rectangles")
+		_check(material != null and material.get_shader_parameter("heat") == 0.0 and material.get_shader_parameter("soft_distance") >= 0.5, label + " is non-emissive fluid matter with softened scene intersections")
 		_check(process.scale_curve.curve.sample(1.0) > process.scale_curve.curve.sample(0.0) * 3.0 and process.color_ramp.gradient.sample(0.0).a == 0.0 and process.color_ramp.gradient.sample(1.0).a == 0.0, label + " expands and fades smoothly at birth and expiry")
 		_check(process.scale_curve.texture_mode == CurveTexture.TEXTURE_MODE_RGB, label + " scale curve provides all XYZ channels so billboards retain visible width and height")
 	var fire_process := (effect.get_node("Fire") as GPUParticles3D).process_material as ParticleProcessMaterial
-	var hot: Color = fire_process.color_ramp.gradient.sample(0.07)
-	var cool: Color = fire_process.color_ramp.gradient.sample(0.64)
-	_check(hot.a > 0.7 and hot.r > cool.r and hot.g > cool.g and fire_process.color_ramp.gradient.sample(1.0).a == 0.0, "fire transitions from a hot bright core to cool fading embers")
+	var fire_material := ((effect.get_node("Fire") as GPUParticles3D).draw_pass_1 as QuadMesh).material as ShaderMaterial
+	var fire_image := (fire_material.get_shader_parameter("flipbook") as Texture2D).get_image()
+	_check(_hot_energy(fire_image, 0) > _hot_energy(fire_image, 24) * 10.0 and fire_process.color_ramp.gradient.sample(1.0).a == 0.0, "actual fluid frames cool from fire to dark soot instead of just recoloring a repeated sphere")
 	_check(fire_process.scale_curve.texture_mode == CurveTexture.TEXTURE_MODE_RGB, "fire scale curve cannot collapse its billboard onto a zero-height line")
 	_check(effect.get_node("Debris") is GPUParticles3D, "destruction ejects finite GPU fragments instead of spawning rigid-body debris piles")
+	var smoke_process := (effect.get_node("Smoke") as GPUParticles3D).process_material as ParticleProcessMaterial
+	_check(smoke_process.turbulence_enabled and smoke_process.damping_min > 1.5 and smoke_process.gravity.y > 0.0, "smoke loses the blast impulse before drifting upward with low-frequency curl")
+	var pressure_curve := ((effect.get_node("Dust") as GPUParticles3D).process_material as ParticleProcessMaterial).radial_velocity_curve as CurveTexture
+	_check(pressure_curve != null and pressure_curve.curve.sample(0.0) > 0.9 and pressure_curve.curve.sample(0.5) < 0.01 and pressure_curve.curve.sample(1.0) < 0.01, "radial pressure explicitly decays to zero rather than relying on damping that cannot stop animated velocity")
+	_check((effect.get_node("Fire") as GPUParticles3D).amount <= 3 and fire_process.anim_speed_min == 1.0 and fire_process.anim_speed_max == 1.0, "each destruction uses at most three evolving fluid lobes with one non-looping animation per life")
 	effect.free()
 	var heavy := ExplosionFX.create_impact(Vector3.ZERO, true, "ground", Vector3.UP, "he")
 	add_child(heavy)
@@ -74,6 +79,12 @@ func _run() -> void:
 	var blast_dust_process := blast_dust.process_material as ParticleProcessMaterial
 	var blast_fire_process := (heavy.get_node("Fire") as GPUParticles3D).process_material as ParticleProcessMaterial
 	_check(blast_dust.lifetime > 2.0 and blast_dust_process.radial_velocity_max >= 6.0 and blast_fire_process.scale_max >= 0.89, "HE produces a broad pressure-driven dust front and substantial rolling fire")
+	var hot_bounds := _first_hot_bounds(fire_image)
+	var he_fire := heavy.get_node("Fire") as GPUParticles3D
+	var initial_size: Vector2 = (he_fire.draw_pass_1 as QuadMesh).size * blast_fire_process.scale_min * blast_fire_process.scale_curve.curve.sample(0.06)
+	var visible_width: float = initial_size.x * hot_bounds.size.x
+	var visible_height: float = he_fire.position.y + initial_size.y * (0.5 - hot_bounds.get_center().y)
+	_check(visible_width > 2.0 and visible_height > 0.3, "actual first-frame HE hot pixels span over two metres and remain above the impact floor even at minimum particle scale")
 	_check(heavy.get_node("BlastSmoke") != null and heavy.get_node("Debris") != null and heavy._duration > 3.0, "HE blast separates fire, lingering smoke and finite fragments")
 	_check(blast_dust_process.scale_curve.texture_mode == CurveTexture.TEXTURE_MODE_RGB and blast_fire_process.scale_curve.texture_mode == CurveTexture.TEXTURE_MODE_RGB, "enlarged HE layers retain RGB particle scale curves")
 	heavy.free()
@@ -143,3 +154,28 @@ func _run() -> void:
 	# positional voices enter the audio mixer before the shared stop routine.
 	await get_tree().create_timer(0.08).timeout
 	await preload("res://tests/test_shutdown.gd").finish(get_tree(), 0 if failed == 0 else 1)
+
+
+func _hot_energy(image: Image, frame: int) -> float:
+	var energy := 0.0
+	var width := image.get_width() / 5.0
+	var height := image.get_height() / 5.0
+	for y in range(int(frame / 5) * int(height), int((int(frame / 5) + 1) * height), 3):
+		for x in range(int((frame % 5) * width), int((frame % 5 + 1) * width), 3):
+			var pixel := image.get_pixel(x, y)
+			energy += maxf(0, pixel.r - pixel.b - 0.1) * pixel.a
+	return energy
+
+
+func _first_hot_bounds(image: Image) -> Rect2:
+	var minimum := Vector2.ONE
+	var maximum := Vector2.ZERO
+	var tile := Vector2(image.get_width(), image.get_height()) / 5.0
+	for y in int(tile.y):
+		for x in int(tile.x):
+			var pixel := image.get_pixel(x, y)
+			if pixel.a > 0.15 and pixel.r - pixel.b > 0.15:
+				var uv := Vector2(x, y) / tile
+				minimum = minimum.min(uv)
+				maximum = maximum.max(uv)
+	return Rect2(minimum, maximum - minimum)

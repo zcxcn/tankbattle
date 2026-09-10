@@ -9,6 +9,7 @@ var _flash: MeshInstance3D
 static var _sprite_cache: Dictionary = {}
 static var _material_cache: Dictionary = {}
 static var _curve_cache: Dictionary = {}
+static var _fluid_material_cache: Dictionary = {}
 const MAX_BLASTS := 8
 const MAX_COOKOFFS := 3
 const MAX_IMPACTS := 18
@@ -94,10 +95,10 @@ func _ready() -> void:
 		return
 	_add_light(12.0, 19.0)
 	_add_flash(3.3, Vector3.UP * 0.8)
-	_spawn_particles("Fire", 28, 0.95, Color("ffcf66"), Color(1.0, 0.12, 0.015, 0.0), 7.6, 3.4, 1.05, true)
+	_spawn_particles("Fire", 2, 2.0, Color.WHITE, Color.TRANSPARENT, 1.6, -0.4, 6.2, true)
 	_spawn_particles("Sparks", 32, 1.25, Color("fff1a0"), Color(1.0, 0.22, 0.03, 0.0), 19.0, 0.45, 0.095, false)
-	_spawn_particles("Smoke", 30, 3.9, Color(0.16, 0.14, 0.12, 0.78), Color(0.055, 0.06, 0.055, 0.0), 4.0, 1.1, 1.5, true)
-	_spawn_particles("Dust", 34, 2.55, Color(0.36, 0.29, 0.19, 0.6), Color(0.18, 0.15, 0.1, 0.0), 12.0, 0.35, 1.05, true, true)
+	_spawn_particles("Smoke", 8, 3.9, Color.WHITE, Color.TRANSPARENT, 2.2, 1.1, 3.2, true)
+	_spawn_particles("Dust", 24, 2.55, Color.WHITE, Color.TRANSPARENT, 12.0, 0.35, 2.2, true, true)
 	_spawn_debris(18, 0.20)
 	# The mastered explosion clips already include debris and outdoor decay.
 	# Layering the old long blast again would double the report and mask fire.
@@ -123,49 +124,51 @@ func _retire_oldest_destruction() -> bool:
 
 
 func _build_cookoff() -> void:
-	# Ammunition vents through the turret ring: a fast vertical jet precedes
-	# rising fire clumps, falling hot fragments and a long, dark smoke column.
-	# All layers are cosmetic; the wreck owns the single 9 m damage query.
+	# Three short gas surges escape different turret-ring openings. The actual
+	# fluid frames cool to opaque soot while airborne; there is no stretched
+	# static candle card. Damage still belongs to the wreck's single 9 m query.
 	_duration = 6.2
-	_flash_duration = 0.16
-	_jet_duration = 1.2
+	_flash_duration = 0.095
+	_jet_duration = 0.45
 	_add_light(17.0, 28.0)
 	_add_flash(4.8, Vector3.UP * 0.65)
-	_muzzle_forward = Vector3.UP
-	_build_muzzle_jet(10.5, 3.2)
-	_muzzle_jet.name = "UpwardFlameJet"
-	_muzzle_jet.scale = Vector3(0.72, 0.72, 0.16)
-	var fire := _spawn_particles("Fire", 36, 1.85, Color.WHITE, Color.TRANSPARENT, 17.0, -1.4, 1.3, true)
-	fire.name = "CookoffFireColumn"
-	var flame_process := fire.process_material as ParticleProcessMaterial
-	flame_process.spread = 14.0
-	flame_process.emission_sphere_radius = 0.55
-	flame_process.initial_velocity_min = 11.5
-	flame_process.damping_min = 1.2
-	flame_process.damping_max = 2.5
-	flame_process.scale_curve = _growth_curve([Vector2(0, 0.35), Vector2(0.2, 1.15), Vector2(0.6, 1.85), Vector2(1, 1.65)])
+	# One continuous pressure body joins the hatch vents to the vehicle.
+	var core := _spawn_particles("Fire", 1, 1.85, Color.WHITE, Color.TRANSPARENT, 0.8, -0.3, 8.5, true)
+	core.name = "CookoffCore"
+	for index in 3:
+		var axis := Vector3(float(index - 1) * 0.22, 1.0, -0.11 if index == 1 else 0.15).normalized()
+		var fire := _spawn_particles("Fire", 1, 1.2 + index * 0.08, Color.WHITE, Color.TRANSPARENT, 7.5 - index, -0.4, 5.8 if index == 1 else 4.8, true, false, axis)
+		fire.name = "CookoffFireColumn" if index == 1 else "CookoffVent%d" % index
+		fire.position = Vector3(float(index - 1) * 0.65, 0.25, 0)
+		fire.explosiveness = 0.91
+		var flame_process := fire.process_material as ParticleProcessMaterial
+		flame_process.spread = 12.0
+		flame_process.emission_sphere_radius = 0.18
+		flame_process.initial_velocity_min = 5.0
+		flame_process.damping_min = 5.0
+		flame_process.damping_max = 7.0
+		flame_process.scale_min = 4.4 if index == 1 else 3.8
+		flame_process.scale_curve = _growth_curve([Vector2(0, 0.65), Vector2(0.13, 1.05), Vector2(0.6, 1.35), Vector2(1, 1.45)])
 	var sparks := _spawn_particles("Sparks", 32, 2.1, Color.WHITE, Color.TRANSPARENT, 22.0, 12.0, 0.12, false)
 	sparks.name = "CookoffBurningFragments"
 	var spark_process := sparks.process_material as ParticleProcessMaterial
 	spark_process.spread = 25.0
 	spark_process.initial_velocity_min = 12.0
-	var smoke := _spawn_particles("Smoke", 28, 5.8, Color.GRAY, Color.TRANSPARENT, 6.8, 0.0, 2.0, true)
+	var smoke := _spawn_particles("Smoke", 10, 5.8, Color.WHITE, Color.TRANSPARENT, 2.8, 0.0, 3.8, true)
 	smoke.name = "CookoffSmokeColumn"
 	var smoke_process := smoke.process_material as ParticleProcessMaterial
-	smoke_process.spread = 18.0
-	smoke_process.gravity = Vector3(0.35, 0.95, 0.1)
-	smoke_process.damping_min = 0.25
-	smoke_process.damping_max = 0.5
-	smoke_process.color_ramp.gradient.set_color(1, Color(0.11, 0.09, 0.075, 0.82))
-	smoke_process.color_ramp.gradient.set_color(2, Color(0.21, 0.19, 0.17, 0.58))
-	var dust := _spawn_particles("Dust", 30, 2.6, Color.GRAY, Color.TRANSPARENT, 9.0, 0.0, 1.4, true, true)
+	smoke_process.spread = 31.0
+	smoke_process.gravity = Vector3(0.3, 0.72, 0.18)
+	smoke_process.damping_min = 1.6
+	smoke_process.damping_max = 2.5
+	var dust := _spawn_particles("Dust", 26, 2.6, Color.WHITE, Color.TRANSPARENT, 9.0, 0.0, 2.5, true, true)
 	dust.name = "CookoffPressureDust"
 	dust.position.y = 0.16 - global_position.y
 	var dust_process := dust.process_material as ParticleProcessMaterial
 	dust_process.emission_ring_radius = 1.3
 	dust_process.emission_ring_inner_radius = 0.7
-	dust_process.radial_velocity_min = 4.5
-	dust_process.radial_velocity_max = 8.8
+	dust_process.radial_velocity_min = 9.0
+	dust_process.radial_velocity_max = 14.0
 	_spawn_debris(18, 0.24)
 	var debris := get_node("Debris") as GPUParticles3D
 	debris.lifetime = 2.4
@@ -241,9 +244,9 @@ func _build_explosive_impact() -> void:
 	_duration = 3.7
 	_add_light(8.5, 16.0)
 	_add_flash(2.5, Vector3.UP * 0.22)
-	_spawn_particles("Fire", 24, 0.90, Color("ffd596"), Color.TRANSPARENT, 8.0, 1.2, 1.20, true)
-	_spawn_particles("BlastSmoke", 24, 3.35, Color.GRAY, Color.TRANSPARENT, 3.7, 0.4, 1.55, true)
-	_spawn_particles("Dust", 30, 2.25, Color("88755f"), Color.TRANSPARENT, 9.0, 0.2, 1.15, true, _surface_kind == "ground", _normal)
+	_spawn_particles("Fire", 1, 1.65, Color.WHITE, Color.TRANSPARENT, 1.4, -0.3, 7.2, true)
+	_spawn_particles("BlastSmoke", 6, 3.35, Color.WHITE, Color.TRANSPARENT, 2.0, 0.4, 3.0, true)
+	_spawn_particles("Dust", 24, 2.25, Color.WHITE, Color.TRANSPARENT, 9.0, 0.2, 2.1, true, _surface_kind == "ground", _normal)
 	_spawn_particles("Sparks", 18, 0.9, Color("ffe69c"), Color.TRANSPARENT, 14.0, 10.0, 0.065, false, false, _normal)
 	_spawn_debris(12, 0.13)
 	AudioService.play_3d("explosion", global_position, -1.8, 0.96 if _weapon_kind == "he" else 1.04)
@@ -348,14 +351,9 @@ func _process(delta: float) -> void:
 	if is_instance_valid(_muzzle_jet):
 		_muzzle_jet.visible = _age < _jet_duration
 		var phase := clampf(_age / _jet_duration, 0.0, 1.0)
-		if _profile == "cookoff":
-			var surge := minf(_age / 0.14, 1.0)
-			var flicker := 1.0 + sin(_age * 41.0) * 0.07
-			_muzzle_jet.scale = Vector3(0.72 + surge * 0.35, 0.72 + surge * 0.35, lerpf(0.16, 1.12, surge) * flicker)
-		else:
-			_muzzle_jet.scale = Vector3.ONE * (0.78 + sin(phase * PI) * 0.26)
+		_muzzle_jet.scale = Vector3.ONE * (0.78 + sin(phase * PI) * 0.26)
 		for material: StandardMaterial3D in _jet_materials:
-			var fade := 1.0 - smoothstep(0.25, 1.0, phase) if _profile == "cookoff" else pow(1.0 - phase, 1.4)
+			var fade := pow(1.0 - phase, 1.4)
 			material.albedo_color = Color(2.6 - phase, 1.65 - phase * 1.25, 0.60 - phase * 0.50, fade * 0.85)
 	if _age >= _duration:
 		queue_free()
@@ -364,6 +362,10 @@ func _process(delta: float) -> void:
 func _spawn_particles(label: String, amount: int, lifetime: float, start: Color, finish: Color, speed: float, gravity: float, size: float, billboard: bool, horizontal := false, outward := Vector3.UP) -> GPUParticles3D:
 	var particles := GPUParticles3D.new()
 	particles.name = label
+	if label == "Fire" and _profile != "muzzle":
+		# Atlas content sits below the card centre. Lift the visual, keeping the
+		# real impact position and blast damage query on the physical surface.
+		particles.position.y = size * 0.22
 	if label == "Dust":
 		particles.position.y = size * 0.32
 	elif label in ["Smoke", "BlastSmoke"]:
@@ -374,6 +376,7 @@ func _spawn_particles(label: String, amount: int, lifetime: float, start: Color,
 	particles.explosiveness = 0.96
 	particles.randomness = 0.45
 	particles.fixed_fps = 30
+	particles.draw_order = GPUParticles3D.DRAW_ORDER_VIEW_DEPTH
 	particles.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	particles.visibility_aabb = AABB(Vector3(-20, -4, -20), Vector3(40, 30, 40))
 	var process := ParticleProcessMaterial.new()
@@ -428,6 +431,12 @@ func _spawn_particles(label: String, amount: int, lifetime: float, start: Color,
 				process.initial_velocity_max = 0.15
 				process.radial_velocity_min = 3.0 if _profile == "destruction" or _heavy else 1.2
 				process.radial_velocity_max = 6.0 if _profile == "destruction" or _heavy else 2.4
+				# Radial velocity is an animated velocity: ordinary damping does
+				# not affect it. Stop the pressure front explicitly over its life.
+				process.radial_velocity_curve = _growth_curve([Vector2(0, 1), Vector2(0.1, 0.78), Vector2(0.3, 0.16), Vector2(0.48, 0), Vector2(1, 0)])
+				if _profile == "destruction" or _heavy:
+					process.radial_velocity_min = 7.0
+					process.radial_velocity_max = 12.0
 			process.gravity = Vector3.UP * 0.08
 			process.scale_curve = _growth_curve([Vector2(0.0, 0.25), Vector2(0.2, 1.1), Vector2(1.0, 2.4)])
 		"Sparks":
@@ -440,14 +449,79 @@ func _spawn_particles(label: String, amount: int, lifetime: float, start: Color,
 	ramp.gradient = gradient
 	ramp.use_hdr = label in ["Fire", "Sparks"]
 	process.color_ramp = ramp
+	var fluid := label in ["Fire", "Smoke", "BlastSmoke", "Dust"] and _profile != "muzzle"
+	if fluid:
+		_configure_fluid_motion(process, label)
 	particles.process_material = process
 	var quad := QuadMesh.new()
 	quad.size = Vector2(0.45, 2.2) if label == "Sparks" else Vector2.ONE * (2.1 if label == "Smoke" else 1.65)
-	quad.material = _sprite_material(label)
+	quad.material = fluid_material(label) if fluid else _sprite_material(label)
 	particles.draw_pass_1 = quad
 	add_child(particles)
 	particles.emitting = true
 	return particles
+
+
+static func _configure_fluid_motion(process: ParticleProcessMaterial, label: String) -> void:
+	process.anim_speed_min = 1.0
+	process.anim_speed_max = 1.0
+	process.angle_min = 0.0
+	process.angle_max = 0.0
+	process.angular_velocity_min = 0.0
+	process.angular_velocity_max = 0.0
+	# Color and changing silhouettes already exist inside the fluid simulation;
+	# an orange overlay would also tint cold soot and keep it glowing.
+	var tint := Color(0.85, 0.82, 0.76) if label == "Dust" else Color.WHITE
+	var gradient := Gradient.new()
+	gradient.set_color(0, Color(tint, 0.0))
+	gradient.set_color(1, Color(tint, 0.0))
+	gradient.add_point(0.035 if label == "Fire" else 0.1, Color(tint, 0.96 if label == "Fire" else (0.4 if label == "Dust" else 0.62)))
+	gradient.add_point(0.55, Color(tint, 0.83 if label == "Fire" else (0.27 if label == "Dust" else 0.45)))
+	var ramp := GradientTexture1D.new()
+	ramp.gradient = gradient
+	process.color_ramp = ramp
+	if label == "Fire":
+		process.scale_min = process.scale_max * 0.85
+		process.damping_min = 3.5
+		process.damping_max = 5.0
+		process.scale_curve = _growth_curve([Vector2(0, 0.65), Vector2(0.12, 1.0), Vector2(0.6, 1.2), Vector2(1, 1.3)])
+	elif label in ["Smoke", "BlastSmoke"]:
+		process.damping_min = 1.6
+		process.damping_max = 2.6
+		process.gravity = Vector3(0.18, 0.52, 0.12)
+		process.scale_curve = _growth_curve([Vector2(0, 0.38), Vector2(0.18, 0.85), Vector2(0.65, 1.35), Vector2(1, 1.65)])
+		# Low-frequency curl displaces only ten-odd particles per explosion;
+		# the detailed vortices themselves come from the precomputed atlas.
+		process.turbulence_enabled = true
+		process.turbulence_noise_strength = 1.5
+		process.turbulence_noise_scale = 3.0
+		process.turbulence_influence_min = 0.08
+		process.turbulence_influence_max = 0.16
+		process.turbulence_noise_speed = Vector3(0.15, 0.22, 0.1)
+	elif label == "Dust":
+		process.gravity = Vector3(0.06, 0.08, 0.025)
+		process.scale_curve = _growth_curve([Vector2(0, 0.25), Vector2(0.18, 0.85), Vector2(0.6, 1.3), Vector2(1, 1.55)])
+
+
+static func fluid_material(label: String) -> ShaderMaterial:
+	if _fluid_material_cache.has(label):
+		return _fluid_material_cache[label]
+	var material := ShaderMaterial.new()
+	material.shader = preload("res://assets/shaders/fluid_flipbook.gdshader")
+	var burning := label == "BurningFlame"
+	var hot := label == "Fire" or burning
+	var atlas: Texture2D = load("res://assets/fx/fluid/" + ("flame" if burning else ("explosion" if hot else "smoke")) + ".png")
+	material.set_shader_parameter("flipbook", atlas)
+	material.set_shader_parameter("heat", 3.2 if hot else 0.0)
+	material.set_shader_parameter("matter_brightness", 1.35 if hot else (2.6 if label == "Dust" else 1.3))
+	material.set_shader_parameter("soft_distance", 0.5 if hot else 0.7)
+	material.set_shader_parameter("flame_only", burning)
+	if burning:
+		material.set_shader_parameter("grid", Vector2(16, 4))
+		material.set_shader_parameter("last_frame", 63.0)
+	material.resource_name = "SimulatedFluid" + label
+	_fluid_material_cache[label] = material
+	return material
 
 
 func _spawn_debris(amount: int, size: float) -> void:

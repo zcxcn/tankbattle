@@ -148,6 +148,8 @@ if (-not $SkipTests) {
     Assert-LastExitCode -Action "Godot rain, roof shelter and wet terrain tests"
     & $GodotPath --headless --path $projectRoot --script "res://tests/track_marks_test.gd" -- --test
     Assert-LastExitCode -Action "Godot track mark surface and lifecycle tests"
+    & $GodotPath --headless --path $projectRoot --script "res://tests/weather_settings_test.gd" -- --test
+    Assert-LastExitCode -Action "Godot random weather preferences and live settings tests"
 }
 
 $outputRoot = [System.IO.Path]::GetFullPath((Join-Path $repositoryRoot "outputs/pc-godot"))
@@ -178,6 +180,10 @@ $creditSources = [ordered]@{
     "audio/provenance.json" = "assets/audio/combat/provenance.json"
     "audio/battlefield/README.md" = "assets/audio/battlefield/README.md"
     "audio/battlefield/provenance.json" = "assets/audio/battlefield/provenance.json"
+    "audio/battlefield/radio/credits/Kenney-Voiceover-License.txt" = "assets/audio/battlefield/radio/credits/Kenney-Voiceover-License.txt"
+    "audio/battlefield/radio/credits/Kenney-Voiceover-Credits.txt" = "assets/audio/battlefield/radio/credits/Kenney-Voiceover-Credits.txt"
+    "fx/fluid/README.md" = "assets/fx/fluid/README.md"
+    "fx/fluid/provenance.json" = "assets/fx/fluid/provenance.json"
     "models/environment/CREDITS.md" = "assets/models/environment/polyhaven_factory/CREDITS.md"
     "models/environment/LICENSE.txt" = "assets/models/environment/polyhaven_factory/LICENSE.txt"
     "models/ordnance/README.md" = "assets/models/ordnance/README.md"
@@ -196,7 +202,7 @@ foreach ($credit in $creditSources.GetEnumerator()) {
     }
 }
 
-$productVersion = "0.4.2"
+$productVersion = "0.4.3"
 $manifestPath = Join-Path $artifactDirectory "build-manifest.json"
 $payloadFiles = @(Get-ChildItem -LiteralPath $artifactDirectory -File -Recurse | Sort-Object FullName)
 $manifestFiles = @(

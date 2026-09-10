@@ -30,6 +30,7 @@ func _run() -> void:
 	DirAccess.make_dir_recursive_absolute(directory)
 	root.get_node("SaveService").set("_directory", "user://tests/tracks_visual_042")
 	root.get_node("SaveService").reset_for_tests()
+	root.get_node("SettingsService").weather_mode = 1
 	game = load("res://scenes/main/main.tscn").instantiate()
 	root.add_child(game)
 	game.get_window().focus_exited.disconnect(game._on_focus_lost)

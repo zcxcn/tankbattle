@@ -121,22 +121,22 @@ func _run() -> void:
 	plume.set_process(false)
 	var fire := plume.get_node("CookoffFireColumn") as GPUParticles3D
 	var fire_process := fire.process_material as ParticleProcessMaterial
-	_check(fire_process.direction == Vector3.UP and fire_process.spread <= 15.0 and fire_process.initial_velocity_min >= 11.0 and fire.lifetime > 1.5, "cookoff ejects substantial narrow upward fire instead of a second spherical impact")
-	_check(plume._muzzle_jet.name == "UpwardFlameJet" and (-plume._muzzle_jet.global_basis.z).normalized().dot(Vector3.UP) > 0.999 and plume._jet_duration >= 1.0, "crossed textured flame cards follow the vertical turret-ring vent for more than a brief flash")
+	_check(fire_process.direction.dot(Vector3.UP) > 0.98 and fire_process.spread <= 25.0 and fire_process.initial_velocity_min >= 4.0 and fire_process.initial_velocity_max <= 8.0 and fire.lifetime < 1.5, "cookoff pressure rises briefly while remaining connected to the vehicle instead of launching fireballs")
+	_check(plume._muzzle_jet == null and plume.get_node_or_null("CookoffCore") != null and plume.get_node_or_null("CookoffVent0") != null and plume.get_node_or_null("CookoffVent2") != null and fire_process.damping_min >= 5.0, "a continuous fluid core and three decelerating vents replace the fixed stretched flame card")
 	var smoke := plume.get_node("CookoffSmokeColumn") as GPUParticles3D
 	_check(smoke.lifetime > 5.0 and plume._duration > smoke.lifetime and plume.get_node("CookoffBurningFragments") is GPUParticles3D, "the fire column leaves lingering dark smoke and finite ballistic glowing fragments")
 	var dust := plume.get_node("CookoffPressureDust") as GPUParticles3D
 	_check(is_equal_approx(dust.global_position.y, 0.16) and (dust.process_material as ParticleProcessMaterial).radial_velocity_max >= 8.0, "large pressure dust expands across the floor rather than floating at the turret height")
 	mode = "paused"
 	var age_before := plume._age
-	var jet_scale_before := plume._muzzle_jet.scale
+	var fire_position_before := fire.position
 	plume._process(0.4)
-	_check(plume._age == age_before and plume._muzzle_jet.scale == jet_scale_before and fire.speed_scale == 0.0 and smoke.speed_scale == 0.0, "pause freezes every part of the upward jet and smoke without consuming their lifetime")
+	_check(plume._age == age_before and fire.position == fire_position_before and fire.speed_scale == 0.0 and smoke.speed_scale == 0.0, "pause freezes each fluid vent and smoke without consuming their lifetime")
 	mode = "playing"
 	plume._process(0.14)
-	_check(plume._muzzle_jet.scale.z > 1.0 and plume._muzzle_jet.visible and fire.speed_scale == 1.0, "resume restores particles and rapidly drives the fire jet above ten meters")
+	_check(plume._age > age_before and fire.speed_scale == 1.0 and smoke.speed_scale == 1.0, "resume restores the same vent simulation instead of restarting or advancing the fluid animation while paused")
 	plume._process(1.25)
-	_check(not plume._muzzle_jet.visible and not plume.is_queued_for_deletion(), "the pressure jet burns out before its dark smoke instead of leaving a permanent flame column")
+	_check(plume._age > fire.lifetime and not plume.is_queued_for_deletion() and smoke.lifetime > plume._age, "the hot pressure surge burns out before its dark smoke instead of leaving a permanent flame column")
 	var cookoff_particles := 0
 	var cookoff_rgb := true
 	for child: Node in plume.get_children():
@@ -212,7 +212,7 @@ func _test_cookoff_priority() -> void:
 	var priority := ExplosionFX.create_cookoff(Vector3(0, 1.5, 0))
 	add_child(priority)
 	priority.set_process(false)
-	_check(not priority.is_queued_for_deletion() and priority.get_node_or_null("UpwardFlameJet") != null and ordinary[0].is_queued_for_deletion() and not ordinary[1].is_queued_for_deletion() and get_tree().get_nodes_in_group("blast_fx").size() == ExplosionFX.MAX_BLASTS and get_tree().get_nodes_in_group("impact_flash_lights").size() <= ExplosionFX.MAX_FLASH_LIGHTS, "a full eight-death burst gives the imminent cookoff a visible fire column by retiring only the oldest ordinary blast")
+	_check(not priority.is_queued_for_deletion() and priority.get_node_or_null("CookoffFireColumn") != null and ordinary[0].is_queued_for_deletion() and not ordinary[1].is_queued_for_deletion() and get_tree().get_nodes_in_group("blast_fx").size() == ExplosionFX.MAX_BLASTS and get_tree().get_nodes_in_group("impact_flash_lights").size() <= ExplosionFX.MAX_FLASH_LIGHTS, "a full eight-death burst gives the imminent cookoff visible fire vents by retiring only the oldest ordinary blast")
 	for index in ExplosionFX.MAX_COOKOFFS:
 		var followup := ExplosionFX.create_cookoff(Vector3(index * 12.0, 1.5, 0))
 		add_child(followup)

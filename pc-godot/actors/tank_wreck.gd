@@ -193,10 +193,10 @@ func _detonate() -> void:
 
 func _build_burning_effects() -> void:
 	var origin := Vector3(0.0, 1.1, 1.3) if variant == 0 else Vector3(0.0, 1.8, 0.0)
-	_add_burn_layer("WreckFire", "Fire", origin, 12, 0.95, 0.7, 1.35)
-	_add_burn_layer("WreckSmoke", "Smoke", origin + Vector3.UP * 0.55, 22, 5.0, 1.18, 1.5)
+	_add_burn_layer("WreckFire", "Fire", origin, 4, 1.05, 0.78, 0.8)
+	_add_burn_layer("WreckSmoke", "Smoke", origin + Vector3.UP * 0.55, 9, 5.0, 1.35, 1.5)
 	if variant == 2:
-		_add_burn_layer("EscapingFlame", "Fire", Vector3(0.8, 1.7, -0.35), 6, 0.65, 0.36, 2.2)
+		_add_burn_layer("EscapingFlame", "Fire", Vector3(0.8, 1.7, -0.35), 2, 0.65, 0.42, 1.8)
 
 
 func _add_burn_layer(label: String, sprite: String, at: Vector3, amount: int, duration: float, size: float, speed: float) -> void:
@@ -206,6 +206,7 @@ func _add_burn_layer(label: String, sprite: String, at: Vector3, amount: int, du
 	particles.amount = amount
 	particles.lifetime = duration
 	particles.fixed_fps = 30
+	particles.draw_order = GPUParticles3D.DRAW_ORDER_VIEW_DEPTH
 	particles.local_coords = false
 	particles.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	particles.visibility_aabb = AABB(Vector3(-14, -3, -14), Vector3(28, 27, 28))
@@ -233,10 +234,18 @@ func _add_burn_layer(label: String, sprite: String, at: Vector3, amount: int, du
 	ramp.gradient = gradient
 	ramp.use_hdr = sprite == "Fire"
 	process.color_ramp = ramp
+	ExplosionFX._configure_fluid_motion(process, sprite)
+	if sprite == "Fire":
+		# Thin, evolving tongues from a flame simulation; never enlarged
+		# spherical explosion sprites for continuous wreck burning.
+		process.scale_curve = ExplosionFX._growth_curve([Vector2(0, 0.45), Vector2(0.2, 1.0), Vector2(0.6, 0.9), Vector2(1, 0.6)])
+		process.damping_min = 0.2
+		process.damping_max = 0.4
+		particles.position.y += size * 0.5
 	particles.process_material = process
 	var quad := QuadMesh.new()
-	quad.size = Vector2.ONE * 1.65
-	quad.material = ExplosionFX._sprite_material(sprite)
+	quad.size = Vector2(1.2, 2.4) if sprite == "Fire" else Vector2.ONE * 2.1
+	quad.material = ExplosionFX.fluid_material("BurningFlame" if sprite == "Fire" else "Smoke")
 	particles.draw_pass_1 = quad
 	add_child(particles)
 	_emitters.append(particles)

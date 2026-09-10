@@ -1,5 +1,5 @@
 extends SceneTree
-## Render the production harbor weather from both real gameplay camera modes.
+## Compare every selectable weather on one production street and both cameras.
 
 var game: Node3D
 var directory := ""
@@ -25,16 +25,20 @@ func _run() -> void:
 	if not "--test" in OS.get_cmdline_user_args() or DisplayServer.get_name() == "headless":
 		quit(2)
 		return
-	directory = ProjectSettings.globalize_path("res://../work/asset-review/weather-0.4.2")
+	directory = ProjectSettings.globalize_path("res://../work/asset-review/weather-0.4.3")
 	DirAccess.make_dir_recursive_absolute(directory)
-	root.get_node("SaveService").set("_directory", "user://tests/weather_visual_042")
+	root.get_node("SaveService").set("_directory", "user://tests/weather_visual_043")
 	root.get_node("SaveService").reset_for_tests()
 	game = load("res://scenes/main/main.tscn").instantiate()
 	root.add_child(game)
 	game.get_window().focus_exited.disconnect(game._on_focus_lost)
-	for chapter in [0, 1, 4]:
-		game.selected_mission = chapter
+	for weather_kind: String in ["dry", "light_rain", "heavy_rain", "snow", "fog"]:
+		if "--snow-only" in OS.get_cmdline_user_args() and weather_kind != "snow":
+			continue
+		game.selected_mission = 1
+		root.get_node("SettingsService").set("weather_mode", {"dry": 1, "light_rain": 2, "heavy_rain": 3, "snow": 4, "fog": 5}[weather_kind])
 		game.start_game()
+		game.arena.set_weather_kind(weather_kind)
 		game.set_process(false)
 		for tank in get_nodes_in_group("tanks"):
 			tank.set_physics_process(false)
@@ -45,12 +49,12 @@ func _run() -> void:
 		game.player._camera_pivot.update_view(1.0, Vector3.ZERO)
 		game.ui.update_snapshot(game.get_ui_snapshot())
 		await frames(60)
-		await capture("chapter-%d-tactical" % (chapter + 1))
+		await capture(weather_kind + "-tactical")
 		game.player.toggle_camera()
 		game.player._camera_pivot.update_view(1.0, Vector3.ZERO)
 		game.ui.update_snapshot(game.get_ui_snapshot())
 		await frames(60)
-		await capture("chapter-%d-chase" % (chapter + 1))
+		await capture(weather_kind + "-chase")
 		if is_instance_valid(game.arena.weather):
 			print("WEATHER_SNAPSHOT: ", game.arena.weather.get_snapshot())
 	game.free()

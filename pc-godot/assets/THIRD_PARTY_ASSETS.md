@@ -112,9 +112,11 @@ classes add game-authored roofs, balconies, transformers, chimneys and fittings.
 
 ## Battlefield music, radio and vehicle motion
 
-Three original synthesized combat scores and seventeen original Chinese radio
-lines are packaged for offline playback. The speech uses local Windows Huihui
-TTS and original receiver effects. Vehicle motion combines an actual tank-engine
+Three original synthesized combat scores and thirteen English actor recordings
+are packaged for offline playback. The CC0 Kenney Voiceover Pack features
+Jeffrey M. Smith and Giselle; Chinese subtitles translate their actual words.
+Four additional status notifications use text and an interface cue where no
+matching recorded line exists. Vehicle motion combines an actual tank-engine
 recording and mechanical tread/steering foley.
 
 Required attribution: **qubodup, Tank Engine Loop.flac**,
@@ -125,6 +127,15 @@ Required attribution: **qubodup, Tank Engine Loop.flac**,
 supplies mechanical foley for the tread and steering layers.
 [Complete audio attribution and processing](audio/battlefield/README.md),
 [per-file hashes and quality measurements](audio/battlefield/provenance.json).
+
+## Fluid explosion, smoke and flame animation
+
+Houdini simulation sequences by **Unity Labs Paris / Unity Technologies**, released
+by Thomas Iché under **CC0 1.0**, supply the animated fire and smoke textures.
+[Original publication and downloads](https://unity.com/blog/engine-platform/free-vfx-image-sequences-flipbooks).
+The PC renderer uses adapted texture sheets inside Godot; the engine is unchanged.
+[Source archives, license and processing](fx/fluid/README.md),
+[asset checksums](fx/fluid/provenance.json).
 
 ## Original modeled ordnance
 

@@ -17,7 +17,7 @@ def main():
     parser.add_argument('--report', type=Path)
     args = parser.parse_args()
     provenance = json.loads((ASSETS/'provenance.json').read_text(encoding='utf-8'))
-    assert len(provenance['files']) == 23, 'Expected 3 scores, 3 mechanical loops and 17 radio lines'
+    assert len(provenance['files']) == 19, 'Expected 3 scores, 3 mechanical loops and 13 actor recordings'
     checks = 1
     results = []
     for record in provenance['files']:
@@ -39,10 +39,13 @@ def main():
             checks += 1
             result['loop_seam'] = seam
         if record['file'].startswith('radio/'):
+            assert record.get('human_recording') and record['source'] == 'kenney-voiceover-pack'
+            assert record['performer'] in ['Jeffrey M. Smith', 'Giselle'] and len(record['source_sha256']) == 64
+            checks += 2
             f = np.fft.rfftfreq(len(samples), 1/rate)
             energy = abs(np.fft.rfft(samples[:,0]))**2
-            ratio = float(energy[(f>=240)&(f<=4200)].sum()/energy.sum())
-            assert ratio > .65, f'Radio-band speech is not dominant: {path.name}'
+            ratio = float(energy[(f>=100)&(f<=7500)].sum()/energy.sum())
+            assert ratio > .90, f'Natural wide-band speech is not dominant: {path.name}'
             checks += 1
             result['radio_band_energy_fraction'] = round(ratio, 4)
         if args.ffmpeg:
@@ -51,6 +54,20 @@ def main():
             checks += 1
             result['ffmpeg_decode'] = 'PASS'
         results.append(result)
+    lines = json.loads((ROOT/'pc-godot/tools/audio/radio_lines.json').read_text(encoding='utf-8'))
+    for event, line in lines.items():
+        if line.get('notice_only'):
+            assert not (ASSETS/f'radio/{event}.wav').exists(), f'Obsolete speech survives for {event}'
+        else:
+            record = next(r for r in provenance['files'] if r.get('event') == event)
+            assert record['caption'] == line['caption'] and record['transcript'] == line['transcript']
+        checks += 1
+    assert len(provenance['notice_only_events']) == 4
+    checks += 1
+    voice_source = next(s for s in provenance['sources'] if s['id'] == 'kenney-voiceover-pack')
+    for key in ['licenseFile', 'creditsFile']:
+        assert (ASSETS/voice_source[key]).is_file(), f'Missing original source {key}'
+        checks += 1
     report = dict(result='PASS', checks=checks, assets=len(results), bytes=provenance['total_bytes'], files=results)
     if args.report:
         args.report.parent.mkdir(parents=True, exist_ok=True)

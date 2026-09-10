@@ -12,6 +12,9 @@ const ArenaScript = preload("res://scenes/missions/industrial_arena.gd")
 const Deployment = preload("res://scripts/battle_deployment.gd")
 const WreckScript = preload("res://actors/tank_wreck.gd")
 const TrackMarksScript = preload("res://scripts/track_marks.gd")
+const WeatherCatalog = preload("res://data/weather_catalog.gd")
+
+var current_weather := "dry"
 
 var mission_index := 0
 var selected_mission := 0
@@ -62,13 +65,14 @@ func _ready() -> void:
 	gamepad.game = self
 	add_child(gamepad)
 	mission_data = MissionCatalog.get_mission(selected_mission)
+	_resolve_weather()
 	_create_ui()
 	_show_title_tank()
 	get_window().focus_exited.connect(_on_focus_lost)
 	get_tree().auto_accept_quit = false
 	Input.joy_connection_changed.connect(_on_joy_connection_changed)
 	_smoke_test = "--smoke-test" in OS.get_cmdline_user_args()
-	print("IRON_EMBERS_PC_READY | Godot native | Campaign 0.4.2 | rain + track marks + vertical cookoff")
+	print("IRON_EMBERS_PC_READY | Godot native | Campaign 0.4.3 | human radio + fluid explosion + selectable weather")
 	if _smoke_test:
 		call_deferred("start_game")
 
@@ -80,12 +84,25 @@ func _build_arena() -> void:
 	arena.name = "GrayIgnitionArena"
 	arena.game = self
 	arena.mission_index = mission_index
+	arena.weather_kind = current_weather
 	add_child(arena)
 	var tracks := TrackMarksScript.new()
 	tracks.game = self
-	var weather_kind: String = MissionCatalog.get_mission(mission_index).get("weather", "dry")
-	tracks.set_wetness(1.0 if weather_kind == "heavy_rain" else (0.55 if weather_kind == "light_rain" else 0.0))
+	tracks.set_wetness(WeatherCatalog.wetness(current_weather))
 	arena.add_child(tracks)
+
+
+func _resolve_weather() -> void:
+	current_weather = WeatherCatalog.resolve(SettingsService.weather_mode, int(get_meta("weather_seed", randi())))
+
+
+func _apply_weather_setting() -> void:
+	_resolve_weather()
+	if is_instance_valid(arena):
+		arena.set_weather_kind(current_weather)
+		var tracks := arena.get_node_or_null("TrackMarks")
+		if is_instance_valid(tracks):
+			tracks.set_wetness(WeatherCatalog.wetness(current_weather))
 
 
 func _create_ui() -> void:
@@ -167,6 +184,7 @@ func start_game() -> void:
 	_clear_combat_nodes()
 	mission_index = clampi(selected_mission, 0, MissionCatalog.count() - 1)
 	mission_data = MissionCatalog.get_mission(mission_index)
+	_resolve_weather()
 	_build_arena()
 	mission_kills = 0
 	total_run_kills = 0
@@ -699,6 +717,9 @@ func get_ui_snapshot() -> Dictionary:
 		"fps_cap": SettingsService.fps_cap,
 		"vsync": SettingsService.vsync,
 		"screen_shake": SettingsService.screen_shake,
+		"weather_mode": SettingsService.weather_mode,
+		"weather_label": WeatherCatalog.mode_label(SettingsService.weather_mode, current_weather),
+		"current_weather": current_weather,
 		"master_volume": SettingsService.master_volume,
 		"effects_volume": SettingsService.effects_volume,
 		"music_volume": SettingsService.music_volume,
@@ -764,6 +785,10 @@ func _on_setting_requested(id: String) -> void:
 			SettingsService.apply()
 		"music_track":
 			_cycle_music()
+		"weather_mode":
+			SettingsService.weather_mode = (SettingsService.weather_mode + 1) % WeatherCatalog.MODE_COUNT
+			_apply_weather_setting()
+			SettingsService.apply()
 	AudioService.play_ui("click")
 
 

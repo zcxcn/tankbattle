@@ -32,22 +32,20 @@ const RADIO_CLIPS := {
 	"boss_destroyed": preload("res://assets/audio/battlefield/radio/boss_destroyed.wav"),
 	"mission_complete": preload("res://assets/audio/battlefield/radio/mission_complete.wav"),
 	"mission_failed": preload("res://assets/audio/battlefield/radio/mission_failed.wav"),
-	"ammo_low": preload("res://assets/audio/battlefield/radio/ammo_low.wav"),
-	"ammo_depleted": preload("res://assets/audio/battlefield/radio/ammo_depleted.wav"),
-	"armor_restored": preload("res://assets/audio/battlefield/radio/armor_restored.wav"),
 	"objective_secured": preload("res://assets/audio/battlefield/radio/objective_secured.wav"),
 	"mine_deployed": preload("res://assets/audio/battlefield/radio/mine_deployed.wav"),
-	"mines_cleared": preload("res://assets/audio/battlefield/radio/mines_cleared.wav"),
 }
+# Complete performances from the CC0 Kenney Voiceover Pack. The four status
+# messages without matching recorded words remain text + a quiet UI cue.
 const RADIO_CAPTIONS := {
-	"command_online": "指挥链路已建立。战车就位。", "enemy_spotted": "发现敌军。准备接敌。",
-	"enemy_approaching": "注意，敌方装甲正在逼近。", "target_destroyed": "目标已摧毁。",
-	"multiple_targets": "发现多辆敌车。注意侧翼。", "armor_low": "装甲受损。寻找掩体。",
-	"armor_critical": "车体重创！立即撤离交火区。", "boss_detected": "敌方指挥战车出现。集中火力。",
-	"boss_destroyed": "敌方指挥战车已击毁。", "mission_complete": "任务完成。战场已控制。",
-	"mission_failed": "战车失联。任务终止。", "ammo_low": "弹药储备不足。前往补给点。",
+	"command_online": "前进！前进！", "enemy_spotted": "正在接敌！",
+	"enemy_approaching": "小心！", "target_destroyed": "目标已摧毁！",
+	"multiple_targets": "掩护我的后方！", "armor_low": "掩护我！",
+	"armor_critical": "快隐蔽！", "boss_detected": "小心！",
+	"boss_destroyed": "目标已摧毁！", "mission_complete": "任务完成。",
+	"mission_failed": "任务失败。", "ammo_low": "弹药储备不足。前往补给点。",
 	"ammo_depleted": "当前武器弹药耗尽。切换武器。", "armor_restored": "补给完成。装甲修复。",
-	"objective_secured": "目标已控制。准备下一阶段。", "mine_deployed": "地雷已部署。注意安全距离。",
+	"objective_secured": "目标已达成。", "mine_deployed": "当心爆炸！",
 	"mines_cleared": "脉冲完成。附近地雷已清除。",
 }
 const RADIO_PRIORITIES := {"mission_failed": 100, "mission_complete": 100, "armor_critical": 90,
@@ -109,7 +107,8 @@ func _ready() -> void:
 	_radio_player.bus = "Radio"
 	_radio_player.volume_db = -2.0
 	add_child(_radio_player)
-	_radio_player.finished.connect(_finish_radio)
+	# The audio stops naturally. Its caption lasts at least 1.8 seconds so a
+	# short human shout remains readable; _tick_audio owns queue advancement.
 	set_music_track(int(SettingsService.get("music_track")), true)
 
 
@@ -166,7 +165,7 @@ func _tick_audio(delta: float) -> void:
 		if _radio_id.is_empty() and _radio_gap <= 0.0 and not _radio_queue.is_empty():
 			_start_radio(_radio_queue.pop_front())
 	_music_transition = minf(1.0, _music_transition + delta / 0.65)
-	var target_duck := -10.0 if not _radio_id.is_empty() and _game_mode not in ["paused", "settings"] else 0.0
+	var target_duck := -10.0 if RADIO_CLIPS.has(_radio_id) and _game_mode not in ["paused", "settings"] else 0.0
 	_music_duck_db = move_toward(_music_duck_db, target_duck, delta * (45.0 if target_duck < _music_duck_db else 8.0))
 	var scene_gain := -11.0 if _game_mode in ["paused", "settings"] else (-5.0 if _game_mode == "title" else 0.0)
 	for index in range(_music_players.size()):
@@ -184,7 +183,7 @@ func set_game_state(mode: String) -> void:
 	var paused := mode in ["paused", "settings"]
 	_radio_player.stream_paused = paused
 	for node: Node in get_children():
-		if node is AudioStreamPlayer3D:
+		if node is AudioStreamPlayer3D or node.get_meta("battlefield_notice", false):
 			node.stream_paused = paused
 			if mode == "title":
 				node.queue_free()
@@ -222,6 +221,7 @@ func get_music_snapshot() -> Dictionary:
 		"index": _music_index, "count": MUSIC_TRACKS.size(),
 		"playing": not _music_players.is_empty() and _music_players[_music_active].playing,
 		"radio_event": _radio_id, "radio_caption": RADIO_CAPTIONS.get(_radio_id, ""),
+		"radio_has_voice": RADIO_CLIPS.has(_radio_id), "radio_language": "en",
 		"radio_pending": _radio_queue.size(), "duck_db": _music_duck_db}
 
 
@@ -231,7 +231,7 @@ func get_radio_caption() -> String:
 
 func radio(event: String) -> bool:
 	event = RADIO_ALIASES.get(event, event)
-	if not RADIO_CLIPS.has(event) or _game_mode in ["title", "paused", "settings"]:
+	if not RADIO_CAPTIONS.has(event) or _game_mode in ["title", "paused", "settings"]:
 		return false
 	if float(_radio_cooldowns.get(event, -100.0)) > _audio_clock or event == _radio_id or event in _radio_queue:
 		return false
@@ -257,9 +257,14 @@ func radio(event: String) -> bool:
 
 func _start_radio(event: String) -> void:
 	_radio_id = event
-	_radio_player.stream = RADIO_CLIPS[event]
-	_radio_remaining = _radio_player.stream.get_length() + 0.05
-	_radio_player.play()
+	_radio_player.stop()
+	_radio_player.stream = RADIO_CLIPS.get(event)
+	if _radio_player.stream != null:
+		_radio_remaining = maxf(1.8, _radio_player.stream.get_length() + 0.05)
+		_radio_player.play()
+	else:
+		_radio_remaining = 2.8
+		play_ui("click", -20.0, 1.0, true)
 
 
 func _finish_radio() -> void:
@@ -364,11 +369,12 @@ func _stop_spatial_voice(voice: AudioStreamPlayer3D) -> void:
 	voice.stream = null
 
 
-func play_ui(kind: String, volume_db := -8.0, pitch := 1.0) -> void:
+func play_ui(kind: String, volume_db := -8.0, pitch := 1.0, battlefield_notice := false) -> void:
 	if not streams.has(kind) or get_child_count() >= MAX_VOICES:
 		return
 	var voice := AudioStreamPlayer.new()
 	voice.set_meta("audio_kind", kind)
+	voice.set_meta("battlefield_notice", battlefield_notice)
 	voice.stream = streams[kind]
 	voice.volume_db = volume_db
 	voice.pitch_scale = pitch

@@ -27,6 +27,7 @@ func _run() -> void:
 		await preload("res://tests/test_shutdown.gd").finish(self, 2)
 		return
 	var rainy := "--rain" in OS.get_cmdline_user_args()
+	root.get_node("SettingsService").set("weather_mode", 3 if rainy else 1)
 	directory = ProjectSettings.globalize_path("res://../work/asset-review/cookoff-0.4.2" + ("-rain" if rainy else ""))
 	DirAccess.make_dir_recursive_absolute(directory)
 	root.get_node("SaveService").set("_directory", "user://tests/cookoff_visual_042")

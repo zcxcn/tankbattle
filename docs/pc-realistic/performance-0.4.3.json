@@ -1,0 +1,126 @@
+{
+	"gpu": "NVIDIA GeForce GTX 1660 SUPER",
+	"method": "1080p medium, uncapped/VSync off, stationary invulnerable player, live AI, synthetic print histories projected onto real terrain, 90 warmup + 240 sample frames; no captures or file writes during samples. Different chapters are separate workloads, not a controlled weather on/off comparison.",
+	"results": [
+		{
+			"average_fps": 135.696257497218,
+			"chapter": 1,
+			"mean_draw_calls": 801.7375,
+			"mean_physics_ms": 4.4712,
+			"mode": "playing",
+			"p95_frame_ms": 11.635,
+			"quality": 1,
+			"render_scale": 0.850000023841858,
+			"samples": 240,
+			"tracks": {
+				"active": 246,
+				"cap": 256,
+				"distance": 65.0,
+				"emitted": 300,
+				"enemy": 146,
+				"enemy_cap": 146,
+				"ground_rays": 602,
+				"player": 100,
+				"player_cap": 110,
+				"vehicles": 1,
+				"wetness": 0.0
+			},
+			"vehicles": 8,
+			"weather": "dry",
+			"window": [
+				1920,
+				1080
+			]
+		},
+		{
+			"average_fps": 79.8382742690889,
+			"chapter": 5,
+			"mean_draw_calls": 1310.15,
+			"mean_physics_ms": 8.62385833333336,
+			"mode": "playing",
+			"p95_frame_ms": 19.048,
+			"quality": 1,
+			"render_scale": 0.850000023841858,
+			"samples": 240,
+			"tracks": {
+				"active": 246,
+				"cap": 256,
+				"distance": 65.0,
+				"emitted": 358,
+				"enemy": 146,
+				"enemy_cap": 146,
+				"ground_rays": 666,
+				"player": 100,
+				"player_cap": 110,
+				"vehicles": 3,
+				"wetness": 1.0
+			},
+			"vehicles": 20,
+			"weather": "heavy_rain",
+			"window": [
+				1920,
+				1080
+			]
+		},
+		{
+			"average_fps": 80.6421534680662,
+			"chapter": 5,
+			"mean_draw_calls": 1370.0875,
+			"mean_physics_ms": 9.00051666666662,
+			"mode": "playing",
+			"p95_frame_ms": 19.389,
+			"quality": 1,
+			"render_scale": 0.850000023841858,
+			"samples": 240,
+			"tracks": {
+				"active": 246,
+				"cap": 256,
+				"distance": 65.0,
+				"emitted": 358,
+				"enemy": 146,
+				"enemy_cap": 146,
+				"ground_rays": 666,
+				"player": 100,
+				"player_cap": 110,
+				"vehicles": 3,
+				"wetness": 0.2
+			},
+			"vehicles": 20,
+			"weather": "snow",
+			"window": [
+				1920,
+				1080
+			]
+		},
+		{
+			"average_fps": 79.0960116824809,
+			"chapter": 5,
+			"mean_draw_calls": 1307.175,
+			"mean_physics_ms": 9.85780833333334,
+			"mode": "playing",
+			"p95_frame_ms": 19.587,
+			"quality": 1,
+			"render_scale": 0.850000023841858,
+			"samples": 240,
+			"tracks": {
+				"active": 246,
+				"cap": 256,
+				"distance": 65.0,
+				"emitted": 358,
+				"enemy": 146,
+				"enemy_cap": 146,
+				"ground_rays": 666,
+				"player": 100,
+				"player_cap": 110,
+				"vehicles": 3,
+				"wetness": 0.0
+			},
+			"vehicles": 20,
+			"weather": "fog",
+			"window": [
+				1920,
+				1080
+			]
+		}
+	]
+}

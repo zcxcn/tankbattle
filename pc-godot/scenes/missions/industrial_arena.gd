@@ -6,6 +6,8 @@ const DetailsBuilder = preload("res://scripts/industrial_details.gd")
 const Catalog = preload("res://data/mission_catalog.gd")
 const FacadeLibrary = preload("res://scripts/factory_facade_library.gd")
 const WeatherScript = preload("res://scripts/battlefield_weather.gd")
+const SNOW_COVER_SHADER = preload("res://assets/shaders/snow_cover.gdshader")
+const WEATHER_KINDS := ["dry", "light_rain", "heavy_rain", "snow", "fog"]
 
 var game: Node
 var mission_index := 0
@@ -22,7 +24,9 @@ var _details: RefCounted
 var _district := 0
 var _building_types: Array[String] = []
 var weather: Node3D
+var weather_kind := ""
 var _weather_roofs: Array[AABB] = []
+var _weather_baseline: Array[Dictionary] = []
 
 
 func _ready() -> void:
@@ -64,21 +68,69 @@ func _ready() -> void:
 	set_meta("arena_bounds", get_radar_bounds())
 	set_meta("building_types", _building_types)
 	_details = null
+	_capture_weather_baseline()
 	_build_weather()
 
 
 func _build_weather() -> void:
-	var weather_kind: String = Catalog.get_mission(mission_index).get("weather", "dry")
-	set_meta("weather", weather_kind)
-	if weather_kind == "dry":
+	var selected_kind := weather_kind
+	if selected_kind.is_empty():
+		selected_kind = Catalog.get_mission(mission_index).get("weather", "dry")
+	set_weather_kind(selected_kind)
+
+
+func _remember_weather_properties(target: Object, properties: Array) -> void:
+	var values := {}
+	for property: String in properties:
+		values[property] = target.get(property)
+	_weather_baseline.append({"target": target, "values": values})
+
+
+func _capture_weather_baseline() -> void:
+	for surface in [_asphalt, _concrete, _building, _metal, _dark_metal]:
+		_remember_weather_properties(surface, ["albedo_color", "roughness", "normal_scale", "next_pass"])
+	var environment: Environment = get_node("WorldEnvironment").environment
+	_remember_weather_properties(environment, ["ambient_light_energy", "fog_light_color", "fog_density", "volumetric_fog_density", "fog_sky_affect", "volumetric_fog_sky_affect"])
+	_remember_weather_properties(environment.sky.sky_material, ["sky_top_color", "sky_horizon_color"])
+	_remember_weather_properties(get_node("LowSun"), ["light_color", "light_energy", "light_angular_distance"])
+
+
+func set_weather_kind(value: String) -> void:
+	var resolved := value if value in WEATHER_KINDS else "dry"
+	if _weather_baseline.is_empty():
+		weather_kind = resolved
 		return
+	if get_meta("weather", "") == resolved:
+		return
+	# Keep the same arena, enemy actors and authored PBR resources. Only weather
+	# nodes and the explicitly recorded atmosphere/material properties change.
+	if is_instance_valid(weather):
+		weather.free()
+	weather = null
+	for record in _weather_baseline:
+		for property: String in record.values:
+			record.target.set(property, record.values[property])
+	weather_kind = resolved
+	set_meta("weather", weather_kind)
 	# The same authored roof volumes drive rain occlusion and dry loading bays.
 	set_meta("weather_roofs", _weather_roofs)
-	weather = WeatherScript.new()
-	weather.name = "BattlefieldWeather"
-	weather.game = game
-	weather.kind = weather_kind
-	add_child(weather)
+	if weather_kind == "dry":
+		return
+	if weather_kind in ["light_rain", "heavy_rain", "snow"]:
+		weather = WeatherScript.new()
+		weather.name = "BattlefieldWeather"
+		weather.game = game
+		weather.kind = weather_kind
+		add_child(weather)
+	if weather_kind == "snow":
+		_apply_snow()
+	elif weather_kind == "fog":
+		_apply_fog()
+	else:
+		_apply_rain()
+
+
+func _apply_rain() -> void:
 	_asphalt.albedo_color = Color("687578")
 	_asphalt.roughness = 0.28 if weather_kind == "heavy_rain" else 0.43
 	_asphalt.normal_scale = 0.46
@@ -96,6 +148,50 @@ func _build_weather() -> void:
 	sun.light_color = Color("cbdbe9")
 	sun.light_energy = 0.64 if weather_kind == "heavy_rain" else 0.82
 	sun.light_angular_distance = 1.4
+
+
+func _apply_snow() -> void:
+	var cover := ShaderMaterial.new()
+	cover.shader = SNOW_COVER_SHADER
+	cover.set_shader_parameter("roof_height", weather.roof_texture)
+	cover.set_shader_parameter("map_origin", WeatherScript.MAP_ORIGIN)
+	cover.set_shader_parameter("map_size", WeatherScript.MAP_SIZE)
+	# The extra pass only coats upward, sky-exposed faces. Original texture,
+	# normals and imported building materials are left intact underneath.
+	for surface in [_asphalt, _concrete, _building, _metal, _dark_metal]:
+		surface.next_pass = cover
+	_asphalt.albedo_color = Color("8b989f")
+	_asphalt.roughness = 0.86
+	_concrete.albedo_color = Color("a3a9ad")
+	var environment: Environment = get_node("WorldEnvironment").environment
+	var sky_material: ProceduralSkyMaterial = environment.sky.sky_material
+	sky_material.sky_top_color = Color("748796")
+	sky_material.sky_horizon_color = Color("b5c4cd")
+	environment.ambient_light_energy = 0.96
+	environment.fog_light_color = Color("b3c5d1")
+	environment.fog_density = 0.0024
+	environment.volumetric_fog_density = 0.0038
+	var sun: DirectionalLight3D = get_node("LowSun")
+	sun.light_color = Color("deebf5")
+	sun.light_energy = 0.72
+	sun.light_angular_distance = 1.65
+
+
+func _apply_fog() -> void:
+	var environment: Environment = get_node("WorldEnvironment").environment
+	var sky_material: ProceduralSkyMaterial = environment.sky.sky_material
+	sky_material.sky_top_color = Color("899396")
+	sky_material.sky_horizon_color = Color("b7bfbe")
+	environment.ambient_light_energy = 0.85
+	environment.fog_light_color = Color("a5b4b7")
+	environment.fog_density = 0.0085
+	environment.volumetric_fog_density = 0.010
+	environment.fog_sky_affect = 0.65
+	environment.volumetric_fog_sky_affect = 0.62
+	var sun: DirectionalLight3D = get_node("LowSun")
+	sun.light_color = Color("dbe2df")
+	sun.light_energy = 0.55
+	sun.light_angular_distance = 2.0
 
 
 func _weathered_steel(tint: Color) -> StandardMaterial3D:
