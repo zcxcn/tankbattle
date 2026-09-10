@@ -1,0 +1,747 @@
+{
+  "label": "pc-0.4.0",
+  "method": "Real 60 Hz Godot/Jolt scene; fixed initial deployment and input tactics; randomized shot spread and wrecks may vary results. Input actions steer, aim, fire and EMP; default HP and damage; no forced damage or wins. Boss fixture starts a full-health boss encounter at legal arena coordinates. This is an automated playtest, not human input.",
+  "results": [
+    {
+      "boss_hp": 780.0,
+      "damage_taken": 193.18,
+      "distance_driven_m": 0.0,
+      "enemy_projectiles": 4,
+      "first_damage_seconds": 10.23,
+      "first_enemy_shot_seconds": 10.07,
+      "healing_received": 0.0,
+      "initial_hp": 260.0,
+      "kills": 0,
+      "max_active_enemies": 6,
+      "max_enemy_cannons_in_one_second": 0,
+      "max_player_speed": 0.0,
+      "outcome": "playing",
+      "player_shots": 0,
+      "remaining_hp": 66.82,
+      "samples": [
+        {
+          "active_enemies": 6,
+          "hp": 260.0,
+          "kills": 0,
+          "position": [
+            0.0,
+            174.0
+          ],
+          "t": 0.0
+        },
+        {
+          "active_enemies": 6,
+          "hp": 260.0,
+          "kills": 0,
+          "position": [
+            0.0,
+            174.0
+          ],
+          "t": 5.0
+        },
+        {
+          "active_enemies": 6,
+          "hp": 260.0,
+          "kills": 0,
+          "position": [
+            0.0,
+            174.0
+          ],
+          "t": 10.0
+        },
+        {
+          "active_enemies": 6,
+          "hp": 211.96,
+          "kills": 0,
+          "position": [
+            0.0,
+            174.0
+          ],
+          "t": 15.0
+        },
+        {
+          "active_enemies": 6,
+          "hp": 163.54,
+          "kills": 0,
+          "position": [
+            0.0,
+            174.0
+          ],
+          "t": 20.0
+        },
+        {
+          "active_enemies": 6,
+          "hp": 115.36,
+          "kills": 0,
+          "position": [
+            0.0,
+            174.0
+          ],
+          "t": 25.0
+        }
+      ],
+      "scenario": "opening_hold",
+      "seconds": 30.0,
+      "shots": [
+        {
+          "kind": "he",
+          "owner": "Enemy_03",
+          "t": 10.067,
+          "team": 1
+        },
+        {
+          "kind": "he",
+          "owner": "Enemy_03",
+          "t": 15.883,
+          "team": 1
+        },
+        {
+          "kind": "he",
+          "owner": "Enemy_03",
+          "t": 21.7,
+          "team": 1
+        },
+        {
+          "kind": "he",
+          "owner": "Enemy_03",
+          "t": 27.517,
+          "team": 1
+        }
+      ]
+    },
+    {
+      "boss_hp": 780.0,
+      "damage_taken": 48.78,
+      "distance_driven_m": 318.33,
+      "enemy_projectiles": 1,
+      "first_damage_seconds": 4.47,
+      "first_enemy_shot_seconds": 4.3,
+      "healing_received": 0.0,
+      "initial_hp": 260.0,
+      "kills": 5,
+      "max_active_enemies": 6,
+      "max_enemy_cannons_in_one_second": 0,
+      "max_player_speed": 8.0,
+      "outcome": "playing",
+      "player_shots": 19,
+      "remaining_hp": 211.22,
+      "samples": [
+        {
+          "active_enemies": 6,
+          "hp": 260.0,
+          "kills": 0,
+          "position": [
+            0.0,
+            174.0
+          ],
+          "t": 0.0
+        },
+        {
+          "active_enemies": 6,
+          "hp": 211.22,
+          "kills": 0,
+          "position": [
+            -9.9,
+            152.38
+          ],
+          "t": 5.0
+        },
+        {
+          "active_enemies": 6,
+          "hp": 211.22,
+          "kills": 0,
+          "position": [
+            -10.94,
+            128.26
+          ],
+          "t": 10.0
+        },
+        {
+          "active_enemies": 5,
+          "hp": 211.22,
+          "kills": 1,
+          "position": [
+            -10.94,
+            107.21
+          ],
+          "t": 15.0
+        },
+        {
+          "active_enemies": 5,
+          "hp": 211.22,
+          "kills": 1,
+          "position": [
+            -11.07,
+            87.31
+          ],
+          "t": 20.0
+        },
+        {
+          "active_enemies": 4,
+          "hp": 211.22,
+          "kills": 2,
+          "position": [
+            -1.51,
+            65.65
+          ],
+          "t": 25.0
+        },
+        {
+          "active_enemies": 4,
+          "hp": 211.22,
+          "kills": 2,
+          "position": [
+            12.46,
+            45.31
+          ],
+          "t": 30.0
+        },
+        {
+          "active_enemies": 4,
+          "hp": 211.22,
+          "kills": 2,
+          "position": [
+            10.29,
+            36.42
+          ],
+          "t": 35.0
+        },
+        {
+          "active_enemies": 4,
+          "hp": 211.22,
+          "kills": 2,
+          "position": [
+            10.41,
+            31.91
+          ],
+          "t": 40.0
+        },
+        {
+          "active_enemies": 4,
+          "hp": 211.22,
+          "kills": 2,
+          "position": [
+            10.94,
+            25.54
+          ],
+          "t": 45.0
+        },
+        {
+          "active_enemies": 3,
+          "hp": 211.22,
+          "kills": 3,
+          "position": [
+            11.79,
+            20.52
+          ],
+          "t": 50.0
+        },
+        {
+          "active_enemies": 3,
+          "hp": 211.22,
+          "kills": 3,
+          "position": [
+            9.39,
+            16.03
+          ],
+          "t": 55.0
+        },
+        {
+          "active_enemies": 3,
+          "hp": 211.22,
+          "kills": 3,
+          "position": [
+            11.36,
+            15.92
+          ],
+          "t": 60.0
+        },
+        {
+          "active_enemies": 3,
+          "hp": 211.22,
+          "kills": 3,
+          "position": [
+            10.86,
+            13.97
+          ],
+          "t": 65.0
+        },
+        {
+          "active_enemies": 3,
+          "hp": 211.22,
+          "kills": 3,
+          "position": [
+            11.17,
+            12.55
+          ],
+          "t": 70.0
+        },
+        {
+          "active_enemies": 3,
+          "hp": 211.22,
+          "kills": 3,
+          "position": [
+            10.95,
+            11.34
+          ],
+          "t": 75.0
+        },
+        {
+          "active_enemies": 2,
+          "hp": 211.22,
+          "kills": 4,
+          "position": [
+            10.97,
+            2.82
+          ],
+          "t": 80.0
+        },
+        {
+          "active_enemies": 2,
+          "hp": 211.22,
+          "kills": 4,
+          "position": [
+            11.0,
+            -36.09
+          ],
+          "t": 85.0
+        }
+      ],
+      "scenario": "street_maneuver",
+      "seconds": 90.0,
+      "shots": [
+        {
+          "kind": "cannon",
+          "owner": "PlayerTank",
+          "t": 0.383,
+          "team": 0
+        },
+        {
+          "kind": "cannon",
+          "owner": "PlayerTank",
+          "t": 3.3,
+          "team": 0
+        },
+        {
+          "kind": "he",
+          "owner": "Enemy_03",
+          "t": 4.3,
+          "team": 1
+        },
+        {
+          "kind": "cannon",
+          "owner": "PlayerTank",
+          "t": 6.217,
+          "team": 0
+        },
+        {
+          "kind": "cannon",
+          "owner": "PlayerTank",
+          "t": 9.133,
+          "team": 0
+        },
+        {
+          "kind": "cannon",
+          "owner": "PlayerTank",
+          "t": 12.05,
+          "team": 0
+        },
+        {
+          "kind": "cannon",
+          "owner": "PlayerTank",
+          "t": 17.05,
+          "team": 0
+        },
+        {
+          "kind": "cannon",
+          "owner": "PlayerTank",
+          "t": 19.967,
+          "team": 0
+        },
+        {
+          "kind": "cannon",
+          "owner": "PlayerTank",
+          "t": 22.883,
+          "team": 0
+        },
+        {
+          "kind": "cannon",
+          "owner": "PlayerTank",
+          "t": 42.767,
+          "team": 0
+        },
+        {
+          "kind": "cannon",
+          "owner": "PlayerTank",
+          "t": 45.683,
+          "team": 0
+        },
+        {
+          "kind": "cannon",
+          "owner": "PlayerTank",
+          "t": 48.6,
+          "team": 0
+        },
+        {
+          "kind": "cannon",
+          "owner": "PlayerTank",
+          "t": 57.35,
+          "team": 0
+        },
+        {
+          "kind": "cannon",
+          "owner": "PlayerTank",
+          "t": 60.267,
+          "team": 0
+        },
+        {
+          "kind": "cannon",
+          "owner": "PlayerTank",
+          "t": 63.183,
+          "team": 0
+        },
+        {
+          "kind": "cannon",
+          "owner": "PlayerTank",
+          "t": 72.433,
+          "team": 0
+        },
+        {
+          "kind": "cannon",
+          "owner": "PlayerTank",
+          "t": 75.35,
+          "team": 0
+        },
+        {
+          "kind": "cannon",
+          "owner": "PlayerTank",
+          "t": 78.267,
+          "team": 0
+        },
+        {
+          "kind": "cannon",
+          "owner": "PlayerTank",
+          "t": 84.633,
+          "team": 0
+        },
+        {
+          "kind": "cannon",
+          "owner": "PlayerTank",
+          "t": 87.55,
+          "team": 0
+        }
+      ]
+    },
+    {
+      "boss_hp": 0.0,
+      "damage_taken": 190.7,
+      "distance_driven_m": 95.06,
+      "enemy_projectiles": 17,
+      "first_damage_seconds": 4.53,
+      "first_enemy_shot_seconds": 4.42,
+      "healing_received": 0.0,
+      "initial_hp": 260.0,
+      "kills": 1,
+      "max_active_enemies": 2,
+      "max_enemy_cannons_in_one_second": 1,
+      "max_player_speed": 8.0,
+      "outcome": "won",
+      "player_shots": 16,
+      "remaining_hp": 69.3,
+      "samples": [
+        {
+          "active_enemies": 1,
+          "hp": 260.0,
+          "kills": 0,
+          "position": [
+            0.0,
+            -10.0
+          ],
+          "t": 0.0
+        },
+        {
+          "active_enemies": 1,
+          "hp": 224.79,
+          "kills": 0,
+          "position": [
+            10.21,
+            -10.0
+          ],
+          "t": 5.0
+        },
+        {
+          "active_enemies": 1,
+          "hp": 224.79,
+          "kills": 0,
+          "position": [
+            -2.42,
+            -10.0
+          ],
+          "t": 10.0
+        },
+        {
+          "active_enemies": 2,
+          "hp": 224.79,
+          "kills": 0,
+          "position": [
+            -13.16,
+            -10.0
+          ],
+          "t": 15.0
+        },
+        {
+          "active_enemies": 2,
+          "hp": 196.63,
+          "kills": 0,
+          "position": [
+            -10.18,
+            -10.0
+          ],
+          "t": 20.0
+        },
+        {
+          "active_enemies": 2,
+          "hp": 161.0,
+          "kills": 0,
+          "position": [
+            2.78,
+            -10.0
+          ],
+          "t": 25.0
+        },
+        {
+          "active_enemies": 2,
+          "hp": 161.0,
+          "kills": 0,
+          "position": [
+            10.22,
+            -10.0
+          ],
+          "t": 30.0
+        },
+        {
+          "active_enemies": 2,
+          "hp": 88.98,
+          "kills": 0,
+          "position": [
+            10.22,
+            -10.0
+          ],
+          "t": 35.0
+        },
+        {
+          "active_enemies": 2,
+          "hp": 88.98,
+          "kills": 0,
+          "position": [
+            1.26,
+            -10.0
+          ],
+          "t": 40.0
+        }
+      ],
+      "scenario": "boss_encounter",
+      "seconds": 43.88,
+      "shots": [
+        {
+          "kind": "cannon",
+          "owner": "PlayerTank",
+          "t": 0.017,
+          "team": 0
+        },
+        {
+          "kind": "cannon",
+          "owner": "PlayerTank",
+          "t": 2.933,
+          "team": 0
+        },
+        {
+          "kind": "cannon",
+          "owner": "Boss_IronFang",
+          "t": 4.417,
+          "team": 1
+        },
+        {
+          "kind": "cannon",
+          "owner": "PlayerTank",
+          "t": 5.85,
+          "team": 0
+        },
+        {
+          "kind": "cannon",
+          "owner": "PlayerTank",
+          "t": 8.767,
+          "team": 0
+        },
+        {
+          "kind": "rocket",
+          "owner": "Boss_IronFang",
+          "t": 9.817,
+          "team": 1
+        },
+        {
+          "kind": "rocket",
+          "owner": "Boss_IronFang",
+          "t": 9.817,
+          "team": 1
+        },
+        {
+          "kind": "rocket",
+          "owner": "Boss_IronFang",
+          "t": 9.817,
+          "team": 1
+        },
+        {
+          "kind": "cannon",
+          "owner": "PlayerTank",
+          "t": 11.683,
+          "team": 0
+        },
+        {
+          "kind": "cannon",
+          "owner": "PlayerTank",
+          "t": 14.6,
+          "team": 0
+        },
+        {
+          "kind": "cannon",
+          "owner": "Boss_IronFang",
+          "t": 14.967,
+          "team": 1
+        },
+        {
+          "kind": "cannon",
+          "owner": "PlayerTank",
+          "t": 17.517,
+          "team": 0
+        },
+        {
+          "kind": "cannon",
+          "owner": "Boss_IronFang",
+          "t": 19.983,
+          "team": 1
+        },
+        {
+          "kind": "cannon",
+          "owner": "PlayerTank",
+          "t": 20.433,
+          "team": 0
+        },
+        {
+          "kind": "cannon",
+          "owner": "PlayerTank",
+          "t": 23.35,
+          "team": 0
+        },
+        {
+          "kind": "rocket",
+          "owner": "Boss_IronFang",
+          "t": 25.433,
+          "team": 1
+        },
+        {
+          "kind": "rocket",
+          "owner": "Boss_IronFang",
+          "t": 25.433,
+          "team": 1
+        },
+        {
+          "kind": "rocket",
+          "owner": "Boss_IronFang",
+          "t": 25.433,
+          "team": 1
+        },
+        {
+          "kind": "rocket",
+          "owner": "Boss_IronFang",
+          "t": 25.433,
+          "team": 1
+        },
+        {
+          "kind": "cannon",
+          "owner": "PlayerTank",
+          "t": 26.267,
+          "team": 0
+        },
+        {
+          "kind": "cannon",
+          "owner": "PlayerTank",
+          "t": 29.183,
+          "team": 0
+        },
+        {
+          "kind": "cannon",
+          "owner": "Boss_IronFang",
+          "t": 30.15,
+          "team": 1
+        },
+        {
+          "kind": "cannon",
+          "owner": "PlayerTank",
+          "t": 32.1,
+          "team": 0
+        },
+        {
+          "kind": "cannon",
+          "owner": "Boss_IronFang",
+          "t": 34.767,
+          "team": 1
+        },
+        {
+          "kind": "cannon",
+          "owner": "PlayerTank",
+          "t": 35.017,
+          "team": 0
+        },
+        {
+          "kind": "cannon",
+          "owner": "PlayerTank",
+          "t": 37.933,
+          "team": 0
+        },
+        {
+          "kind": "rocket",
+          "owner": "Boss_IronFang",
+          "t": 39.85,
+          "team": 1
+        },
+        {
+          "kind": "rocket",
+          "owner": "Boss_IronFang",
+          "t": 39.85,
+          "team": 1
+        },
+        {
+          "kind": "rocket",
+          "owner": "Boss_IronFang",
+          "t": 39.85,
+          "team": 1
+        },
+        {
+          "kind": "rocket",
+          "owner": "Boss_IronFang",
+          "t": 39.85,
+          "team": 1
+        },
+        {
+          "kind": "rocket",
+          "owner": "Boss_IronFang",
+          "t": 39.85,
+          "team": 1
+        },
+        {
+          "kind": "cannon",
+          "owner": "PlayerTank",
+          "t": 40.85,
+          "team": 0
+        },
+        {
+          "kind": "cannon",
+          "owner": "PlayerTank",
+          "t": 43.767,
+          "team": 0
+        }
+      ]
+    }
+  ]
+}

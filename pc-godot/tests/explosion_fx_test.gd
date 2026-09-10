@@ -40,7 +40,7 @@ func _run() -> void:
 	var effect := ExplosionFX.create(Vector3.ZERO)
 	add_child(effect)
 	effect.set_process(false)
-	_check(effect.is_in_group("combat_effects") and is_equal_approx(effect._duration, 2.8), "effect retains its cleanup group and original lifetime")
+	_check(effect.is_in_group("combat_effects") and is_equal_approx(effect._duration, 4.2), "effect retains its cleanup group and a finite 4.2-second smoke lifetime")
 	_check(effect.get_node_or_null("Shockwave") == null, "explosion pressure uses dust instead of a neon torus")
 	var total_particles := 0
 	var textured_layers := true
@@ -52,7 +52,7 @@ func _run() -> void:
 		total_particles += particles.amount
 		var material := (particles.draw_pass_1 as QuadMesh).material as StandardMaterial3D
 		textured_layers = textured_layers and material != null and material.albedo_texture != null and material.billboard_keep_scale
-	_check(textured_layers and total_particles <= 110, "all four bounded particle layers preserve simulated size and use soft textures within the reduced budget")
+	_check(textured_layers and total_particles <= 128, "all four bounded particle layers preserve simulated size and use soft textures within the 128-particle budget")
 	for label in ["Smoke", "Dust"]:
 		var particles := effect.get_node(label) as GPUParticles3D
 		var material := (particles.draw_pass_1 as QuadMesh).material as StandardMaterial3D
@@ -67,6 +67,16 @@ func _run() -> void:
 	_check(fire_process.scale_curve.texture_mode == CurveTexture.TEXTURE_MODE_RGB, "fire scale curve cannot collapse its billboard onto a zero-height line")
 	_check(effect.get_node("Debris") is GPUParticles3D, "destruction ejects finite GPU fragments instead of spawning rigid-body debris piles")
 	effect.free()
+	var heavy := ExplosionFX.create_impact(Vector3.ZERO, true, "ground", Vector3.UP, "he")
+	add_child(heavy)
+	heavy.set_process(false)
+	var blast_dust := heavy.get_node("Dust") as GPUParticles3D
+	var blast_dust_process := blast_dust.process_material as ParticleProcessMaterial
+	var blast_fire_process := (heavy.get_node("Fire") as GPUParticles3D).process_material as ParticleProcessMaterial
+	_check(blast_dust.lifetime > 2.0 and blast_dust_process.radial_velocity_max >= 6.0 and blast_fire_process.scale_max >= 0.89, "HE produces a broad pressure-driven dust front and substantial rolling fire")
+	_check(heavy.get_node("BlastSmoke") != null and heavy.get_node("Debris") != null and heavy._duration > 3.0, "HE blast separates fire, lingering smoke and finite fragments")
+	_check(blast_dust_process.scale_curve.texture_mode == CurveTexture.TEXTURE_MODE_RGB and blast_fire_process.scale_curve.texture_mode == CurveTexture.TEXTURE_MODE_RGB, "enlarged HE layers retain RGB particle scale curves")
+	heavy.free()
 	var armor := ExplosionFX.create_impact(Vector3.ZERO, false, "armor", Vector3.RIGHT, "machine_gun")
 	add_child(armor)
 	armor.set_process(false)
@@ -88,4 +98,7 @@ func _run() -> void:
 	for impact: ExplosionFX in effects:
 		impact.free()
 	print("EXPLOSION_FX_RESULT: %d passed, %d failed" % [passed, failed])
-	get_tree().quit(0 if failed == 0 else 1)
+	# This entire resource test otherwise runs in one frame. Let submitted
+	# positional voices enter the audio mixer before the shared stop routine.
+	await get_tree().create_timer(0.08).timeout
+	await preload("res://tests/test_shutdown.gd").finish(get_tree(), 0 if failed == 0 else 1)

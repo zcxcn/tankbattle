@@ -57,7 +57,7 @@ func _run() -> void:
 	print("PACING_REGRESSION_RESULT: %d passed, %d failed" % [passed, failed])
 	game.free()
 	await _frames(2)
-	get_tree().quit(0 if failed == 0 else 1)
+	await preload("res://tests/test_shutdown.gd").finish(get_tree(), 0 if failed == 0 else 1)
 
 
 func _freeze() -> void:

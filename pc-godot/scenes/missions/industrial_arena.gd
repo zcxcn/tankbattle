@@ -4,6 +4,7 @@ extends Node3D
 
 const DetailsBuilder = preload("res://scripts/industrial_details.gd")
 const Catalog = preload("res://data/mission_catalog.gd")
+const FacadeLibrary = preload("res://scripts/factory_facade_library.gd")
 
 var game: Node
 var mission_index := 0
@@ -17,9 +18,12 @@ var _dark_metal: StandardMaterial3D
 var _glass: StandardMaterial3D
 var _lamp_lens: StandardMaterial3D
 var _details: RefCounted
+var _district := 0
+var _building_types: Array[String] = []
 
 
 func _ready() -> void:
+	_district = posmod(mission_index, 3)
 	_asphalt = ArtFactory.pbr_terrain_material(
 		"res://assets/materials/polyhaven/asphalt_01/asphalt_01_diff_1k.jpg",
 		"res://assets/materials/polyhaven/asphalt_01/asphalt_01_nor_gl_1k.jpg",
@@ -55,6 +59,7 @@ func _ready() -> void:
 	set_meta("industrial_detail_pieces", _details.piece_count)
 	set_meta("mission_index", mission_index)
 	set_meta("arena_bounds", get_radar_bounds())
+	set_meta("building_types", _building_types)
 	_details = null
 
 
@@ -74,8 +79,8 @@ func _build_environment() -> void:
 	environment.background_mode = Environment.BG_SKY
 	var sky := Sky.new()
 	var sky_material := ProceduralSkyMaterial.new()
-	sky_material.sky_top_color = [Color("566b79"), Color("687d8f"), Color("4b5967")][clampi(mission_index, 0, 2)]
-	sky_material.sky_horizon_color = [Color("abb4b5"), Color("d0c3ac"), Color("afb2b5")][clampi(mission_index, 0, 2)]
+	sky_material.sky_top_color = [Color("566b79"), Color("687d8f"), Color("4b5967")][_district]
+	sky_material.sky_horizon_color = [Color("abb4b5"), Color("d0c3ac"), Color("afb2b5")][_district]
 	sky_material.ground_bottom_color = Color("343a3d")
 	sky_material.ground_horizon_color = Color("747d80")
 	sky_material.sun_angle_max = 4.0
@@ -98,19 +103,19 @@ func _build_environment() -> void:
 	environment.fog_enabled = true
 	environment.fog_light_color = Color("88969c")
 	environment.fog_light_energy = 0.30
-	environment.fog_density = 0.0008 if mission_index == 1 else 0.0012
+	environment.fog_density = 0.0008 if _district == 1 else 0.0012
 	environment.fog_sky_affect = 0.32
 	environment.volumetric_fog_enabled = true
-	environment.volumetric_fog_density = 0.0025 if mission_index == 1 else 0.0032
+	environment.volumetric_fog_density = 0.0025 if _district == 1 else 0.0032
 	environment.volumetric_fog_length = 180.0
 	environment.volumetric_fog_sky_affect = 0.24
 	world_environment.environment = environment
 	add_child(world_environment)
 	var sun := DirectionalLight3D.new()
 	sun.name = "LowSun"
-	sun.rotation_degrees = [Vector3(-52, -32, 0), Vector3(-32, 48, 0), Vector3(-44, -70, 0)][clampi(mission_index, 0, 2)]
-	sun.light_color = [Color("fff1dd"), Color("ffe1b7"), Color("e9f0ff")][clampi(mission_index, 0, 2)]
-	sun.light_energy = 1.10 if mission_index == 2 else 1.15
+	sun.rotation_degrees = [Vector3(-52, -32, 0), Vector3(-32, 48, 0), Vector3(-44, -70, 0)][_district]
+	sun.light_color = [Color("fff1dd"), Color("ffe1b7"), Color("e9f0ff")][_district]
+	sun.light_energy = 1.10 if _district == 2 else 1.15
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 190.0
 	sun.directional_shadow_fade_start = 0.72
@@ -167,34 +172,26 @@ func _build_industrial_blocks() -> void:
 	for row in range(4):
 		var z := -108.0 + row * 72.0
 		for side in [-1.0, 1.0]:
-			if mission_index == 1 and side > 0:
+			if _district == 1 and side > 0:
 				continue # This district's eastern parcels are working container yards.
-			if mission_index == 2 and row % 2 == 0:
+			if _district == 2 and row % 2 == 0:
 				# Two independent magazines per parcel create traversable inner courtyards.
 				for x in [34.0, 64.0]:
 					buildings.append([Vector3(side * x, 3.0, z), Vector3(20, 6, 28)])
 				continue
 			var height := 8.0 + float((row + int(side)) % 3) * 1.3
-			if mission_index == 2:
+			if _district == 2:
 				height = 6.2 + row * 0.6
 			var width := 44.0 + 2.0 * (row % 3)
 			var depth := 24.0 + 2.0 * (row % 2)
 			buildings.append([Vector3(side * 48, height * 0.5, z), Vector3(width, height, depth)])
 	for side in [-1.0, 1.0]:
 		buildings.append([Vector3(side * 55, 5.0, 175), Vector3(42, 10, 20)])
-		if mission_index != 1:
+		if _district != 1:
 			buildings.append([Vector3(side * 58, 7.0, -174), Vector3(42, 14, 20)])
 	for index in range(buildings.size()):
 		var data: Array = buildings[index]
-		var building_position: Vector3 = data[0]
-		var building_size: Vector3 = data[1]
-		var building := ArtFactory.add_box(self, "Warehouse_%02d" % index, building_position, building_size, _building, true)
-		_details.placement = building.transform
-		_warehouse_fittings(building_size)
-		if mission_index == 2:
-			_fortification_fittings(building_size)
-		_details.placement = Transform3D.IDENTITY
-		_details.bake(self, "WarehouseFittings_%02d" % index)
+		_construct_building(data[0], data[1], index)
 	_details.placement = Transform3D.IDENTITY
 
 
@@ -294,7 +291,7 @@ func _build_details() -> void:
 	for index in range(16):
 		var side := -1.0 if index % 2 == 0 else 1.0
 		_add_container(Vector3(side * 60, 1.3, container_rows[index >> 1]), container_paints[index % 3], index)
-	if mission_index == 1:
+	if _district == 1:
 		for row in range(4):
 			for column in range(4):
 				var z := -108.0 + row * 72.0
@@ -330,7 +327,7 @@ func _add_container(at: Vector3, paint: Material, index: int) -> void:
 
 
 func _build_landmarks() -> void:
-	match mission_index:
+	match _district:
 		1:
 			# The quay and water are beyond the perimeter: every playable road stays solid.
 			var water := ArtFactory.material(Color("264753"), 0.3, 0.18)
@@ -513,3 +510,134 @@ func set_boss_gate_open(open: bool) -> void:
 
 func get_radar_bounds() -> Rect2:
 	return Catalog.ARENA_BOUNDS
+
+
+func get_spawn_candidates() -> Array[Vector3]:
+	# Authored road axes are clear before the first physics synchronization.
+	# The 6.6 m tank-envelope sweep in mission_navigation_test verifies these
+	# exact points and every route to the adjoining intersection in all districts.
+	var points: Array[Vector3] = []
+	for x in [-96.0, 0.0, 96.0]:
+		for z in range(-144, 145, 12):
+			points.append(Vector3(x, 0.05, float(z)))
+	for z in [-144.0, -72.0, 0.0, 72.0, 144.0]:
+		for x in range(-132, 133, 12):
+			var point := Vector3(float(x), 0.05, z)
+			if not points.has(point):
+				points.append(point)
+	return points
+
+
+
+func _construct_building(at: Vector3, footprint: Vector3, index: int) -> void:
+	var kinds := ["warehouse", "factory", "office", "apartment", "hangar", "substation", "garage"]
+	var kind: String = kinds[(index + mission_index * 2) % kinds.size()]
+	if not _building_types.has(kind):
+		_building_types.append(kind)
+	var height: float = {"warehouse": 6.0, "factory": 9.0, "office": 12.0, "apartment": 15.0, "hangar": 6.0, "substation": 6.0, "garage": 6.0}[kind]
+	var size := Vector3(footprint.x, height, footprint.z)
+	var origin := Vector3(at.x, 0.0, at.z)
+	# A dark interior set behind actual modeled openings gives depth to glass.
+	# One conservative hull collider per building keeps navigation inexpensive.
+	var shell := ArtFactory.add_box(self, kind.capitalize() + "_%02d" % index,
+		origin + Vector3(0, height * 0.5, 0), Vector3(size.x - 0.42, height, size.z - 0.42), _dark_metal, true)
+	shell.set_meta("building_type", kind)
+	var facade := FacadeLibrary.new()
+	facade.add_elevation(origin + Vector3(0, 0, size.z * 0.5), size.x, height, 0.0, kind in ["warehouse", "factory", "hangar", "garage"])
+	facade.add_elevation(origin + Vector3(0, 0, -size.z * 0.5), size.x, height, PI, kind in ["warehouse", "factory", "hangar", "garage"])
+	facade.add_elevation(origin + Vector3(size.x * 0.5, 0, 0), size.z, height, PI * 0.5, false)
+	facade.add_elevation(origin + Vector3(-size.x * 0.5, 0, 0), size.z, height, -PI * 0.5, false)
+	facade.bake(self, "Facade_%02d" % index)
+	_details.placement = Transform3D(Basis.IDENTITY, origin)
+	_details.box(Vector3(0, 0.22, 0), Vector3(size.x + 0.28, 0.44, size.z + 0.28), _concrete)
+	_details.box(Vector3(0, height + 0.12, 0), Vector3(size.x + 0.65, 0.24, size.z + 0.65), _dark_metal)
+	# Roof cornices, drainage and parapets follow the actual perimeter.
+	for side in [-1.0, 1.0]:
+		_details.box(Vector3(0, height + 0.42, side * size.z * 0.5), Vector3(size.x + 0.65, 0.7, 0.3), _concrete)
+		_details.box(Vector3(side * size.x * 0.5, height + 0.42, 0), Vector3(0.3, 0.7, size.z + 0.65), _concrete)
+		for z in [-size.z * 0.44, size.z * 0.44]:
+			_details.pipe(Vector3(side * (size.x * 0.5 + 0.14), 0.3, z), Vector3(side * (size.x * 0.5 + 0.14), height, z), 0.09, _metal)
+	match kind:
+		"warehouse", "garage":
+			# Loading canopies use steel posts, gutter edges and corrugated roofs.
+			for side in [-1.0, 1.0]:
+				_details.box(Vector3(0, 3.55, side * (size.z * 0.5 + 0.7)), Vector3(size.x - 2.5, 0.16, 1.6), _metal)
+				for x in [-size.x * 0.42, 0.0, size.x * 0.42]:
+					_details.pipe(Vector3(x, 2.6, side * size.z * 0.5), Vector3(x, 3.5, side * (size.z * 0.5 + 1.45)), 0.08, _dark_metal)
+			_roof_ventilation(size, 3)
+		"factory":
+			# Brick flue stacks, catwalks and saw-tooth northlights identify process halls.
+			for x in [-size.x * 0.32, 0.0, size.x * 0.32]:
+				_details.box(Vector3(x, height + 1.35, 0), Vector3(size.x * 0.24, 0.2, size.z * 0.72), _metal, Vector3(0, 0, -0.16))
+				_details.box(Vector3(x + size.x * 0.12, height + 0.8, 0), Vector3(0.12, 1.5, size.z * 0.72), _glass)
+			for x in [-size.x * 0.36, size.x * 0.36]:
+				_details.cylinder(Vector3(x, height + 6.0, -size.z * 0.3), 1.18, 12.0, _building, 0.7)
+				_details.cylinder(Vector3(x, height + 12.0, -size.z * 0.3), 0.9, 0.55, _dark_metal)
+				for y in [height + 3.0, height + 6.0, height + 9.0]:
+					_details.cylinder(Vector3(x, y, -size.z * 0.3), 1.15, 0.16, _metal, 0.95)
+		"office":
+			_roof_ventilation(size, 2)
+			# Setback glazed stair core breaks up the solid silhouette.
+			_details.box(Vector3(size.x * 0.27, height + 2.0, 0), Vector3(size.x * 0.32, 4.0, size.z * 0.62), _glass)
+			for y in [height, height + 2.0, height + 4.0]:
+				_details.box(Vector3(size.x * 0.27, y, 0), Vector3(size.x * 0.33, 0.2, size.z * 0.64), _concrete)
+			for z in [-size.z * 0.32, size.z * 0.32]:
+				for x in [size.x * 0.11, size.x * 0.27, size.x * 0.43]:
+					_details.box(Vector3(x, height + 2.0, z), Vector3(0.13, 4.0, 0.13), _metal)
+		"apartment":
+			_roof_ventilation(size, 1)
+			# Repeated balconies have solid slabs, open railings and side privacy walls.
+			for side in [-1.0, 1.0]:
+				for floor in range(1, 5):
+					for x in [-size.x * 0.32, 0.0, size.x * 0.32]:
+						var y := float(floor) * 3.0
+						var z: float = side * (size.z * 0.5 + 0.6)
+						_details.box(Vector3(x, y, z), Vector3(3.2, 0.18, 1.4), _concrete)
+						_details.pipe(Vector3(x - 1.5, y + 1.0, z + side * 0.65), Vector3(x + 1.5, y + 1.0, z + side * 0.65), 0.045, _metal)
+						for rail in range(9):
+							_details.box(Vector3(x - 1.5 + float(rail) * 0.375, y + 0.54, z + side * 0.65), Vector3(0.045, 0.9, 0.045), _dark_metal)
+		"hangar":
+			# A curved standing-seam barrel roof replaces the flat warehouse roofline.
+			for side in [-1.0, 1.0]:
+				# Closed arch gables seal the barrel roof; no hollow floating roof shell.
+				var radius := size.z * 0.48
+				for panel in range(40):
+					var z := -radius + (float(panel) + 0.5) * radius * 2.0 / 40.0
+					var rise := sqrt(maxf(0.0, radius * radius - z * z)) * 0.38
+					_details.box(Vector3(side * size.x * 0.5, height + rise * 0.5, z), Vector3(0.2, rise, radius * 2.0 / 40.0 + 0.02), _metal)
+				for z in [-radius * 0.5, 0.0, radius * 0.5]:
+					var rise := sqrt(maxf(0.0, radius * radius - z * z)) * 0.38
+					_details.box(Vector3(side * (size.x * 0.5 + 0.14), height + rise * 0.5, z), Vector3(0.16, rise, 0.14), _dark_metal)
+			for strip in range(18):
+				var angle := -PI * 0.5 + (float(strip) + 0.5) * PI / 18.0
+				var radius := size.z * 0.48
+				var z := sin(angle) * radius
+				var y := height + cos(angle) * radius * 0.38
+				_details.box(Vector3(0, y, z), Vector3(size.x + 0.4, 0.18, PI * radius / 18.0 * 1.05), _metal, Vector3(angle * 0.38, 0, 0))
+		"substation":
+			_roof_ventilation(size, 2)
+			# Roof-mounted transformer assemblies and porcelain insulators.
+			for x in [-size.x * 0.28, size.x * 0.28]:
+				_details.box(Vector3(x, height + 1.3, 0), Vector3(5.0, 2.6, 4.0), _metal)
+				for rib in range(12):
+					_details.box(Vector3(x - 2.6 + float(rib) * 0.47, height + 1.4, 0), Vector3(0.16, 2.1, 4.7), _dark_metal)
+				for z in [-1.3, 0.0, 1.3]:
+					_details.cylinder(Vector3(x, height + 3.3, z), 0.16, 1.5, _concrete)
+					for ring in range(5):
+						_details.cylinder(Vector3(x, height + 2.8 + float(ring) * 0.19, z), 0.38, 0.09, _concrete)
+	_details.placement = Transform3D.IDENTITY
+	_details.bake(self, "Architecture_%02d" % index)
+
+
+func _roof_ventilation(size: Vector3, count: int) -> void:
+	for index in range(count):
+		var x := (float(index) - float(count - 1) * 0.5) * minf(8.0, size.x / float(count + 1))
+		var center := Vector3(x, size.y, 0)
+		_details.box(center + Vector3(0, 0.2, 0), Vector3(4.0, 0.4, 3.2), _concrete)
+		_details.box(center + Vector3(0, 1.0, 0), Vector3(3.7, 1.2, 2.9), _metal)
+		for z in [-0.8, 0.8]:
+			_details.cylinder(center + Vector3(0, 1.65, z), 0.6, 0.14, _dark_metal)
+			for spoke in range(6):
+				_details.box(center + Vector3(0, 1.73, z), Vector3(1.1, 0.03, 0.04), _metal, Vector3(0, float(spoke) * PI / 6.0, 0))
+		for rib in range(6):
+			_details.box(center + Vector3(1.87, 0.55 + float(rib) * 0.17, 0), Vector3(0.08, 0.05, 2.6), _dark_metal)

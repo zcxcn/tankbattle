@@ -130,4 +130,4 @@ func _run() -> void:
 	player.free()
 	await get_tree().process_frame
 	print("BARREL_ELEVATION_RESULT: %d passed, %d failed" % [passed, failed])
-	get_tree().quit(0 if failed == 0 else 1)
+	await preload("res://tests/test_shutdown.gd").finish(get_tree(), 0 if failed == 0 else 1)

@@ -12,9 +12,9 @@
 
 ## Godot PC 原生重制
 
-`pc-godot/` 是用 **Godot 4.7.2、Forward+ 和 Jolt Physics** 制作的 Windows 原生坦克游戏。PC **0.3.0** 提供三关连续战役，每张地图 **288 × 384 米**：工业外围肃清巡逻车队，补给港区占领通信站，指挥堡垒摧毁燃料库；完成前置任务后迎战各关首领，胜利解锁下一关，并可返回菜单重玩。普通敌车分别为 6 / 8 / 10 辆。
+`pc-godot/` 是用 **Godot 4.7.2、Forward+ 和 Jolt Physics** 制作的 Windows 原生坦克游戏。PC **0.4.0** 提供六关连续战役，每张地图 **288 × 384 米**：工业外围、补给港区、指挥堡垒、钢厂反击、港口封锁和最后壁垒，分别执行肃清、占领或摧毁任务，然后迎战各关首领。普通敌车逐关增加到 **6 / 9 / 12 / 15 / 18 / 22 辆**，装甲、火力和装填能力逐步增强；通关解锁、整备补给和重玩奖励均独立结算。
 
-主菜单可选择 KF51、Challenger 2 和 KV-2 三种授权写实 PBR 底盘，分别偏重机动、均衡和重装甲。敌军具有侦察、主战、重装、远射、机枪、火箭六种战斗角色。三种原始模型单车为 63,016–176,035 三角面，保留颜色、法线、金属/粗糙度与环境遮蔽贴图，并具备独立炮塔、炮管和炮口。模型作者、许可与修改记录见 [`pc-godot/assets/THIRD_PARTY_ASSETS.md`](pc-godot/assets/THIRD_PARTY_ASSETS.md)。
+主菜单可选择 KF51、Challenger 2 和 KV-2 三种授权写实 PBR 底盘，分别偏重机动、均衡和重装甲。敌军扩展为 **11 种作战角色**：原有侦察、主战、重装、远射、机枪和火箭车，加上布雷、突击、榴弹、抢修和重型歼击车。它们共用三种原始车体，具有不同装备外观和实际行为；抢修车消耗有限维修储备修复附近可见友军，布雷车携带十二枚地雷。单车原始模型为 63,016–176,035 三角面，保留完整 PBR 材质、独立炮塔与炮管。作者与许可见 [`资产来源`](pc-godot/assets/THIRD_PARTY_ASSETS.md)。
 
 玩家和敌军使用同一套实体地雷系统：地雷经过 1.2 秒布防后才会触发，只攻击敌对车辆，90 秒后失效。玩家的电磁脉冲可安全排除范围内双方地雷，并短暂瘫痪敌军、打断 Boss 攻击准备。
 
@@ -22,19 +22,23 @@
 
 保留从容的装甲交战节奏：均衡型坦克移速 8 米/秒、主炮装填 2.9 秒；车体和炮塔转动有速度限制，转弯降速，空格提供 1.35 倍短时加速。四种武器随时切换：穿甲主炮、40 发弹链机枪（240 发备弹、换带 4.4 秒）、24 发高爆榴弹、8 发反装甲火箭。穿甲弹与榴弹共用炮膛，切枪不能跳过装填；绿色整备点一次性修复 85 点装甲并补满弹药、地雷。
 
-敌军沿道路巡逻，通过距离、视角和实体遮挡发现玩家，停稳瞄准后开火；失去视线时搜索最后看到的位置，随后恢复巡逻。机枪敌车短点射后停歇，敌炮有明确瞄准时间，EMP 会打断瞄准。Boss 前补给把装甲恢复至至少 75% 并重置 EMP；Boss 在 70% / 35% 装甲阶段强化攻击，火箭齐射具有预警、锁定位置和发射后休止，可侧移躲避或用 EMP 打断。
+每次行动从全图 **175 个道路安全候选位置**随机部署敌军，保留出生安全距离和车辆间距，巡逻路线避开建筑与任务燃料库。敌军通过距离、视角和实体遮挡发现玩家，停稳瞄准后开火；失去视线时搜索最后看到的位置，随后恢复巡逻。机枪敌车短点射后停歇，EMP 会打断瞄准。Boss 前补给把装甲恢复至至少 75% 并重置 EMP；每关 Boss 在 70% / 35% 装甲阶段强化攻击，火箭齐射具有预警、锁定位置和发射后休止，可侧移躲避或用 EMP 打断。
 
 按 **C** 在俯视与真正的第三人称跟随视角之间切换，滚轮可调距离，俯视拉近后自动进入第三人称。近景鼠标/右摇杆控制观察与瞄准，移动方向随镜头旋转，SpringArm 自动避免镜头穿墙。炮管具有真实俯仰和机械限位，白色角标表示瞄准意图，圆形准星预测当前炮口的实际弹道落点。雷达保持朝北，显示视线内近处敌军、任务目标、补给和附近地雷。
 
-三张地图包含仓库与储油罐、港区集装箱和龙门吊、指挥堡垒与观察塔。道路、巡逻回环、出生位置、目标和补给区均用实际 Jolt 碰撞空间验证；静态附件按材质合批。
+六关采用三类工业街区的不同光照和战斗配置。下载并整合 Poly Haven CC0 工厂模块，加入有立体窗框、门洞和装卸口的砖墙外立面；七类建筑包括装卸仓库、烟囱工厂、办公楼、公寓、拱顶机库、变电站和维修车库，并保留油罐、集装箱、龙门吊和观察塔。使用实际 Jolt 空间验证道路及出生净空，门窗合批、共享网格和 LOD，175 米外停止绘制细小立面。
 
-炮弹使用连续碰撞检测和重力，榴弹沿抛物线飞行，机枪每四发出现一发曳光，火箭保留短烟尾。爆炸包含瞬时闪光、冷却火焰、黑烟、扬尘和碎片，命中装甲、混凝土或地面产生不同效果。粒子材质共享，效果、动态光源及烟尾均有数量上限。武器使用独立真实录音与加工尾响，完整许可见 [`音效来源`](pc-godot/assets/audio/combat/README.md)。
+炮弹改为四种封闭 GLB 模型，具备弧形弹头、铜制弹带、引信和火箭尾翼，飞行中使用实际尺寸。玩家 AP / 机枪 / HE / 火箭速度分别为 **260 / 500 / 185 / 95 米/秒**，连续扫掠检测避免高速穿墙；AP、HE 和机枪受重力影响，机枪间隔出现紧凑曳光，火箭保留短烟尾。HE 伤害半径 **8 米**、火箭 **6 米**，爆炸分层表现冲击闪光、扩张火团、黑烟、地面扬尘与碎片。
+
+坦克击毁后保留原车模型与碰撞，呈现发动机起火、炮塔环断裂或弹药舱喷火三种残骸；**25% 概率在 3.3–7.2 秒后殉爆**，炮塔抛飞，9 米内双方车辆可能受伤，建筑可以遮挡。最多保留十四辆残骸、六处持续燃烧，27 秒后熄火；暂停冻结危险计时，换关清理。
+
+按 **N** 切换三首原创循环 BGM，设置中可分别调整音乐、战斗音效和通信音量。十七句原创中文无线电播报发现敌军、敌车逼近、目标摧毁、装甲危险、补给及任务结果；带中文字幕、优先级和限频，播报时音乐自动降低。实录发动机、履带拟音、转向摩擦和碰撞声根据实际运动变化，停车、暂停或摧毁时正确停止。完整许可及制作方式见 [`战斗录音`](pc-godot/assets/audio/combat/README.md) 和 [`音乐与战场通信`](pc-godot/assets/audio/battlefield/README.md)。
 
 Godot PC 实际渲染截图（Challenger 2：tomm8，CC BY 4.0；完整来源见上方资产说明）：
 
-![PC 0.3.0 第三人称港区](docs/pc-realistic/chase-0.3.0.png)
+![PC 0.4.0 第三人称港区](docs/pc-realistic/chase-0.4.0.png)
 
-[0.3.0 新爆炸效果](docs/pc-realistic/explosion-0.3.0.png) · [三关战役、454 项自检与显卡性能数据](docs/pc-realistic/SELF_CHECK_0.3.0.md)
+[0.4.0 实体弹药](docs/pc-realistic/ordnance-0.4.0.png) · [燃烧残骸与炮塔殉爆](docs/pc-realistic/cookoff-0.4.0.png) · [建筑近景](docs/pc-realistic/buildings-0.4.0.png) · [六关战役自检与显卡性能数据](docs/pc-realistic/SELF_CHECK_0.4.0.md)
 
 ![PC 0.2.1 首页](docs/pc-realistic/title.png)
 ![Challenger 2 战场近景](docs/pc-realistic/challenger2.png)
@@ -52,6 +56,7 @@ Godot PC 实际渲染截图（Challenger 2：tomm8，CC BY 4.0；完整来源见
 | 开火 | 鼠标左键 | RT |
 | 选择主炮 / 机枪 / 榴弹 / 火箭 | 1 / 2 / 3 / 4 | — |
 | 轮换武器 | R | X |
+| 切换战斗音乐 | N / 设置菜单 | 设置菜单 |
 | 短时加速 | 空格 | LB |
 | 电磁脉冲 / 排雷 | E | RB |
 | 布设地雷 | M | 右摇杆按下（R3） |
@@ -70,13 +75,13 @@ $godot = (Resolve-Path .\work\tools\godot-4.7.2\editor\Godot_v4.7.2-stable_win64
 # 独立逻辑测试与真实场景集成测试
 & $godot --headless --path .\pc-godot --script res://tests/test_runner.gd -- --test
 & $godot --headless --path .\pc-godot res://tests/integration_scene.tscn -- --test
-& $godot --headless --path .\pc-godot --script res://tests/tracked_drive_test.gd
+& $godot --headless --path .\pc-godot --script res://tests/tracked_drive_test.gd -- --test
 
 # 导入资源、运行测试、导出并启动成品冒烟检查
 pwsh -NoProfile -File .\scripts\build-pc-godot.ps1 -Configuration Release
 ```
 
-构建脚本固定校验官方 Godot 可执行文件和模板的 SHA-256；其他位置的同版 console 程序可通过 `-GodotPath <路径>` 指定，Windows 模板仍放在 `work/tools/godot-4.7.2/templates/`。Release 成品位于 `outputs/pc-godot/windows-x86_64/`，可分发压缩包为 `outputs/pc-godot/Iron-Embers-Windows-x86_64-0.3.0.zip`。当前 Windows 可执行文件未做代码签名，首次运行可能显示系统信誉提示。
+构建脚本固定校验官方 Godot 可执行文件和模板的 SHA-256；其他位置的同版 console 程序可通过 `-GodotPath <路径>` 指定，Windows 模板仍放在 `work/tools/godot-4.7.2/templates/`。Release 成品位于 `outputs/pc-godot/windows-x86_64/`，可分发压缩包为 `outputs/pc-godot/Iron-Embers-Windows-x86_64-0.4.0.zip`。解压后双击 `IronEmbers.exe`，保留同目录 `IronEmbers.pck` 和 `credits/` 即可离线运行。当前 Windows 可执行文件未做代码签名，首次运行可能显示系统信誉提示。
 
 本次 PC 重制的源码集中在 `pc-godot/`，构建与验收脚本为 `scripts/build-pc-godot.ps1`、`scripts/smoke-pc-godot.ps1`；`mobile/baseline/` 和 `android/` 未改动。
 

@@ -74,6 +74,8 @@ var _hud_weapon_slots: Label
 var _hud_mine: Label
 var _hud_emp: Label
 var _hud_dash: Label
+var _hud_music: Label
+var _hud_radio: Label
 
 var _pause_notice: Label
 var _result_panel: PanelContainer
@@ -251,7 +253,7 @@ func _build_title_layer() -> void:
 	layout.add_child(HSeparator.new())
 	var footer := HBoxContainer.new()
 	layout.add_child(footer)
-	footer.add_child(_label("BUILD 0.3.0 · FORWARD+ / PBR ARMOR", &"Micro"))
+	footer.add_child(_label("BUILD 0.4.0 · FORWARD+ / PBR ARMOR", &"Micro"))
 	footer.add_child(_spacer(true, false))
 	var asset_credit := _label("3D：tomm8 · GRIP420 / David Falke · Comrade1280 · CC BY 4.0\n机枪录音：KuraiWolf / Nightshade Game Studios · CC BY 4.0", &"Micro")
 	asset_credit.name = "AssetCredit"
@@ -335,6 +337,10 @@ func _build_hud_layer() -> void:
 	_hud_time = _label("00:00", &"Muted")
 	_hud_time.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	score_box.add_child(_hud_time)
+	_hud_music = _label("N · 战斗音乐", &"Micro")
+	_hud_music.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_hud_music.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	score_box.add_child(_hud_music)
 
 	var boss_center := HBoxContainer.new()
 	layout.add_child(boss_center)
@@ -365,6 +371,10 @@ func _build_hud_layer() -> void:
 	boss_health.add_child(_hud_boss_hp)
 
 	layout.add_child(_spacer(false, true))
+	_hud_radio = _label("", &"Body")
+	_hud_radio.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_hud_radio.add_theme_color_override(&"font_color", ThemeFactory.GREEN)
+	layout.add_child(_hud_radio)
 
 	var notice_center := HBoxContainer.new()
 	layout.add_child(notice_center)
@@ -449,7 +459,7 @@ func _build_pause_layer() -> void:
 	var controls := _label("WASD / 左摇杆：移动    鼠标 / 右摇杆：瞄准\n左键 / RT：开火    C / Y：俯视 / 第三人称    滚轮：变焦\n1–4：选择武器    R / X：切换武器\nM / R3：布雷    E / RB：脉冲排雷    空格 / LB：短时加速", &"Muted")
 	controls.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(controls)
-	var tactics := _label("停稳瞄准，开炮后退回掩体；绿色补给点可修复战车并补充弹药。", &"Muted")
+	var tactics := _label("N：切换战斗音乐。绿色整备点提供补给；起火残骸可能殉爆，保持距离。", &"Muted")
 	tactics.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	tactics.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(tactics)
@@ -518,6 +528,9 @@ func _build_settings_layer() -> void:
 		["shake", "屏幕震动", "爆炸与重炮冲击反馈"],
 		["master_volume", "总音量", "每次调整 10%"],
 		["effects_volume", "战斗音效", "炮声、爆炸、引擎与界面音效"],
+		["music_volume", "战斗音乐", "音乐独立音量，每次调整 10%"],
+		["radio_volume", "战场通信", "原创无线电语音独立音量，每次调整 10%"],
+		["music_track", "选择音乐", "轮换三首战斗配乐，也可按 N 切换"],
 	]:
 		var id := String(entry[0])
 		var button := _button("", &"SettingButton", setting_requested.emit.bind(id))
@@ -590,6 +603,7 @@ func _build_result_layer() -> void:
 
 
 func _apply_snapshot() -> void:
+	var result_was_visible := _result_layer.visible
 	var requested_mode := str(_snapshot.get("mode", "title")).to_lower()
 	if requested_mode not in VALID_MODES:
 		requested_mode = "title"
@@ -604,14 +618,14 @@ func _apply_snapshot() -> void:
 	_hud_layer.visible = _mode in ["playing", "paused"] or settings_over_battle
 	_pause_layer.visible = _mode == "paused"
 	_settings_layer.visible = _mode == "settings"
-	_result_layer.visible = _mode in ["won", "lost"]
+	_result_layer.visible = _mode in ["won", "lost"] and _float_value("result_delay", 0.0) <= 0.0
 
 	_update_title()
 	_update_hud()
 	_update_settings()
 	_update_pause()
 	_update_result()
-	if _focused_mode != _mode:
+	if _focused_mode != _mode or (_result_layer.visible and not result_was_visible):
 		_focused_mode = _mode
 		call_deferred("_focus_current_mode")
 
@@ -658,6 +672,10 @@ func _update_hud() -> void:
 		_hud_kill_bar.value = progress
 	_hud_score.text = "%05d" % maxi(0, _int_value("score", 0))
 	_hud_time.text = _format_time(_float_value("time", 0.0))
+	var music: Dictionary = _snapshot.get("music", {})
+	_hud_music.text = "N · " + str(music.get("name", "战斗音乐"))
+	_hud_radio.text = "[车组通信] " + str(_snapshot.get("radio_caption", ""))
+	_hud_radio.visible = not str(_snapshot.get("radio_caption", "")).is_empty()
 
 	var boss_max := maxf(0.0, _float_value("boss_max_hp", 0.0))
 	var boss_hp := clampf(_float_value("boss_hp", 0.0), 0.0, boss_max)
@@ -726,6 +744,9 @@ func _update_settings() -> void:
 		"shake": ["屏幕震动", "开启" if _shake_enabled else "关闭"],
 		"master_volume": ["总音量", "%d%%" % _int_value("master_volume", 80)],
 		"effects_volume": ["战斗音效", "%d%%" % _int_value("effects_volume", 85)],
+		"music_volume": ["战斗音乐", "%d%%" % _int_value("music_volume", 45)],
+		"radio_volume": ["战场通信", "%d%%" % _int_value("radio_volume", 85)],
+		"music_track": ["选择音乐 · N", str((_snapshot.get("music", {}) as Dictionary).get("name", "战斗音乐"))],
 	}
 	for id: String in _setting_buttons:
 		var parts: Array = values[id]

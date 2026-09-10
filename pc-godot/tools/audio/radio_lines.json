@@ -1,0 +1,19 @@
+{
+  "command_online": "指挥链路已建立。战车就位。",
+  "enemy_spotted": "发现敌军。准备接敌。",
+  "enemy_approaching": "注意，敌方装甲正在逼近。",
+  "target_destroyed": "目标已摧毁。",
+  "multiple_targets": "发现多辆敌车。注意侧翼。",
+  "armor_low": "装甲受损。寻找掩体。",
+  "armor_critical": "车体重创！立即撤离交火区。",
+  "boss_detected": "敌方指挥战车出现。集中火力。",
+  "boss_destroyed": "敌方指挥战车已击毁。",
+  "mission_complete": "任务完成。战场已控制。",
+  "mission_failed": "战车失联。任务终止。",
+  "ammo_low": "弹药储备不足。前往补给点。",
+  "ammo_depleted": "当前武器弹药耗尽。切换武器。",
+  "armor_restored": "补给完成。装甲修复。",
+  "objective_secured": "目标已控制。准备下一阶段。",
+  "mine_deployed": "地雷已部署。注意安全距离。",
+  "mines_cleared": "脉冲完成。附近地雷已清除。"
+}

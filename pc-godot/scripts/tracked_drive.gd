@@ -30,6 +30,9 @@ const WHEEL_LAYOUTS := {
 static var _mesh_cache: Dictionary = {}
 var _model: Node3D
 var _wheels: Array[Dictionary] = []
+var _pending_distance := 0.0
+var _pending_yaw := 0.0
+var _visual_time := 0.0
 
 
 func setup(model: Node3D, model_key: String) -> void:
@@ -60,10 +63,22 @@ func setup(model: Node3D, model_key: String) -> void:
 				"side_x": float(wheel_data["center"].x)})
 
 
-func step(actual_velocity: Vector3, yaw_delta: float, delta: float) -> void:
+func step(actual_velocity: Vector3, yaw_delta: float, delta: float, visual_interval := 0.0) -> void:
 	if not is_instance_valid(_model) or delta <= 0.0:
 		return
 	var forward_distance := actual_velocity.dot(-_model.global_basis.z.normalized()) * delta
+	_pending_distance += forward_distance
+	_pending_yaw += yaw_delta
+	_visual_time += delta
+	if _visual_time < visual_interval:
+		return
+	_visual_time = 0.0
+	forward_distance = _pending_distance
+	yaw_delta = _pending_yaw
+	_pending_distance = 0.0
+	_pending_yaw = 0.0
+	if absf(forward_distance) < 0.000001 and absf(yaw_delta) < 0.000001:
+		return
 	var world_scale := _model.global_basis.get_scale().x
 	for wheel_data: Dictionary in _wheels:
 		var wheel: MeshInstance3D = wheel_data["node"]

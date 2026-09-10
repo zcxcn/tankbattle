@@ -46,7 +46,7 @@ func _run() -> void:
 	_test_loadout()
 	await _test_perception_and_actors()
 	print("FIELD_COMBAT_RESULT: %d passed, %d failed" % [passed, failed])
-	quit(0 if failed == 0 else 1)
+	await preload("res://tests/test_shutdown.gd").finish(self, 0 if failed == 0 else 1)
 
 
 func _test_loadout() -> void:
@@ -89,7 +89,7 @@ func _test_loadout() -> void:
 	var options := Vehicles.player_options()
 	check(options.size() == 3 and options[0].model != options[1].model and options[1].model != options[2].model, "all three licensed hulls are playable")
 	check(options[0].speed > options[1].speed and options[1].speed > options[2].speed and options[0].hp < options[2].hp, "playable chassis trade maneuverability for protection")
-	check(Vehicles.ENEMY_ROLES.size() == 6 and Vehicles.enemy_role("gunner").weapon == "machine_gun" and Vehicles.enemy_role("rocket").weapon == "rocket", "six enemy roles include specialized guns and rockets")
+	check(Vehicles.ENEMY_ROLES.size() == 11 and Vehicles.enemy_role("gunner").weapon == "machine_gun" and Vehicles.enemy_role("rocket").weapon == "rocket" and Vehicles.enemy_role("artillery").weapon == "he", "eleven enemy roles include machine guns, rockets and heavy artillery")
 
 
 func _actor(fixture: Node3D, role: String, player := false) -> Node3D:

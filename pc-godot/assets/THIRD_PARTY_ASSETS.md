@@ -97,3 +97,37 @@ Required machine-gun attribution: **KuraiWolf / Nightshade Game Studios**,
 [Light Machine Gun](https://opengameart.org/content/light-machine-gun),
 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), trimmed and mastered.
 The remaining added clips use CC0 or public-domain sources documented above.
+
+## Factory buildings and modular architecture
+
+The PC 0.4.0 districts use the actual modeled brick panels, recessed windows,
+frames, steel doors, loading shutters and cornices from **Modular Factory
+Facade**, by **James Ray Cock / Poly Haven**, published under CC0 1.0.
+[Original model](https://polyhaven.com/a/modular_factory_facade).
+The original binary and 1K PBR images are retained and verified against the
+publisher's download manifest. Source geometry is shared in MultiMesh batches,
+with generated LODs and a 175m detail cutoff. The seven assembled building
+classes add game-authored roofs, balconies, transformers, chimneys and fittings.
+[Source, license and modifications](models/environment/polyhaven_factory/CREDITS.md).
+
+## Battlefield music, radio and vehicle motion
+
+Three original synthesized combat scores and seventeen original Chinese radio
+lines are packaged for offline playback. The speech uses local Windows Huihui
+TTS and original receiver effects. Vehicle motion combines an actual tank-engine
+recording and mechanical tread/steering foley.
+
+Required attribution: **qubodup, Tank Engine Loop.flac**,
+[Freesound source](https://freesound.org/people/qubodup/sounds/200303/),
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), processed and looped.
+**77Pacer, Tank Tread**,
+[Freesound source](https://freesound.org/people/77Pacer/sounds/425271/), CC0,
+supplies mechanical foley for the tread and steering layers.
+[Complete audio attribution and processing](audio/battlefield/README.md),
+[per-file hashes and quality measurements](audio/battlefield/provenance.json).
+
+## Original modeled ordnance
+
+AP shells, HE shells, machine-gun bullets and rockets are original closed GLB
+geometry generated for this game. They use curved noses, driving bands, fuzes
+and fins as appropriate. [Generator, sizes and CC0 license](models/ordnance/README.md).

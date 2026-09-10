@@ -5,12 +5,18 @@ extends Node3D
 
 const MAX_SWEEP_LENGTH := 4.0
 const MAX_ROCKET_TRAILS := 14
+const ORDNANCE := {
+	"cannon": preload("res://assets/models/ordnance/ap_shell.glb"),
+	"he": preload("res://assets/models/ordnance/he_shell.glb"),
+	"machine_gun": preload("res://assets/models/ordnance/machine_gun_bullet.glb"),
+	"rocket": preload("res://assets/models/ordnance/rocket.glb"),
+}
 
 var game: Node
 var owner_tank: TankActor
 var team := 0
 var direction := Vector3.FORWARD
-var speed := 58.0
+var speed := 260.0
 var damage := 34.0
 var splash_radius := 0.0
 var weapon_kind := "cannon"
@@ -21,13 +27,13 @@ var has_tracer := false
 var _previous := Vector3.ZERO
 var _trail: GPUParticles3D
 var _resolved := false
-static var _shell_material: StandardMaterial3D
 static var _tracer_material: StandardMaterial3D
+static var _tracer_mesh: SphereMesh
 
 
 func _ready() -> void:
 	_previous = global_position
-	gravity = 9.8 if weapon_kind == "he" else (0.0 if weapon_kind == "rocket" else 0.85)
+	gravity = 0.0 if weapon_kind == "rocket" else 9.8
 	# The tank's articulated barrel has already applied fire control. Respect
 	# its real direction even at near-zero pitch; never compensate it twice.
 	flight_velocity = direction.normalized() * speed
@@ -105,7 +111,8 @@ func _impact(hit: Dictionary) -> void:
 	var at: Vector3 = hit.get("position", global_position)
 	var normal: Vector3 = hit.get("normal", Vector3.UP)
 	var collider: Object = hit.get("collider")
-	var surface_kind := "armor" if collider is TankActor else ("ground" if normal.y > 0.55 else "stone")
+	var armored: bool = collider is TankActor or (collider is Node and collider.is_in_group("tank_wrecks"))
+	var surface_kind := "armor" if armored else ("ground" if normal.y > 0.55 else "stone")
 	if collider != null and collider.has_method("receive_damage"):
 		collider.call("receive_damage", damage, team, at)
 	if splash_radius > 0.0:
@@ -129,44 +136,34 @@ func _finish() -> void:
 
 
 func _build_shell() -> void:
-	if _shell_material == null:
-		_shell_material = StandardMaterial3D.new()
-		_shell_material.albedo_color = Color("575953")
-		_shell_material.metallic = 0.82
-		_shell_material.roughness = 0.38
+	if _tracer_material == null:
 		_tracer_material = StandardMaterial3D.new()
 		_tracer_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		_tracer_material.albedo_color = Color("ffca77")
 		_tracer_material.emission_enabled = true
 		_tracer_material.emission = Color("ffb64d")
-		_tracer_material.emission_energy_multiplier = 1.8
-	var shell := MeshInstance3D.new()
+		_tracer_material.emission_energy_multiplier = 2.0
+		_tracer_mesh = SphereMesh.new()
+		_tracer_mesh.radius = 0.024
+		_tracer_mesh.height = 0.048
+		_tracer_mesh.radial_segments = 12
+		_tracer_mesh.rings = 6
+		_tracer_mesh.material = _tracer_material
+	var model: PackedScene = ORDNANCE.get(weapon_kind, ORDNANCE.cannon)
+	var shell := model.instantiate() as Node3D
 	shell.name = "Shell"
-	shell.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	var mesh := CylinderMesh.new()
-	mesh.radial_segments = 8
-	mesh.rings = 1
-	mesh.top_radius = 0.009
-	mesh.bottom_radius = 0.075 if weapon_kind == "rocket" else (0.018 if weapon_kind == "machine_gun" else 0.05)
-	mesh.height = 0.72 if weapon_kind == "rocket" else (0.14 if weapon_kind == "machine_gun" else 0.34)
-	mesh.material = _shell_material
-	shell.mesh = mesh
-	shell.rotation.x = -PI * 0.5
+	for part: Node in shell.find_children("*", "MeshInstance3D"):
+		(part as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(shell)
 	if has_tracer:
+		# A compact burning base is visible from behind. It is not a drawn line,
+		# beam or stretched cylinder: the solid ordnance remains the projectile.
 		var tracer := MeshInstance3D.new()
 		tracer.name = "Tracer"
 		tracer.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		var streak := CylinderMesh.new()
-		streak.radial_segments = 6
-		streak.rings = 1
-		streak.top_radius = 0.018 if weapon_kind == "machine_gun" else 0.028
-		streak.bottom_radius = 0.003
-		streak.height = 0.9 if weapon_kind == "machine_gun" else 0.58
-		streak.material = _tracer_material
-		tracer.mesh = streak
-		tracer.rotation.x = -PI * 0.5
-		tracer.position.z = streak.height * 0.5 + 0.12
+		tracer.mesh = _tracer_mesh
+		tracer.position.z = 0.48 if weapon_kind == "rocket" else (0.025 if weapon_kind == "machine_gun" else 0.25)
+		tracer.scale = Vector3.ONE * (0.36 if weapon_kind == "machine_gun" else (1.5 if weapon_kind == "rocket" else 0.8))
 		add_child(tracer)
 
 

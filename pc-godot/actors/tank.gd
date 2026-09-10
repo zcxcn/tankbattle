@@ -41,7 +41,7 @@ var move_speed := 8.0
 var acceleration := 10.0
 var turn_speed := 1.05
 var turret_turn_speed := 1.35
-var projectile_speed := 66.0
+var projectile_speed := 260.0
 var projectile_damage := 62.0
 var fire_interval := 2.9
 var aim_acquire_time := 1.25
@@ -86,6 +86,9 @@ var _camera_pivot: Node3D
 var _camera_arm: SpringArm3D
 var camera: Camera3D
 var _engine_audio: AudioStreamPlayer3D
+var _vehicle_audio: Node3D
+var _repair_reserve := 120.0
+var _repair_clock := 0.0
 var _ai_clock := 0.0
 var _salvo_clock := 5.0
 var _ai_mine_clock := 10.0
@@ -123,7 +126,7 @@ func _ready() -> void:
 	_build_model()
 	if is_player:
 		_build_camera()
-	_engine_audio = AudioService.attach_engine(self)
+	_vehicle_audio = AudioService.attach_vehicle(self)
 
 
 func _build_collision() -> void:
@@ -170,7 +173,7 @@ func _apply_role_stats() -> void:
 		projectile_damage = 32.0
 		fire_interval = 5.4
 		aim_acquire_time = 1.5
-		projectile_speed = 54.0
+		projectile_speed = 220.0
 		sight_range = 68.0
 		sight_angle = 130.0
 		_ideal_distance = 32.0
@@ -189,16 +192,15 @@ func _apply_role_stats() -> void:
 	sight_angle = role.fov
 	_ideal_distance = role.ideal
 	_enemy_weapon_kind = role.weapon
+	projectile_speed = 185.0 if role.weapon == "he" else (500.0 if role.weapon == "machine_gun" else (95.0 if role.weapon == "rocket" else 210.0))
 	if archetype == "heavy":
 		acceleration = 4.8
 		turn_speed = 0.58
 		turret_turn_speed = 0.72
 	elif archetype == "sniper":
-		projectile_speed = 86.0
-	elif archetype == "gunner":
-		projectile_speed = 130.0
-	elif archetype == "rocket":
-		projectile_speed = 44.0
+		projectile_speed = 280.0
+	if archetype == "minelayer":
+		mine_ammo = 12
 	hp = max_hp
 	_ai_clock = _rng.randf_range(0.3, 1.2)
 	_ai_mine_clock = _rng.randf_range(10.0, 15.0)
@@ -246,10 +248,11 @@ func _build_model() -> void:
 	_drive = TrackedDriveScript.new()
 	_drive.setup(_model, model_key)
 	_add_team_iff(model_key)
-	if is_boss or archetype == "rocket":
+	if is_player or is_boss or archetype == "rocket":
 		_add_boss_rocket_pods()
-	if is_player or archetype == "gunner":
+	if is_player or archetype in ["gunner", "assault"]:
 		_add_machine_gun()
+	_add_specialist_equipment()
 
 
 func _model_key() -> String:
@@ -258,6 +261,51 @@ func _model_key() -> String:
 	if is_player:
 		return str(VehicleCatalogScript.player_vehicle(archetype).model)
 	return str(VehicleCatalogScript.enemy_role(archetype).model)
+
+
+func _add_specialist_equipment() -> void:
+	if is_player or is_boss:
+		return
+	var steel := ArtFactory.material(Color("39433c"), 0.7, 0.6)
+	var warning := ArtFactory.material(Color("d6ac52"), 0.35, 0.6)
+	if archetype == "minelayer":
+		for side in [-1.0, 1.0]:
+			ArtFactory.add_box(_model, "MineRack", Vector3(side * 1.2, 1.5, 2.0), Vector3(0.7, 0.16, 1.5), steel)
+			for offset in [-0.5, 0.0, 0.5]:
+				ArtFactory.add_cylinder(_model, "ReserveMine", Vector3(side * 1.2, 1.7, 2.0 + offset), 0.23, 0.14, warning, 16)
+	elif archetype == "repair":
+		ArtFactory.add_box(_model, "RecoveryToolChest", Vector3(0.0, 1.4, 2.3), Vector3(2.0, 0.6, 0.65), steel)
+		var boom := ArtFactory.add_box(_turret, "RecoveryCrane", Vector3(-0.8, 1.7, 0.1), Vector3(0.22, 0.28, 2.1), warning)
+		boom.rotation.x = -0.24
+		ArtFactory.add_box(_turret, "RecoveryHoist", Vector3(-0.8, 1.1, -0.85), Vector3(0.10, 1.2, 0.10), steel)
+	elif archetype == "destroyer":
+		for side in [-1.0, 1.0]:
+			var plate := ArtFactory.add_box(_turret, "SpacedArmor", Vector3(side * 1.08, 0.6, -0.8), Vector3(0.26, 0.75, 1.45), steel)
+			plate.rotation.z = side * -0.12
+	elif archetype == "artillery":
+		ArtFactory.add_box(_model, "ArtilleryRangefinder", Vector3(0.0, 3.05, 0.0), Vector3(1.2, 0.24, 0.25), steel)
+	elif archetype == "assault" and is_instance_valid(_machine_muzzle):
+		var tube := ArtFactory.add_cylinder(_machine_muzzle.get_parent(), "CoaxialAutocannon", Vector3(-0.22, 0.16, -0.65), 0.085, 1.25, steel, 16)
+		tube.rotation.x = PI * 0.5
+
+
+func _repair_allies(delta: float) -> void:
+	_repair_clock = maxf(0.0, _repair_clock - delta)
+	if _repair_reserve <= 0.0 or _repair_clock > 0.0:
+		return
+	_repair_clock = 1.0
+	for ally: Node in get_tree().get_nodes_in_group("tanks"):
+		if ally == self or not ally is TankActor or ally.team != team or ally.destroyed or ally.is_boss or not ally.active:
+			continue
+		if ally.hp >= ally.max_hp or global_position.distance_to(ally.global_position) > 18.0:
+			continue
+		if not game.has_line_of_sight(global_position + Vector3.UP * 2, ally.global_position + Vector3.UP * 2):
+			continue
+		var restored := minf(5.0, minf(ally.max_hp - ally.hp, _repair_reserve))
+		ally.hp += restored
+		_repair_reserve -= restored
+		# Limited repair stores and one target per second prevent an immortal pack.
+		return
 
 
 func _add_machine_gun() -> void:
@@ -346,6 +394,8 @@ func _physics_process(delta: float) -> void:
 	if destroyed or game == null or not game.is_combat_running():
 		if is_instance_valid(_engine_audio):
 			_engine_audio.volume_db = -80.0
+		if is_instance_valid(_vehicle_audio):
+			AudioService.stop_vehicle(_vehicle_audio)
 		return
 	var old_yaw := rotation.y
 	if is_player and _loadout != null:
@@ -374,9 +424,22 @@ func _physics_process(delta: float) -> void:
 		velocity.z = move_toward(velocity.z, 0.0, acceleration * delta)
 		_update_turret(delta)
 	_apply_gravity(delta)
+	var requested_velocity := Vector3(velocity.x, 0.0, velocity.z)
 	move_and_slide()
-	_drive.step(get_real_velocity(), angle_difference(old_yaw, rotation.y), delta)
-	_update_engine_audio()
+	var wheel_interval := 0.0
+	if not is_player and is_instance_valid(game.player) and global_position.distance_squared_to(game.player.global_position) > 8100.0:
+		wheel_interval = 0.12
+	_drive.step(get_real_velocity(), angle_difference(old_yaw, rotation.y), delta, wheel_interval)
+	var impact_speed := 0.0
+	for contact in get_slide_collision_count():
+		var normal := get_slide_collision(contact).get_normal()
+		if absf(normal.y) < 0.6:
+			impact_speed = maxf(impact_speed, maxf(0.0, -requested_velocity.dot(normal)))
+	if is_instance_valid(_vehicle_audio):
+		if active:
+			AudioService.update_vehicle(_vehicle_audio, Vector2(get_real_velocity().x, get_real_velocity().z).length(), absf(angle_difference(old_yaw, rotation.y)) / maxf(delta, 0.001), impact_speed, delta)
+		else:
+			AudioService.stop_vehicle(_vehicle_audio)
 
 
 func _player_control(delta: float) -> void:
@@ -416,6 +479,8 @@ func _player_control(delta: float) -> void:
 
 
 func _ai_control(delta: float) -> void:
+	if archetype == "repair":
+		_repair_allies(delta)
 	var target: TankActor = game.player
 	if not is_instance_valid(target) or target.destroyed:
 		_aim_hold_time = 0.0
@@ -499,7 +564,7 @@ func _ai_control(delta: float) -> void:
 		_aim_hold_time = 0.0
 	if mine_cooldown <= 0.0 and distance > 8.0 and distance < 25.0 and _ai_mine_clock <= 0.0:
 		try_place_mine()
-		_ai_mine_clock = _rng.randf_range(12.0, 17.0)
+		_ai_mine_clock = _rng.randf_range(5.0, 8.0) if archetype == "minelayer" else _rng.randf_range(12.0, 17.0)
 
 
 func can_see_target(target: Node3D) -> bool:
@@ -523,6 +588,9 @@ func can_see_target(target: Node3D) -> bool:
 func _patrol_control(delta: float) -> void:
 	ai_state = "patrol"
 	_aim_hold_time = 0.0
+	if archetype == "minelayer" and _ai_mine_clock <= 0.0 and get_real_velocity().length() > 1.5:
+		try_place_mine()
+		_ai_mine_clock = _rng.randf_range(8.0, 12.0)
 	if patrol_route.is_empty():
 		# Standalone encounters still patrol locally; campaign spawns provide
 		# authored routes through streets and clearings.
@@ -607,7 +675,7 @@ func _fire_boss_salvo(target: TankActor) -> void:
 		var base := (target_point - launch_marker.global_position).normalized()
 		var spread := deg_to_rad((float(index) - float(shots - 1) * 0.5) * 7.0)
 		var direction := base.rotated(Vector3.UP, spread)
-		var launch_position := _launch_weapon(_turret.global_position, launch_marker.global_position, direction, projectile_damage * 0.55, projectile_speed * 0.8, 2.4, "rocket")
+		var launch_position := _launch_weapon(_turret.global_position, launch_marker.global_position, direction, projectile_damage * 0.55, 95.0, 4.2, "rocket")
 		game.spawn_muzzle_flash(launch_position, Color("ff593d"), 0.82, direction, "rocket")
 	var audio_origin := _rocket_muzzles[0].global_position if not _rocket_muzzles.is_empty() else _muzzle.global_position
 	AudioService.play_3d("cannon", audio_origin, -1.0, 0.68)
@@ -747,7 +815,7 @@ func _desired_weapon_pitch(origin: Vector3, kind: String) -> float:
 			if definition.id == kind:
 				speed = float(definition.speed) if is_player else projectile_speed
 				break
-	var gravity := 9.8 if kind == "he" else (0.0 if kind == "rocket" else 0.85)
+	var gravity := 0.0 if kind == "rocket" else 9.8
 	var solved := IronProjectile.ballistic_direction(origin, aim_point, forward, speed, gravity)
 	if kind == "rocket":
 		var offset := aim_point - origin
@@ -809,7 +877,7 @@ func try_fire() -> bool:
 	var kind := _enemy_weapon_kind
 	var damage := projectile_damage
 	var speed := projectile_speed
-	var splash := 1.6 if is_boss else (4.0 if kind == "he" else (3.2 if kind == "rocket" else 0.0))
+	var splash := 2.4 if is_boss else (7.0 if kind == "he" else (5.0 if kind == "rocket" else 0.0))
 	if is_player and _loadout != null:
 		var weapon: Dictionary = _loadout.fire(fire_interval if _loadout.selected == 0 else -1.0)
 		if weapon.is_empty():
@@ -830,7 +898,7 @@ func try_fire() -> bool:
 			_enemy_rocket_ammo -= 1
 			if _enemy_rocket_ammo <= 0:
 				_enemy_weapon_kind = "cannon"
-				projectile_speed = 60.0
+				projectile_speed = 210.0
 				projectile_damage = 22.0
 	var direction := get_firing_direction(kind)
 	var speed_ratio := clampf(Vector2(velocity.x, velocity.z).length() / move_speed, 0.0, 1.0)
@@ -906,6 +974,7 @@ func try_emp() -> bool:
 	emp_cooldown = 13.0
 	game.emit_emp(self, 28.0)
 	AudioService.play_3d("emp", global_position, -2.0)
+	AudioService.radio("mines_cleared")
 	return true
 
 
@@ -916,6 +985,8 @@ func try_place_mine() -> bool:
 	game.spawn_mine(self, behind)
 	mine_ammo -= 1
 	mine_cooldown = 2.0 if is_player else 7.0
+	if is_player:
+		AudioService.radio("mine_deployed")
 	return true
 
 
@@ -929,7 +1000,7 @@ func apply_emp(duration: float) -> void:
 		_charge_clock = 0.0
 		_clear_salvo_telegraph()
 		_salvo_clock = 7.0
-		game.notify("EMP 已打断铁牙的火箭齐射", 2.2)
+		game.notify("EMP 已打断%s的火箭齐射" % display_name, 2.2)
 
 
 func activate_boss() -> void:
@@ -952,6 +1023,8 @@ func receive_damage(amount: float, attacker_team: int, hit_position := Vector3.Z
 			game.alert_enemy(self)
 	var accepted := maxf(1.0, amount * (1.0 - armor))
 	hp = maxf(0.0, hp - accepted)
+	if is_player and hp > 0.0 and hp <= max_hp * 0.3:
+		AudioService.radio("player_critical")
 	AudioService.play_3d("hit", hit_position if hit_position != Vector3.ZERO else global_position, -9.0, _rng.randf_range(0.9, 1.12))
 	if is_boss:
 		var fraction := hp / max_hp
@@ -989,11 +1062,15 @@ func _die(attacker_team: int) -> void:
 		return
 	destroyed = true
 	active = false
+	AudioService.stop_vehicle(_vehicle_audio)
 	collision_layer = 0
 	collision_mask = 0
 	velocity = Vector3.ZERO
+	if game.has_method("spawn_tank_wreck"):
+		game.spawn_tank_wreck(self)
 	visible = false
-	game.spawn_explosion(global_position + Vector3.UP * 0.7, 1.75 if is_boss else 1.0)
+	if not game.has_method("spawn_tank_wreck"):
+		game.spawn_explosion(global_position + Vector3.UP * 0.7, 1.75 if is_boss else 1.0)
 	tank_destroyed.emit(self, attacker_team)
 	if not is_player:
 		queue_free()

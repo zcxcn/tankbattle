@@ -22,7 +22,7 @@ func _run() -> void:
 	if not "--test" in OS.get_cmdline_user_args() or DisplayServer.get_name() == "headless":
 		quit(2)
 		return
-	directory = ProjectSettings.globalize_path("res://../work/asset-review/expansion-0.3.0")
+	directory = ProjectSettings.globalize_path("res://../work/asset-review/expansion-0.4.0")
 	DirAccess.make_dir_recursive_absolute(directory)
 	root.get_node("SaveService").set("_directory", "user://tests/expansion_visual")
 	root.get_node("SaveService").reset_for_tests()
@@ -33,9 +33,14 @@ func _run() -> void:
 	var quick := "--quick" in OS.get_cmdline_user_args()
 	if not quick:
 		await capture("title")
-	for mission in ([1] if quick else [0, 1, 2]):
+		game.open_settings()
+		await frames(3)
+		await capture("settings-audio")
+		game.return_to_menu()
+	for mission in ([1] if quick else [0, 1, 2, 3, 4, 5]):
 		game.selected_mission = mission
-		game.selected_chassis = mission
+		game.selected_chassis = mission % 3
+		game.set_meta("deployment_seed", 40910 + mission)
 		game.start_game()
 		for tank in get_nodes_in_group("tanks"):
 			tank.set_physics_process(false)
@@ -70,4 +75,4 @@ func _run() -> void:
 	game.free()
 	await frames(3)
 	print("EXPANSION_VISUAL_COMPLETE")
-	quit()
+	await preload("res://tests/test_shutdown.gd").finish(self, 0)

@@ -43,7 +43,9 @@ func _run() -> void:
 	Engine.max_fps = 0
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
 	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
-	report_path = ProjectSettings.globalize_path("res://../work/asset-review/expansion-0.3.0/performance-baseline.json")
+	DisplayServer.window_set_title("Iron Embers 0.4 Performance")
+	DisplayServer.window_move_to_foreground()
+	report_path = ProjectSettings.globalize_path("res://../work/asset-review/expansion-0.4.0/performance-baseline.json")
 	DirAccess.make_dir_recursive_absolute(report_path.get_base_dir())
 	game = load("res://scenes/main/main.tscn").instantiate()
 	root.add_child(game)
@@ -61,10 +63,12 @@ func _run() -> void:
 		settings.quality = profile.quality
 		settings._apply_quality()
 		DisplayServer.window_set_size(profile.size)
+		DisplayServer.window_move_to_foreground()
 		await _frames(3)
-		for mission in range(3):
+		for mission in range(6):
 			game.selected_mission = mission
 			game.selected_chassis = 1
+			game.set_meta("deployment_seed", 40910 + mission)
 			game.start_game()
 			game.player.position = Vector3(0, 0.05, 142)
 			game.player.invulnerable = 9999.0
@@ -73,7 +77,14 @@ func _run() -> void:
 			game.player._camera_pivot.update_view(1.0, Vector3.ZERO)
 			game.notice = ""
 			game.notice_time = 0.0
+			if mission == 5:
+				# Additional corpses preserve the full live roster while testing the cap.
+				for index in 14:
+					var wreck = load("res://actors/tank_wreck.gd").create_from_tank(game.enemies[index], index % 3, 0)
+					game.add_child(wreck)
+					wreck.position = Vector3(-5.0 if index % 2 == 0 else 5.0, 0.05, 125.0 - floorf(index / 2.0) * 12.0)
 			await _frames(WARMUP_FRAMES)
+			print("PERFORMANCE_STATE: focused=%s window_mode=%d max_fps=%d low_processor=%s" % [root.has_focus(), DisplayServer.window_get_mode(), Engine.max_fps, OS.low_processor_usage_mode])
 			var frame_ms: Array[float] = []
 			var cpu_ms: Array[float] = []
 			var gpu_ms: Array[float] = []
@@ -106,11 +117,12 @@ func _run() -> void:
 				"gpu_render_ms": _summary(gpu_ms) if measured_times else {},
 				"player_position": [game.player.position.x, game.player.position.y, game.player.position.z],
 				"game_mode": game.mode,
+				"live_vehicles": get_nodes_in_group("tanks").size(), "wrecks": get_nodes_in_group("tank_wrecks").size(),
 			}
 			results.append(result)
 			print("PERFORMANCE_SAMPLE: " + JSON.stringify(result))
 	var report := {
-		"method": "Real-time, uncapped, VSync disabled; live AI; stationary invulnerable player; third-person view at (0,142); 60 warm-up and 240 measured frames; no screenshots or disk IO inside sampling loops; same player chassis in all chapters.",
+		"method": "Real-time, uncapped, VSync disabled; live AI; stationary invulnerable player; third-person view at (0,142); 60 warm-up and 240 measured frames; no screenshots or disk IO inside sampling loops; same player chassis in all chapters. Final chapter retains all 24 live vehicles and adds 14 wrecks along the viewed road to measure retained aftermath cost.",
 		"gpu": RenderingServer.get_video_adapter_name(),
 		"engine": Engine.get_version_info(),
 		"results": results,
@@ -121,4 +133,4 @@ func _run() -> void:
 	game.free()
 	await _frames(3)
 	print("CAMPAIGN_PERFORMANCE_COMPLETE: " + report_path)
-	quit()
+	await preload("res://tests/test_shutdown.gd").finish(self, 0)

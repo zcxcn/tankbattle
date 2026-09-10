@@ -76,7 +76,7 @@ static func _get_reticle(player: Node3D, barrel: Node3D, muzzle: Node3D, turret:
 	if not hit.is_empty():
 		return hit
 	var direction: Vector3 = player.get_firing_direction(kind)
-	var gravity := 9.8 if kind == "he" else (0.0 if kind == "rocket" else 0.85)
+	var gravity := 0.0 if kind == "rocket" else 9.8
 	var distance := clampf(Vector2(aim.x - muzzle.global_position.x, aim.z - muzzle.global_position.z).length(), 3.0, 260.0)
 	var planar_speed := maxf(1.0, Vector2(direction.x, direction.z).length() * speed)
 	var duration := minf(distance / planar_speed, 8.0)

@@ -1,5 +1,5 @@
 extends Node3D
-## Three-mission campaign, patrol encounters and native PC game flow.
+## Six-mission campaign, patrol encounters and native PC game flow.
 
 const TankScript = preload("res://actors/tank.gd")
 const ProjectileScript = preload("res://actors/projectile.gd")
@@ -9,6 +9,8 @@ const MissionCatalog = preload("res://data/mission_catalog.gd")
 const VehicleCatalog = preload("res://data/vehicle_catalog.gd")
 const MissionTarget = preload("res://actors/mission_target.gd")
 const ArenaScript = preload("res://scenes/missions/industrial_arena.gd")
+const Deployment = preload("res://scripts/battle_deployment.gd")
+const WreckScript = preload("res://actors/tank_wreck.gd")
 
 var mission_index := 0
 var selected_mission := 0
@@ -19,6 +21,10 @@ var objective_progress := 0.0
 var mission_target: StaticBody3D
 var _objective_marker: Node3D
 var _supply_points: Array[Dictionary] = []
+var deployment_seed := 0
+var result_delay := 0.0
+var _contact_scan := 0.0
+var _reported_contacts: Dictionary = {}
 var mode := "title"
 var player: TankActor
 var boss: TankActor
@@ -39,6 +45,7 @@ var _settings_return_mode := "title"
 var _title_rig: Node3D
 var _cleanup: Array[Dictionary] = []
 var _smoke_test := false
+var _quitting := false
 var _active_encounter := 0
 var _encounter_pause := 0.0
 var _encounter_cleared := false
@@ -53,9 +60,10 @@ func _ready() -> void:
 	_create_ui()
 	_show_title_tank()
 	get_window().focus_exited.connect(_on_focus_lost)
+	get_tree().auto_accept_quit = false
 	Input.joy_connection_changed.connect(_on_joy_connection_changed)
 	_smoke_test = "--smoke-test" in OS.get_cmdline_user_args()
-	print("IRON_EMBERS_PC_READY | Godot native | Campaign 0.3 | patrols + loadouts + chase camera")
+	print("IRON_EMBERS_PC_READY | Godot native | Campaign 0.4 | random patrols + wrecks + battlefield audio")
 	if _smoke_test:
 		call_deferred("start_game")
 
@@ -103,6 +111,7 @@ func _show_title_tank() -> void:
 	_build_title_shot()
 	objective = "第 %02d 章 · %s" % [selected_mission + 1, MissionCatalog.get_mission(selected_mission).name]
 	mode = "title"
+	AudioService.set_game_state(mode)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 
@@ -144,6 +153,7 @@ func _build_title_shot() -> void:
 
 func start_game() -> void:
 	_settle_abandoned_run()
+	AudioService.set_game_state("title")
 	_clear_combat_nodes()
 	mission_index = clampi(selected_mission, 0, MissionCatalog.count() - 1)
 	mission_data = MissionCatalog.get_mission(mission_index)
@@ -155,6 +165,9 @@ func start_game() -> void:
 	play_time = 0.0
 	objective_complete = false
 	objective_progress = 0.0
+	result_delay = 0.0
+	_reported_contacts.clear()
+	_contact_scan = 0.0
 	_active_encounter = 0
 	_encounter_pause = 0.0
 	_encounter_cleared = false
@@ -163,10 +176,20 @@ func start_game() -> void:
 	current_run_id = "%d-%d" % [Time.get_unix_time_from_system(), randi()]
 	SaveService.begin_run(current_run_id)
 	player = _spawn_tank("PlayerTank", mission_data.player_start, TankActor.TEAM_PLAYER, true, false, ["scout", "line", "heavy"][selected_chassis])
-	for index in range(mission_data.enemy_layout.size()):
-		var data: Dictionary = mission_data.enemy_layout[index]
+	deployment_seed = int(get_meta("deployment_seed", randi()))
+	var deployed := Deployment.build(mission_data, arena.get_spawn_candidates(), deployment_seed)
+	if deployed.size() != mission_data.enemy_layout.size():
+		push_error("Validated deployment candidates could not fit the mission roster")
+		deployed.assign(mission_data.enemy_layout)
+	for index in range(deployed.size()):
+		var data: Dictionary = deployed[index]
 		var enemy := _spawn_tank("Enemy_%02d" % index, data.position, TankActor.TEAM_ENEMY, false, false, data.kind)
 		enemy.patrol_route.assign(data.get("patrol", []))
+		enemy.rotation.y = float(data.get("yaw", 0.0))
+		enemy.max_hp *= float(mission_data.health_multiplier)
+		enemy.hp = enemy.max_hp
+		enemy.projectile_damage *= float(mission_data.damage_multiplier)
+		enemy.fire_interval *= float(mission_data.reload_multiplier)
 		enemy.set_meta("encounter_index", index >> 1)
 		enemies.append(enemy)
 	boss = _spawn_tank("Boss_IronFang", mission_data.boss_position, TankActor.TEAM_ENEMY, false, true, "boss")
@@ -178,6 +201,8 @@ func start_game() -> void:
 	arena.set_boss_gate_open(false)
 	_create_mission_props()
 	mode = "playing"
+	AudioService.set_game_state(mode)
+	AudioService.radio("mission_start")
 	_update_encounter_objective()
 	notify("第 %02d 章 · %s\n%s" % [mission_index + 1, mission_data.name, mission_data.briefing], 6.0)
 	Input.mouse_mode = Input.MOUSE_MODE_HIDDEN
@@ -203,6 +228,7 @@ func pause_game(reason := "manual") -> void:
 		return
 	pause_reason = reason
 	mode = "paused"
+	AudioService.set_game_state(mode)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	notify("行动已暂停", 1.2)
 
@@ -211,6 +237,7 @@ func resume_game() -> void:
 	if mode != "paused":
 		return
 	mode = "playing"
+	AudioService.set_game_state(mode)
 	Input.mouse_mode = Input.MOUSE_MODE_HIDDEN
 
 
@@ -221,10 +248,12 @@ func open_settings() -> void:
 		pause_game("settings")
 	_settings_return_mode = mode
 	mode = "settings"
+	AudioService.set_game_state(mode)
 
 
 func _close_settings() -> void:
 	mode = _settings_return_mode
+	AudioService.set_game_state(mode)
 
 
 func _settle_abandoned_run() -> void:
@@ -233,10 +262,23 @@ func _settle_abandoned_run() -> void:
 
 
 func quit_game() -> void:
+	if _quitting:
+		return
+	_quitting = true
 	_settle_abandoned_run()
 	SaveService.save_now()
 	SettingsService.save_settings()
+	mode = "paused"
+	set_process(false)
+	AudioService.set_game_state(mode)
+	AudioService.shutdown()
+	await get_tree().create_timer(0.22).timeout
 	get_tree().quit()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		quit_game()
 
 
 func is_combat_running() -> bool:
@@ -244,6 +286,9 @@ func is_combat_running() -> bool:
 
 
 func _process(delta: float) -> void:
+	AudioService.set_game_state(mode)
+	if mode in ["won", "lost"]:
+		result_delay = maxf(0.0, result_delay - delta)
 	var mouse_mode := Input.MOUSE_MODE_VISIBLE
 	if mode == "playing":
 		mouse_mode = Input.MOUSE_MODE_CAPTURED if is_instance_valid(player) and player.is_third_person() else Input.MOUSE_MODE_HIDDEN
@@ -256,12 +301,17 @@ func _process(delta: float) -> void:
 		play_time += delta
 		_update_mouse_aim()
 		_update_encounters(delta)
+		_update_contact_reports(delta)
 	_update_cleanup(delta)
 	if is_instance_valid(ui) and ui.has_method("update_snapshot"):
 		ui.call("update_snapshot", get_ui_snapshot())
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("music_next"):
+		_cycle_music()
+		get_viewport().set_input_as_handled()
+		return
 	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_F11:
 		SettingsService.cycle_display_mode()
 		get_viewport().set_input_as_handled()
@@ -390,6 +440,11 @@ func spawn_explosion(at: Vector3, scale_factor := 1.0) -> void:
 		player.add_camera_shake(shake)
 
 
+func spawn_tank_wreck(source: TankActor) -> void:
+	var wreck := WreckScript.create_from_tank(source)
+	add_child(wreck)
+
+
 func spawn_impact(at: Vector3, heavy: bool, surface_kind := "ground", normal := Vector3.UP, weapon_kind := "cannon") -> void:
 	add_child(ExplosionScript.create_impact(at, heavy, surface_kind, normal, weapon_kind))
 
@@ -436,22 +491,29 @@ func _on_tank_destroyed(tank: TankActor, attacker_team: int) -> void:
 		return
 	if tank.is_player:
 		mode = "lost"
+		AudioService.set_game_state(mode)
+		result_delay = 2.4
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		objective = "主战坦克失去战斗能力"
 		SaveService.settle_run(current_run_id, false, score, mission_index)
 		AudioService.play_ui("defeat", -3.0)
+		AudioService.radio("mission_failed")
 		return
 	if attacker_team == TankActor.TEAM_PLAYER:
+		AudioService.radio("enemy_destroyed")
 		total_run_kills += 1
 		score += 900 if tank.is_boss else (180 if tank.archetype == "heavy" else 120)
 		SaveService.credit_run_kills(current_run_id, total_run_kills)
 	if tank.is_boss:
 		mode = "won"
+		AudioService.set_game_state(mode)
+		result_delay = 2.4
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		objective = "%s已摧毁 · %s行动完成" % [mission_data.get("boss_name", "指挥车"), mission_data.get("name", "当前")]
 		score += 2500
 		SaveService.settle_run(current_run_id, true, score, mission_index)
 		AudioService.play_ui("victory", -2.0)
+		AudioService.radio("mission_complete")
 		notify("行动成功 · 下一关已解锁" if mission_index < MissionCatalog.count() - 1 else "战役完成 · 尘湾防线已肃清", 5.0)
 		return
 	if not tank.counts_for_objective:
@@ -473,6 +535,7 @@ func _activate_boss() -> void:
 		player.emp_cooldown = 0.0
 		player.resupply()
 	boss.activate_boss()
+	AudioService.radio("boss_incoming")
 	if is_instance_valid(_objective_marker):
 		_objective_marker.global_position = mission_data.boss_position
 		for child: Node in _objective_marker.get_children():
@@ -487,14 +550,34 @@ func _on_boss_phase_changed(phase: int) -> void:
 		return
 	for enemy in enemies:
 		if is_instance_valid(enemy) and not enemy.destroyed and not enemy.is_boss and not enemy.counts_for_objective:
-			notify("铁牙装甲阶段 %d / 3 · 注意火箭预警" % phase, 3.0)
+			notify("%s 阶段 %d / 3 · 注意火箭预警" % [boss.display_name, phase], 3.0)
 			return
-	notify("铁牙装甲阶段 %d / 3 · 一辆护卫进入战场" % phase, 3.0)
-	var offset := boss.global_position + Vector3(-12 if phase == 2 else 12, 0.05, 14.0)
+	notify("%s 阶段 %d / 3 · 一辆护卫进入战场" % [boss.display_name, phase], 3.0)
+	var offset := _find_guard_deployment()
 	var guard := _spawn_tank("BossGuard_%d" % phase, offset, TankActor.TEAM_ENEMY, false, false, "scout" if phase == 2 else "line")
 	guard.counts_for_objective = false
 	guard.reload = guard.fire_interval
 	enemies.append(guard)
+
+
+func _find_guard_deployment() -> Vector3:
+	var chosen: Vector3 = mission_data.boss_position + Vector3(0, 0, 30)
+	var nearest := INF
+	var shape := BoxShape3D.new()
+	shape.size = Vector3(6.6, 1.8, 6.6)
+	var query := PhysicsShapeQueryParameters3D.new()
+	query.shape = shape
+	query.collision_mask = 1 | 2 | 4
+	for at: Vector3 in arena.get_spawn_candidates():
+		var distance := at.distance_to(boss.global_position)
+		if distance < 17.0 or distance >= nearest or at.distance_to(player.global_position) < 20.0:
+			continue
+		query.transform.origin = at + Vector3.UP * 1.4
+		if not get_world_3d().direct_space_state.intersect_shape(query, 1).is_empty():
+			continue
+		chosen = at
+		nearest = distance
+	return chosen
 
 
 func can_enemy_engage(tank: TankActor) -> bool:
@@ -602,6 +685,11 @@ func get_ui_snapshot() -> Dictionary:
 		"screen_shake": SettingsService.screen_shake,
 		"master_volume": SettingsService.master_volume,
 		"effects_volume": SettingsService.effects_volume,
+		"music_volume": SettingsService.music_volume,
+		"radio_volume": SettingsService.radio_volume,
+		"music": AudioService.get_music_snapshot(),
+		"radio_caption": AudioService.get_radio_caption(),
+		"result_delay": result_delay,
 		"pause_reason": pause_reason,
 	}
 	snapshot["mission_index"] = mission_index
@@ -644,12 +732,24 @@ func _on_setting_requested(id: String) -> void:
 			SettingsService.screen_shake = not SettingsService.screen_shake
 			SettingsService.apply()
 		"master_volume":
-			SettingsService.master_volume = (SettingsService.master_volume + 10) % 110
+			SettingsService.master_volume = _next_volume(SettingsService.master_volume)
 			SettingsService.apply()
 		"effects_volume":
-			SettingsService.effects_volume = (SettingsService.effects_volume + 10) % 110
+			SettingsService.effects_volume = _next_volume(SettingsService.effects_volume)
 			SettingsService.apply()
+		"music_volume":
+			SettingsService.music_volume = _next_volume(SettingsService.music_volume)
+			SettingsService.apply()
+		"radio_volume":
+			SettingsService.radio_volume = _next_volume(SettingsService.radio_volume)
+			SettingsService.apply()
+		"music_track":
+			_cycle_music()
 	AudioService.play_ui("click")
+
+
+func _next_volume(current: int) -> int:
+	return 0 if current >= 100 else mini(100, current + 10)
 
 
 func _on_focus_lost() -> void:
@@ -690,6 +790,7 @@ func _setup_inputs() -> void:
 		"fire": [], "dash": [KEY_SPACE], "emp": [KEY_E], "place_mine": [KEY_M],
 		"weapon_1": [KEY_1], "weapon_2": [KEY_2], "weapon_3": [KEY_3], "weapon_4": [KEY_4], "weapon_next": [KEY_R],
 		"camera": [KEY_C], "pause": [KEY_ESCAPE], "confirm": [KEY_ENTER],
+		"music_next": [KEY_N],
 		"menu_up": [KEY_UP, KEY_W], "menu_down": [KEY_DOWN, KEY_S],
 	}
 	for action: String in keyboard:
@@ -739,6 +840,11 @@ func _add_joy_axis(action: String, axis: JoyAxis, value: float) -> void:
 func _finish_smoke_test() -> void:
 	var okay := is_instance_valid(player) and enemies.size() == target_kills + 1 and is_instance_valid(ui) and mode == "playing"
 	print("IRON_EMBERS_SMOKE_PASS" if okay else "IRON_EMBERS_SMOKE_FAIL")
+	mode = "paused"
+	set_process(false)
+	AudioService.set_game_state(mode)
+	AudioService.shutdown()
+	await get_tree().create_timer(0.24).timeout
 	get_tree().quit(0 if okay else 1)
 
 func unlocked_mission_count() -> int:
@@ -811,4 +917,33 @@ func _update_supplies() -> void:
 		player.hp = minf(player.max_hp, player.hp + 85.0)
 		player.resupply()
 		supply.node.queue_free()
+		AudioService.radio("resupply")
 		notify("整备补给 · 装甲 +85 · 弹药/地雷补满", 3.0)
+
+
+func _cycle_music() -> void:
+	var track := AudioService.cycle_music()
+	SettingsService.music_track = int(track.get("index", 0))
+	SettingsService.save_settings()
+	notify("战斗音乐 · " + str(track.get("name", "")), 2.0)
+
+
+func _update_contact_reports(delta: float) -> void:
+	_contact_scan -= delta
+	if _contact_scan > 0.0 or not is_instance_valid(player) or player.destroyed:
+		return
+	_contact_scan = 0.5
+	for enemy: TankActor in enemies:
+		if not is_instance_valid(enemy) or not enemy.is_targetable():
+			continue
+		var distance := player.global_position.distance_to(enemy.global_position)
+		if distance > 70.0 or not has_line_of_sight(player.global_position + Vector3.UP * 2, enemy.global_position + Vector3.UP * 1.5):
+			continue
+		if distance < 24.0:
+			AudioService.radio("enemy_near")
+		if not _reported_contacts.has(enemy.get_instance_id()):
+			_reported_contacts[enemy.get_instance_id()] = true
+			AudioService.radio("enemy_spotted")
+	var weapon := player.get_weapon_snapshot()
+	if int(weapon.get("ammo", -1)) == 0:
+		AudioService.radio("ammo_low")

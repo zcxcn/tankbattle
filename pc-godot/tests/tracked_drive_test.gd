@@ -7,7 +7,7 @@ const ASSETS := {
 	"kf51": "res://assets/models/realistic/kf51/kf51_panther.glb",
 	"kv2": "res://assets/models/realistic/kv2/kv2_boss.glb",
 }
-const EXPECTED_CHECKS := 33
+const EXPECTED_CHECKS := 36
 var _passed := 0
 var _failed := 0
 
@@ -32,7 +32,7 @@ func _run_all() -> void:
 		_failed += 1
 		push_error("Tracked-drive runner stopped before all checks completed")
 	print("\nTracked drive: %d passed, %d failed" % [_passed, _failed])
-	quit(0 if _failed == 0 else 1)
+	await preload("res://tests/test_shutdown.gd").finish(self, 0 if _failed == 0 else 1)
 
 
 func _test_model(model_key: String) -> void:
@@ -89,6 +89,18 @@ func _test_model(model_key: String) -> void:
 		independent = independent and is_zero_approx(second_driver._wheels[index]["node"].rotation.x)
 	_check(shared, model_key + " shares extracted wheel meshes between vehicles")
 	_check(independent, model_key + " keeps wheel transforms independent between vehicles")
+	second.scale = model.scale
+	for data: Dictionary in driver._wheels:
+		data.node.rotation.x = 0.0
+	for tick in 6:
+		var motion := Vector3(0, 0, -1.5 - tick * 0.35)
+		var yaw := 0.008 if tick % 2 == 0 else -0.003
+		driver.step(motion, yaw, 0.02)
+		second_driver.step(motion, yaw, 0.02, 0.119)
+	var accumulated_correctly := true
+	for index in driver._wheels.size():
+		accumulated_correctly = accumulated_correctly and is_equal_approx(driver._wheels[index].node.rotation.x, second_driver._wheels[index].node.rotation.x)
+	_check(accumulated_correctly, model_key + " distant visual updates preserve accumulated travel and differential steering")
 	model.free()
 	second.free()
 

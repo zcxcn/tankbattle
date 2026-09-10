@@ -3,7 +3,7 @@ extends Node3D
 ## Layered one-shot impact: flash, fire, smoke, sparks, dust and local light.
 
 var _age := 0.0
-var _duration := 2.8
+var _duration := 4.2
 var _light: OmniLight3D
 var _flash: MeshInstance3D
 static var _sprite_cache: Dictionary = {}
@@ -69,13 +69,13 @@ func _ready() -> void:
 	if _profile == "muzzle":
 		_build_muzzle()
 		return
-	_add_light(9.0, 12.0)
-	_add_flash(1.65, Vector3.UP * 0.55)
-	_spawn_particles("Fire", 22, 0.66, Color("ffcf66"), Color(1.0, 0.12, 0.015, 0.0), 5.8, 3.4, 0.36, true)
-	_spawn_particles("Sparks", 28, 0.9, Color("fff1a0"), Color(1.0, 0.22, 0.03, 0.0), 14.0, 0.45, 0.08, false)
-	_spawn_particles("Smoke", 24, 2.5, Color(0.16, 0.14, 0.12, 0.78), Color(0.055, 0.06, 0.055, 0.0), 3.5, 1.1, 1.05, true)
-	_spawn_particles("Dust", 28, 1.45, Color(0.36, 0.29, 0.19, 0.6), Color(0.18, 0.15, 0.1, 0.0), 9.0, 0.35, 0.58, true, true)
-	_spawn_debris(12, 0.13)
+	_add_light(12.0, 19.0)
+	_add_flash(3.3, Vector3.UP * 0.8)
+	_spawn_particles("Fire", 28, 0.95, Color("ffcf66"), Color(1.0, 0.12, 0.015, 0.0), 7.6, 3.4, 1.05, true)
+	_spawn_particles("Sparks", 32, 1.25, Color("fff1a0"), Color(1.0, 0.22, 0.03, 0.0), 19.0, 0.45, 0.095, false)
+	_spawn_particles("Smoke", 30, 3.9, Color(0.16, 0.14, 0.12, 0.78), Color(0.055, 0.06, 0.055, 0.0), 4.0, 1.1, 1.5, true)
+	_spawn_particles("Dust", 34, 2.55, Color(0.36, 0.29, 0.19, 0.6), Color(0.18, 0.15, 0.1, 0.0), 12.0, 0.35, 1.05, true, true)
+	_spawn_debris(18, 0.20)
 	# The mastered explosion clips already include debris and outdoor decay.
 	# Layering the old long blast again would double the report and mask fire.
 	AudioService.play_3d("explosion", global_position, -2.0)
@@ -112,12 +112,15 @@ func _add_flash(size: float, offset := Vector3.ZERO) -> void:
 
 func _build_impact() -> void:
 	var machine := _weapon_kind == "machine_gun"
-	_duration = 0.7 if machine else (1.8 if _heavy else 1.1)
+	if _heavy and not machine:
+		_build_explosive_impact()
+		return
+	_duration = 0.7 if machine else 1.75
 	if _surface_kind == "armor":
 		_spawn_particles("Sparks", 7 if machine else 18, 0.34 if machine else 0.6, Color("ffe69c"), Color(1, 0.22, 0.02, 0), 6.5 if machine else 12.0, 12.0, 0.035 if machine else 0.065, false, false, _normal)
-		_spawn_particles("Smoke", 3 if machine else 7, 0.62 if machine else 1.0, Color.GRAY, Color.TRANSPARENT, 1.0, 0.2, 0.12 if machine else 0.28, true, false, _normal)
+		_spawn_particles("Smoke", 3 if machine else 10, 0.62 if machine else 1.4, Color.GRAY, Color.TRANSPARENT, 1.0, 0.2, 0.12 if machine else 0.46, true, false, _normal)
 	else:
-		_spawn_particles("Dust", 6 if machine else 16, 0.6 if machine else 1.1, Color("81705b"), Color.TRANSPARENT, 3.0, 1.0, 0.13 if machine else 0.36, true, _surface_kind == "ground", _normal)
+		_spawn_particles("Dust", 6 if machine else 20, 0.6 if machine else 1.6, Color("81705b"), Color.TRANSPARENT, 3.0, 1.0, 0.13 if machine else 0.62, true, _surface_kind == "ground", _normal)
 		if not machine:
 			_spawn_debris(5, 0.06)
 	if _heavy:
@@ -132,6 +135,22 @@ func _build_impact() -> void:
 		AudioService.play_3d("explosion", global_position, -8.0, 1.15)
 
 
+func _build_explosive_impact() -> void:
+	# A short overpressure flash gives way to a rolling fire front, expanding
+	# earth/dust and a longer smoke column. HE's 8 m damage radius stays in the
+	# same scale as the visible pressure-driven dust; it is not a glowing ring.
+	_duration = 3.7
+	_add_light(8.5, 16.0)
+	_add_flash(2.5, Vector3.UP * 0.22)
+	_spawn_particles("Fire", 24, 0.90, Color("ffd596"), Color.TRANSPARENT, 8.0, 1.2, 1.20, true)
+	_spawn_particles("BlastSmoke", 24, 3.35, Color.GRAY, Color.TRANSPARENT, 3.7, 0.4, 1.55, true)
+	_spawn_particles("Dust", 30, 2.25, Color("88755f"), Color.TRANSPARENT, 9.0, 0.2, 1.15, true, _surface_kind == "ground", _normal)
+	_spawn_particles("Sparks", 18, 0.9, Color("ffe69c"), Color.TRANSPARENT, 14.0, 10.0, 0.065, false, false, _normal)
+	_spawn_debris(12, 0.13)
+	AudioService.play_3d("explosion", global_position, -1.8, 0.96 if _weapon_kind == "he" else 1.04)
+	AudioService.play_3d("armor_hit" if _surface_kind == "armor" else "ground_hit", global_position, -6.0, 0.94)
+
+
 func _build_muzzle() -> void:
 	var machine := _weapon_kind == "machine_gun"
 	_duration = 0.45 if machine else 0.8
@@ -143,6 +162,17 @@ func _build_muzzle() -> void:
 
 
 func _process(delta: float) -> void:
+	var owner := get_parent()
+	if owner != null and owner.has_method("is_combat_running") and not owner.is_combat_running():
+		var mode: String = str(owner.get("mode")) if "mode" in owner else "paused"
+		if mode not in ["won", "lost"]:
+			for child: Node in get_children():
+				if child is GPUParticles3D:
+					child.speed_scale = 0.0
+			return
+	for child: Node in get_children():
+		if child is GPUParticles3D:
+			child.speed_scale = 1.0
 	_age += delta
 	if is_instance_valid(_light):
 		_light.light_energy = _light_peak * exp(-_age * 24.0)
@@ -210,7 +240,7 @@ func _spawn_particles(label: String, amount: int, lifetime: float, start: Color,
 			process.scale_curve = _growth_curve([Vector2(0.0, 0.4), Vector2(0.18, 1.0), Vector2(0.65, 2.0), Vector2(1.0, 2.7)])
 		"Dust":
 			gradient.set_color(0, Color(0.45, 0.37, 0.28, 0.0))
-			gradient.add_point(0.12, Color(0.43, 0.35, 0.26, 0.52))
+			gradient.add_point(0.12, Color(0.43, 0.35, 0.26, 0.68 if _heavy else 0.52))
 			gradient.add_point(0.5, Color(0.46, 0.40, 0.32, 0.31))
 			gradient.set_color(gradient.get_point_count() - 1, Color(0.48, 0.43, 0.36, 0.0))
 			# Ground pressure displaces dust radially, replacing the luminous torus.
@@ -222,8 +252,8 @@ func _spawn_particles(label: String, amount: int, lifetime: float, start: Color,
 				process.emission_ring_inner_radius = 0.35 if _profile == "destruction" else 0.03
 				process.initial_velocity_min = 0.0
 				process.initial_velocity_max = 0.15
-				process.radial_velocity_min = 3.0 if _profile == "destruction" else 1.2
-				process.radial_velocity_max = 6.0 if _profile == "destruction" else 2.4
+				process.radial_velocity_min = 3.0 if _profile == "destruction" or _heavy else 1.2
+				process.radial_velocity_max = 6.0 if _profile == "destruction" or _heavy else 2.4
 			process.gravity = Vector3.UP * 0.08
 			process.scale_curve = _growth_curve([Vector2(0.0, 0.25), Vector2(0.2, 1.1), Vector2(1.0, 2.4)])
 		"Sparks":

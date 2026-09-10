@@ -1,5 +1,5 @@
 extends SceneTree
-## Reproducible input-driven playthrough. Uses real TankActor/Jolt/projectiles,
+## Input-driven playthrough with a fixed deployment. Uses real TankActor/Jolt/projectiles,
 ## ordinary HP/damage and test saves. Not a human playthrough or a forced win.
 ## --headless --fixed-fps 60 --path pc-godot --script res://tests/pacing_playtest.gd -- --test --label=current
 ## Optional --output-dir=<absolute-directory> chooses the JSON destination.
@@ -29,6 +29,7 @@ func _run() -> void:
 			output_label = argument.trim_prefix("--label=").validate_filename()
 		elif argument.begins_with("--output-dir="):
 			output_directory = argument.trim_prefix("--output-dir=")
+	root.get_node("SaveService").set("_directory", "user://tests/pacing_playtest")
 	root.get_node("SaveService").reset_for_tests()
 	for scenario in ["opening_hold", "street_maneuver", "boss_encounter"]:
 		await _scenario(scenario, 30.0 if scenario == "opening_hold" else 90.0)
@@ -47,7 +48,7 @@ func _run() -> void:
 	DirAccess.make_dir_recursive_absolute(directory)
 	var document := {
 		"label": output_label,
-		"method": "Real 60 Hz Godot/Jolt scene; input actions steer, aim, fire and EMP; default HP and damage; no forced damage or wins. Boss fixture starts a full-health boss encounter at legal arena coordinates. This is a deterministic automated playtest, not human input.",
+		"method": "Real 60 Hz Godot/Jolt scene; fixed initial deployment and input tactics; randomized shot spread and wrecks may vary results. Input actions steer, aim, fire and EMP; default HP and damage; no forced damage or wins. Boss fixture starts a full-health boss encounter at legal arena coordinates. This is an automated playtest, not human input.",
 		"results": results,
 	}
 	var output := FileAccess.open(directory.path_join(output_label + ".json"), FileAccess.WRITE)
@@ -57,7 +58,7 @@ func _run() -> void:
 		return
 	output.store_string(JSON.stringify(document, "\t"))
 	print("PACING_PLAYTEST_COMPLETE: " + directory.path_join(output_label + ".json"))
-	quit(0)
+	await preload("res://tests/test_shutdown.gd").finish(self, 0)
 
 
 func _scenario(scenario: String, duration: float) -> void:
@@ -69,6 +70,7 @@ func _scenario(scenario: String, duration: float) -> void:
 	seed(260908)
 	game = load("res://scenes/main/main.tscn").instantiate()
 	root.add_child(game)
+	game.set_meta("deployment_seed", 260908)
 	game.start_game()
 	game.child_entered_tree.connect(_on_child_entered)
 	# Keeping this signal connected is representative in the rendered game. A

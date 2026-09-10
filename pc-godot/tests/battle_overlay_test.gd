@@ -104,4 +104,4 @@ func _run() -> void:
 	game.free()
 	await process_frame
 	print("BATTLE_OVERLAY_RESULT: %d passed, %d failed" % [passed, failed])
-	quit(0 if failed == 0 else 1)
+	await preload("res://tests/test_shutdown.gd").finish(self, 0 if failed == 0 else 1)

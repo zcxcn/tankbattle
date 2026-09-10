@@ -29,7 +29,7 @@ func _initialize() -> void:
 			% [_passed + _failed - 1, EXPECTED_CHECKS]
 		)
 	print("\n%d passed, %d failed" % [_passed, _failed])
-	quit(0 if _failed == 0 else 1)
+	await preload("res://tests/test_shutdown.gd").finish(self, 0 if _failed == 0 else 1)
 
 
 func _check(condition: bool, message: String) -> void:

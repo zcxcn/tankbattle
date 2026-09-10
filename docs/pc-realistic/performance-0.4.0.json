@@ -1,0 +1,786 @@
+{
+  "engine": {
+    "build": "official",
+    "hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
+    "hex": 263938,
+    "major": 4,
+    "minor": 7,
+    "patch": 2,
+    "status": "stable",
+    "string": "4.7.2-stable (official)",
+    "timestamp": 0
+  },
+  "gpu": "NVIDIA GeForce GTX 1660 SUPER",
+  "method": "Real-time, uncapped, VSync disabled; live AI; stationary invulnerable player; third-person view at (0,142); 60 warm-up and 240 measured frames; no screenshots or disk IO inside sampling loops; same player chassis in all chapters. Final chapter retains all 24 live vehicles and adds 14 wrecks along the viewed road to measure retained aftermath cost.",
+  "results": [
+    {
+      "average_fps": 82.3744433289572,
+      "cpu_render_ms": {
+        "max": 6.26100015640259,
+        "mean": 2.77797917028268,
+        "median": 2.97900009155273,
+        "p95": 4.10300016403198
+      },
+      "draw_calls": {
+        "max": 809.0,
+        "mean": 807.970833333333,
+        "median": 808.0,
+        "p95": 809.0
+      },
+      "frame_ms": {
+        "max": 17.871,
+        "mean": 12.1396875,
+        "median": 12.056,
+        "p95": 15.657
+      },
+      "game_mode": "playing",
+      "gpu_render_ms": {
+        "max": 12.4289999008179,
+        "mean": 11.5595208247503,
+        "median": 11.4849996566772,
+        "p95": 12.1990003585815
+      },
+      "live_vehicles": 8,
+      "mission": 1,
+      "mission_name": "工业外围",
+      "msaa": 2,
+      "physics_ms": {
+        "max": 5.493,
+        "mean": 4.58927500000001,
+        "median": 4.725,
+        "p95": 5.493
+      },
+      "player_position": [
+        0.0,
+        -0.0650000125169754,
+        142.0
+      ],
+      "primitives": {
+        "max": 2882615.0,
+        "mean": 2882370.725,
+        "median": 2882221.0,
+        "p95": 2882615.0
+      },
+      "process_ms": {
+        "max": 32.184,
+        "mean": 18.5565625000001,
+        "median": 13.001,
+        "p95": 32.184
+      },
+      "profile": "1440p_high",
+      "render_scale": 1.0,
+      "sample_frames": 240,
+      "warmup_frames": 60,
+      "window_size": [
+        2560,
+        1440
+      ],
+      "wrecks": 0
+    },
+    {
+      "average_fps": 82.2534145448713,
+      "cpu_render_ms": {
+        "max": 6.74399995803833,
+        "mean": 2.89179167101781,
+        "median": 2.73200011253357,
+        "p95": 3.96600008010864
+      },
+      "draw_calls": {
+        "max": 990.0,
+        "mean": 965.6,
+        "median": 961.0,
+        "p95": 987.0
+      },
+      "frame_ms": {
+        "max": 19.824,
+        "mean": 12.15755,
+        "median": 12.212,
+        "p95": 16.29
+      },
+      "game_mode": "playing",
+      "gpu_render_ms": {
+        "max": 12.1470003128052,
+        "mean": 11.2756124893824,
+        "median": 11.1059999465942,
+        "p95": 11.9399995803833
+      },
+      "live_vehicles": 11,
+      "mission": 2,
+      "mission_name": "补给港区",
+      "msaa": 2,
+      "physics_ms": {
+        "max": 7.135,
+        "mean": 6.46733750000001,
+        "median": 6.961,
+        "p95": 7.135
+      },
+      "player_position": [
+        0.0,
+        -0.0650000125169754,
+        142.0
+      ],
+      "primitives": {
+        "max": 3119115.0,
+        "mean": 3090322.2625,
+        "median": 3105347.0,
+        "p95": 3116947.0
+      },
+      "process_ms": {
+        "max": 42.118,
+        "mean": 18.2881041666667,
+        "median": 15.393,
+        "p95": 42.118
+      },
+      "profile": "1440p_high",
+      "render_scale": 1.0,
+      "sample_frames": 240,
+      "warmup_frames": 60,
+      "window_size": [
+        2560,
+        1440
+      ],
+      "wrecks": 0
+    },
+    {
+      "average_fps": 70.198961406366,
+      "cpu_render_ms": {
+        "max": 7.82299995422363,
+        "mean": 3.07347082396348,
+        "median": 2.46300005912781,
+        "p95": 4.46999979019165
+      },
+      "draw_calls": {
+        "max": 1053.0,
+        "mean": 1039.4125,
+        "median": 1036.0,
+        "p95": 1053.0
+      },
+      "frame_ms": {
+        "max": 133.919,
+        "mean": 14.245225,
+        "median": 13.357,
+        "p95": 18.471
+      },
+      "game_mode": "playing",
+      "gpu_render_ms": {
+        "max": 13.8500003814697,
+        "mean": 12.877816649278,
+        "median": 12.6549997329712,
+        "p95": 13.6350002288818
+      },
+      "live_vehicles": 14,
+      "mission": 3,
+      "mission_name": "指挥堡垒",
+      "msaa": 2,
+      "physics_ms": {
+        "max": 8.578,
+        "mean": 6.942125,
+        "median": 6.229,
+        "p95": 8.578
+      },
+      "player_position": [
+        0.0,
+        -0.0650000125169754,
+        142.0
+      ],
+      "primitives": {
+        "max": 3524553.0,
+        "mean": 3520007.35,
+        "median": 3519655.0,
+        "p95": 3524553.0
+      },
+      "process_ms": {
+        "max": 27.852,
+        "mean": 17.2818958333333,
+        "median": 14.317,
+        "p95": 27.852
+      },
+      "profile": "1440p_high",
+      "render_scale": 1.0,
+      "sample_frames": 240,
+      "warmup_frames": 60,
+      "window_size": [
+        2560,
+        1440
+      ],
+      "wrecks": 0
+    },
+    {
+      "average_fps": 69.210758004873,
+      "cpu_render_ms": {
+        "max": 7.95800018310547,
+        "mean": 3.22695001165072,
+        "median": 2.66199994087219,
+        "p95": 4.81599998474121
+      },
+      "draw_calls": {
+        "max": 1124.0,
+        "mean": 1115.71666666667,
+        "median": 1115.0,
+        "p95": 1124.0
+      },
+      "frame_ms": {
+        "max": 20.995,
+        "mean": 14.4486208333333,
+        "median": 14.451,
+        "p95": 19.342
+      },
+      "game_mode": "playing",
+      "gpu_render_ms": {
+        "max": 14.3470001220703,
+        "mean": 13.4869249900182,
+        "median": 13.4449996948242,
+        "p95": 14.1099996566772
+      },
+      "live_vehicles": 17,
+      "mission": 4,
+      "mission_name": "钢厂反击",
+      "msaa": 2,
+      "physics_ms": {
+        "max": 7.474,
+        "mean": 7.07352500000001,
+        "median": 7.062,
+        "p95": 7.474
+      },
+      "player_position": [
+        0.0,
+        -0.0650000125169754,
+        142.0
+      ],
+      "primitives": {
+        "max": 4845381.0,
+        "mean": 4845268.68333333,
+        "median": 4845281.0,
+        "p95": 4845345.0
+      },
+      "process_ms": {
+        "max": 26.361,
+        "mean": 16.4802875,
+        "median": 14.576,
+        "p95": 26.361
+      },
+      "profile": "1440p_high",
+      "render_scale": 1.0,
+      "sample_frames": 240,
+      "warmup_frames": 60,
+      "window_size": [
+        2560,
+        1440
+      ],
+      "wrecks": 0
+    },
+    {
+      "average_fps": 68.1081568882746,
+      "cpu_render_ms": {
+        "max": 8.34700012207031,
+        "mean": 3.71137082974116,
+        "median": 4.31400012969971,
+        "p95": 5.28599977493286
+      },
+      "draw_calls": {
+        "max": 1321.0,
+        "mean": 1311.32083333333,
+        "median": 1316.0,
+        "p95": 1319.0
+      },
+      "frame_ms": {
+        "max": 21.815,
+        "mean": 14.6825291666667,
+        "median": 14.037,
+        "p95": 20.181
+      },
+      "game_mode": "playing",
+      "gpu_render_ms": {
+        "max": 13.8509998321533,
+        "mean": 12.7012625058492,
+        "median": 12.5659999847412,
+        "p95": 13.3420000076294
+      },
+      "live_vehicles": 20,
+      "mission": 5,
+      "mission_name": "港口封锁",
+      "msaa": 2,
+      "physics_ms": {
+        "max": 9.274,
+        "mean": 8.49961249999996,
+        "median": 8.589,
+        "p95": 9.274
+      },
+      "player_position": [
+        0.0,
+        -0.0650000125169754,
+        142.0
+      ],
+      "primitives": {
+        "max": 5291423.0,
+        "mean": 5221409.15833333,
+        "median": 5221595.0,
+        "p95": 5291423.0
+      },
+      "process_ms": {
+        "max": 39.295,
+        "mean": 16.7732499999999,
+        "median": 14.084,
+        "p95": 39.295
+      },
+      "profile": "1440p_high",
+      "render_scale": 1.0,
+      "sample_frames": 240,
+      "warmup_frames": 60,
+      "window_size": [
+        2560,
+        1440
+      ],
+      "wrecks": 0
+    },
+    {
+      "average_fps": 54.0641119271288,
+      "cpu_render_ms": {
+        "max": 11.5419998168945,
+        "mean": 4.48014166454474,
+        "median": 3.44099998474121,
+        "p95": 6.80600023269653
+      },
+      "draw_calls": {
+        "max": 1949.0,
+        "mean": 1854.45416666667,
+        "median": 1842.0,
+        "p95": 1944.0
+      },
+      "frame_ms": {
+        "max": 38.27,
+        "mean": 18.4965583333333,
+        "median": 16.985,
+        "p95": 28.725
+      },
+      "game_mode": "playing",
+      "gpu_render_ms": {
+        "max": 16.6940002441406,
+        "mean": 15.1674582958221,
+        "median": 15.1909999847412,
+        "p95": 16.3199996948242
+      },
+      "live_vehicles": 24,
+      "mission": 6,
+      "mission_name": "最后壁垒",
+      "msaa": 2,
+      "physics_ms": {
+        "max": 14.496,
+        "mean": 11.3720458333334,
+        "median": 10.93,
+        "p95": 14.496
+      },
+      "player_position": [
+        0.0,
+        -0.0650000125169754,
+        142.0
+      ],
+      "primitives": {
+        "max": 8452108.0,
+        "mean": 8232754.30833333,
+        "median": 8200690.0,
+        "p95": 8450880.0
+      },
+      "process_ms": {
+        "max": 31.259,
+        "mean": 22.5549374999999,
+        "median": 21.97,
+        "p95": 31.259
+      },
+      "profile": "1440p_high",
+      "render_scale": 1.0,
+      "sample_frames": 240,
+      "warmup_frames": 60,
+      "window_size": [
+        2560,
+        1440
+      ],
+      "wrecks": 14
+    },
+    {
+      "average_fps": 134.716119457274,
+      "cpu_render_ms": {
+        "max": 6.35799980163574,
+        "mean": 2.4166958262523,
+        "median": 1.91799998283386,
+        "p95": 3.58100008964539
+      },
+      "draw_calls": {
+        "max": 804.0,
+        "mean": 804.0,
+        "median": 804.0,
+        "p95": 804.0
+      },
+      "frame_ms": {
+        "max": 15.379,
+        "mean": 7.42301666666666,
+        "median": 7.381,
+        "p95": 11.293
+      },
+      "game_mode": "playing",
+      "gpu_render_ms": {
+        "max": 6.48699998855591,
+        "mean": 5.63584581812223,
+        "median": 5.50899982452393,
+        "p95": 6.09999990463257
+      },
+      "live_vehicles": 8,
+      "mission": 1,
+      "mission_name": "工业外围",
+      "msaa": 1,
+      "physics_ms": {
+        "max": 4.785,
+        "mean": 3.57485833333332,
+        "median": 3.611,
+        "p95": 4.785
+      },
+      "player_position": [
+        0.0,
+        -0.0650000125169754,
+        142.0
+      ],
+      "primitives": {
+        "max": 2826664.0,
+        "mean": 2826664.0,
+        "median": 2826664.0,
+        "p95": 2826664.0
+      },
+      "process_ms": {
+        "max": 16.366,
+        "mean": 14.8106166666667,
+        "median": 15.264,
+        "p95": 16.366
+      },
+      "profile": "1080p_medium",
+      "render_scale": 0.850000023841858,
+      "sample_frames": 240,
+      "warmup_frames": 60,
+      "window_size": [
+        1920,
+        1080
+      ],
+      "wrecks": 0
+    },
+    {
+      "average_fps": 109.586338966984,
+      "cpu_render_ms": {
+        "max": 6.89900016784668,
+        "mean": 2.87145833621422,
+        "median": 2.30900001525879,
+        "p95": 4.0770001411438
+      },
+      "draw_calls": {
+        "max": 967.0,
+        "mean": 956.783333333333,
+        "median": 956.0,
+        "p95": 964.0
+      },
+      "frame_ms": {
+        "max": 18.883,
+        "mean": 9.125225,
+        "median": 8.72,
+        "p95": 13.985
+      },
+      "game_mode": "playing",
+      "gpu_render_ms": {
+        "max": 6.54699993133545,
+        "mean": 5.552545829614,
+        "median": 5.45100021362305,
+        "p95": 6.04099988937378
+      },
+      "live_vehicles": 11,
+      "mission": 2,
+      "mission_name": "补给港区",
+      "msaa": 1,
+      "physics_ms": {
+        "max": 7.531,
+        "mean": 5.90233333333331,
+        "median": 4.694,
+        "p95": 7.531
+      },
+      "player_position": [
+        0.0,
+        -0.0650000125169754,
+        142.0
+      ],
+      "primitives": {
+        "max": 3021264.0,
+        "mean": 2988651.2625,
+        "median": 3006303.0,
+        "p95": 3017516.0
+      },
+      "process_ms": {
+        "max": 26.11,
+        "mean": 21.3537333333334,
+        "median": 22.942,
+        "p95": 26.11
+      },
+      "profile": "1080p_medium",
+      "render_scale": 0.850000023841858,
+      "sample_frames": 240,
+      "warmup_frames": 60,
+      "window_size": [
+        1920,
+        1080
+      ],
+      "wrecks": 0
+    },
+    {
+      "average_fps": 100.056698795984,
+      "cpu_render_ms": {
+        "max": 5.51900005340576,
+        "mean": 2.94477082441251,
+        "median": 2.44300007820129,
+        "p95": 4.44999980926514
+      },
+      "draw_calls": {
+        "max": 1048.0,
+        "mean": 1039.60416666667,
+        "median": 1043.0,
+        "p95": 1048.0
+      },
+      "frame_ms": {
+        "max": 18.205,
+        "mean": 9.99433333333334,
+        "median": 9.761,
+        "p95": 16.222
+      },
+      "game_mode": "playing",
+      "gpu_render_ms": {
+        "max": 7.47300004959106,
+        "mean": 6.51907915870349,
+        "median": 6.375,
+        "p95": 7.2960000038147
+      },
+      "live_vehicles": 14,
+      "mission": 3,
+      "mission_name": "指挥堡垒",
+      "msaa": 1,
+      "physics_ms": {
+        "max": 6.01,
+        "mean": 5.90268750000001,
+        "median": 5.849,
+        "p95": 6.01
+      },
+      "player_position": [
+        0.0,
+        -0.0650000125169754,
+        142.0
+      ],
+      "primitives": {
+        "max": 3407301.0,
+        "mean": 3403919.54166667,
+        "median": 3402403.0,
+        "p95": 3407301.0
+      },
+      "process_ms": {
+        "max": 16.511,
+        "mean": 13.3727708333334,
+        "median": 12.889,
+        "p95": 16.511
+      },
+      "profile": "1080p_medium",
+      "render_scale": 0.850000023841858,
+      "sample_frames": 240,
+      "warmup_frames": 60,
+      "window_size": [
+        1920,
+        1080
+      ],
+      "wrecks": 0
+    },
+    {
+      "average_fps": 94.2890312391346,
+      "cpu_render_ms": {
+        "max": 6.58300018310547,
+        "mean": 2.97545000364383,
+        "median": 2.47099995613098,
+        "p95": 4.51599979400635
+      },
+      "draw_calls": {
+        "max": 1127.0,
+        "mean": 1120.87916666667,
+        "median": 1122.0,
+        "p95": 1126.0
+      },
+      "frame_ms": {
+        "max": 19.624,
+        "mean": 10.6056875,
+        "median": 10.609,
+        "p95": 16.67
+      },
+      "game_mode": "playing",
+      "gpu_render_ms": {
+        "max": 7.8289999961853,
+        "mean": 6.88222499489784,
+        "median": 6.70100021362305,
+        "p95": 7.70499992370605
+      },
+      "live_vehicles": 17,
+      "mission": 4,
+      "mission_name": "钢厂反击",
+      "msaa": 1,
+      "physics_ms": {
+        "max": 8.733,
+        "mean": 7.50203749999998,
+        "median": 7.016,
+        "p95": 8.733
+      },
+      "player_position": [
+        0.0,
+        -0.0650000125169754,
+        142.0
+      ],
+      "primitives": {
+        "max": 4722856.0,
+        "mean": 4722588.61666667,
+        "median": 4722720.0,
+        "p95": 4722856.0
+      },
+      "process_ms": {
+        "max": 13.07,
+        "mean": 11.9422791666667,
+        "median": 11.893,
+        "p95": 13.07
+      },
+      "profile": "1080p_medium",
+      "render_scale": 0.850000023841858,
+      "sample_frames": 240,
+      "warmup_frames": 60,
+      "window_size": [
+        1920,
+        1080
+      ],
+      "wrecks": 0
+    },
+    {
+      "average_fps": 73.7117489770959,
+      "cpu_render_ms": {
+        "max": 8.92500019073486,
+        "mean": 3.65973750303189,
+        "median": 3.30299997329712,
+        "p95": 5.07299995422363
+      },
+      "draw_calls": {
+        "max": 1319.0,
+        "mean": 1313.27083333333,
+        "median": 1315.0,
+        "p95": 1318.0
+      },
+      "frame_ms": {
+        "max": 26.027,
+        "mean": 13.5663583333333,
+        "median": 12.811,
+        "p95": 19.256
+      },
+      "game_mode": "playing",
+      "gpu_render_ms": {
+        "max": 7.48600006103516,
+        "mean": 6.4366291642189,
+        "median": 6.32399988174438,
+        "p95": 6.89499998092651
+      },
+      "live_vehicles": 20,
+      "mission": 5,
+      "mission_name": "港口封锁",
+      "msaa": 1,
+      "physics_ms": {
+        "max": 12.381,
+        "mean": 9.82644999999999,
+        "median": 8.028,
+        "p95": 12.381
+      },
+      "player_position": [
+        0.0,
+        -0.0650000125169754,
+        142.0
+      ],
+      "primitives": {
+        "max": 5034233.0,
+        "mean": 5031090.95,
+        "median": 5034017.0,
+        "p95": 5034233.0
+      },
+      "process_ms": {
+        "max": 35.163,
+        "mean": 18.4935166666667,
+        "median": 14.452,
+        "p95": 35.163
+      },
+      "profile": "1080p_medium",
+      "render_scale": 0.850000023841858,
+      "sample_frames": 240,
+      "warmup_frames": 60,
+      "window_size": [
+        1920,
+        1080
+      ],
+      "wrecks": 0
+    },
+    {
+      "average_fps": 60.8609851415512,
+      "cpu_render_ms": {
+        "max": 11.5629997253418,
+        "mean": 4.29824167788029,
+        "median": 3.37700009346008,
+        "p95": 6.23099994659424
+      },
+      "draw_calls": {
+        "max": 1935.0,
+        "mean": 1854.61666666667,
+        "median": 1855.0,
+        "p95": 1932.0
+      },
+      "frame_ms": {
+        "max": 36.153,
+        "mean": 16.4308875,
+        "median": 14.739,
+        "p95": 26.443
+      },
+      "game_mode": "playing",
+      "gpu_render_ms": {
+        "max": 9.48400020599365,
+        "mean": 8.32981251080831,
+        "median": 8.2209997177124,
+        "p95": 8.96300029754639
+      },
+      "live_vehicles": 24,
+      "mission": 6,
+      "mission_name": "最后壁垒",
+      "msaa": 1,
+      "physics_ms": {
+        "max": 15.558,
+        "mean": 13.0659291666666,
+        "median": 13.312,
+        "p95": 15.558
+      },
+      "player_position": [
+        0.0,
+        -0.0650000125169754,
+        142.0
+      ],
+      "primitives": {
+        "max": 8245796.0,
+        "mean": 8078159.88333333,
+        "median": 8037713.0,
+        "p95": 8241779.0
+      },
+      "process_ms": {
+        "max": 22.781,
+        "mean": 17.0443708333333,
+        "median": 15.959,
+        "p95": 18.989
+      },
+      "profile": "1080p_medium",
+      "render_scale": 0.850000023841858,
+      "sample_frames": 240,
+      "warmup_frames": 60,
+      "window_size": [
+        1920,
+        1080
+      ],
+      "wrecks": 14
+    }
+  ],
+  "verification_note": "Valid first GPU benchmark before distant-wheel/audio culling optimizations. Retest was affected by Windows access denied and approximately 1 FPS desktop throttling; no post-optimization performance gain is claimed."
+}

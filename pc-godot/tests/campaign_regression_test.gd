@@ -44,7 +44,7 @@ func _check_win(index: int, lifetime_before: int) -> void:
 	_destroy(defeated_boss)
 	_check(game.mode == "won" and index in SaveService.profile.completed_missions, "chapter %d boss destruction completes and persists the mission" % (index + 1))
 	_check(int(SaveService.profile.lifetime_kills) == lifetime_before + 1, "chapter %d boss is credited exactly once" % (index + 1))
-	_check(game.unlocked_mission_count() == mini(3, index + 2), "chapter %d unlocks only its following chapter" % (index + 1))
+	_check(game.unlocked_mission_count() == mini(6, index + 2), "chapter %d unlocks only its following chapter" % (index + 1))
 	var score_at_win: int = game.score
 	var profile_at_win := SaveService.profile.duplicate(true)
 	game._on_tank_destroyed(defeated_boss, 0)
@@ -125,10 +125,11 @@ func _run() -> void:
 	_check(SaveService.profile.upgrade_points == 2, "first completion grants exactly two upgrade points")
 	game.next_mission()
 	_freeze_actors()
-	_check(game.mode == "playing" and game.mission_index == 1 and game.enemies.size() == 9 and game.mission_data.objective_type == "capture", "next mission loads the harbor capture scenario and eight patrols")
+	_check(game.mode == "playing" and game.mission_index == 1 and game.enemies.size() == 10 and game.mission_data.objective_type == "capture", "next mission loads the harbor capture scenario and nine patrols")
 	_check(game._supply_points.size() == 3 and game.mission_kills == 0 and not game.boss.active, "new chapter replaces supplies and resets encounter progress")
 
 	var capture_at: Vector3 = game.mission_data.objective_position
+	game.enemies[0].global_position = capture_at + Vector3(6, 0, 0)
 	game.player.global_position = capture_at
 	game._update_encounters(30.0)
 	_check(game.objective_progress == 0.0 and not game.boss.active and "争夺" in game.objective, "an enemy inside the capture perimeter blocks capture progress")
@@ -140,7 +141,7 @@ func _run() -> void:
 	_check(game.objective_progress == 0.0, "capture does not advance outside the marked zone")
 	game.player.global_position = capture_at
 	game._update_encounters(6.0)
-	_check(is_equal_approx(game.objective_progress, 6.0) and not game.boss.active, "half the required uncontested hold time advances only half the capture")
+	_check(is_equal_approx(game.objective_progress, 6.0) and not game.boss.active, "partial uncontested hold time advances capture without completing it")
 	game.pause_game()
 	game._process(30.0)
 	_check(is_equal_approx(game.objective_progress, 6.0) and game.mode == "paused", "pausing freezes capture time")
@@ -149,13 +150,13 @@ func _run() -> void:
 	game._update_encounters(30.0)
 	_check(is_equal_approx(game.objective_progress, 6.0), "leaving the zone holds accumulated capture progress")
 	game.player.global_position = capture_at
-	game._update_encounters(6.0)
+	game._update_encounters(float(game.mission_data.objective_seconds) - 6.0)
 	_check(game.objective_complete and game.boss.active and _gate_is_open() and game.mission_kills == 0, "full uncontested capture unlocks the boss without requiring every patrol kill")
 	_check_win(1, int(SaveService.profile.lifetime_kills))
 	_check(SaveService.profile.upgrade_points == 4, "second distinct mission awards only its own two points")
 	game.next_mission()
 	_freeze_actors()
-	_check(game.mode == "playing" and game.mission_index == 2 and game.enemies.size() == 11 and game.mission_data.objective_type == "demolition", "next mission loads the fortress demolition scenario and ten patrols")
+	_check(game.mode == "playing" and game.mission_index == 2 and game.enemies.size() == 13 and game.mission_data.objective_type == "demolition", "next mission loads the fortress demolition scenario and twelve patrols")
 	var fuel: Node = game.mission_target
 	_check(is_instance_valid(fuel) and fuel.hp == 320.0 and fuel.collision_layer == 1, "demolition creates a damageable solid fuel-depot objective")
 	fuel.receive_damage(320.0, 1, fuel.position)
@@ -171,10 +172,32 @@ func _run() -> void:
 	game._update_encounters(0.0)
 	_check(fuel.destroyed and fuel.collision_layer == 0 and not fuel.visible and game.objective_complete and game.boss.active and _gate_is_open(), "destroying the depot removes its obstruction and activates the final boss")
 	_check_win(2, int(SaveService.profile.lifetime_kills))
-	_check(SaveService.profile.completed_missions == [0, 1, 2] and SaveService.profile.upgrade_points == 6, "campaign persists each chapter once with six total upgrade points")
+	_check(SaveService.profile.completed_missions == [0, 1, 2] and SaveService.profile.upgrade_points == 6, "first three chapters persist once with six total upgrade points")
+	for chapter in range(3, 6):
+		game.next_mission()
+		_freeze_actors()
+		_check(game.mission_index == chapter and game.enemies.size() == [16, 19, 23][chapter - 3], "later chapter %d deploys its increasing roster" % (chapter + 1))
+		_check(game.enemies[0].max_hp > 86.0 and game.enemies[0].projectile_damage > 18.0, "later chapter %d increases vehicle strength" % (chapter + 1))
+		match str(game.mission_data.objective_type):
+			"clear":
+				for enemy in game.enemies.duplicate():
+					if enemy != game.boss:
+						_destroy(enemy)
+			"capture":
+				for enemy in game.enemies:
+					if enemy != game.boss:
+						enemy.position = Vector3(0, 0.05, 100)
+				game.player.position = game.mission_data.objective_position
+				game._update_encounters(float(game.mission_data.objective_seconds))
+			"demolition":
+				game.mission_target.receive_damage(320.0, 0, game.mission_target.position)
+				game._update_encounters(0.0)
+		_check(game.objective_complete and game.boss.active, "later chapter %d requires its objective before the boss" % (chapter + 1))
+		_check_win(chapter, int(SaveService.profile.lifetime_kills))
+	_check(SaveService.profile.completed_missions == [0, 1, 2, 3, 4, 5] and SaveService.profile.upgrade_points == 12, "all six missions persist one reward each")
 	var final_run: String = game.current_run_id
 	game.next_mission()
-	_check(game.mode == "won" and game.current_run_id == final_run and game.mission_index == 2 and not game.get_ui_snapshot().has_next_mission, "final victory does not create a nonexistent fourth chapter")
+	_check(game.mode == "won" and game.current_run_id == final_run and game.mission_index == 5 and not game.get_ui_snapshot().has_next_mission, "final victory does not create a nonexistent seventh chapter")
 	game.return_to_menu()
 	game.selected_mission = 0
 	game.start_game()
@@ -183,8 +206,8 @@ func _run() -> void:
 		if enemy != game.boss:
 			_destroy(enemy)
 	_destroy(game.boss)
-	_check(game.mode == "won" and SaveService.profile.upgrade_points == 6 and SaveService.profile.completed_missions == [0, 1, 2], "replaying a completed chapter never duplicates unlock rewards")
+	_check(game.mode == "won" and SaveService.profile.upgrade_points == 12 and SaveService.profile.completed_missions == [0, 1, 2, 3, 4, 5], "replaying a completed chapter never duplicates unlock rewards")
 	game.free()
 	await get_tree().process_frame
 	print("CAMPAIGN_REGRESSION_RESULT: %d passed, %d failed" % [passed, failed])
-	get_tree().quit(0 if failed == 0 else 1)
+	await preload("res://tests/test_shutdown.gd").finish(get_tree(), 0 if failed == 0 else 1)

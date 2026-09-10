@@ -85,4 +85,4 @@ func _run() -> void:
 	ui.queue_free()
 	await process_frame
 	print("GameUI smoke test passed")
-	quit(0)
+	await preload("res://tests/test_shutdown.gd").finish(self, 0)

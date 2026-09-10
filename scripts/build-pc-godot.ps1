@@ -92,7 +92,7 @@ if (-not $SkipTests) {
     Assert-LastExitCode -Action "Godot integration tests"
 
     Write-Host "Running imported wheel geometry and motion tests..."
-    & $GodotPath --headless --path $projectRoot --script "res://tests/tracked_drive_test.gd"
+    & $GodotPath --headless --path $projectRoot --script "res://tests/tracked_drive_test.gd" -- --test
     Assert-LastExitCode -Action "Godot tracked drive tests"
 
     Write-Host "Running explosion particle resource tests..."
@@ -132,6 +132,14 @@ if (-not $SkipTests) {
     Assert-LastExitCode -Action "Godot campaign progression tests"
     & $GodotPath --headless --path $projectRoot --script "res://tests/camera_regression_test.gd" -- --test
     Assert-LastExitCode -Action "Godot camera collision tests"
+
+    Write-Host "Running expanded deployment, wreck and battlefield audio tests..."
+    & $GodotPath --headless --path $projectRoot --script "res://tests/deployment_expansion_test.gd" -- --test
+    Assert-LastExitCode -Action "Godot expanded deployment tests"
+    & $GodotPath --headless --path $projectRoot "res://tests/tank_wreck_test.tscn" -- --test
+    Assert-LastExitCode -Action "Godot wreck and cookoff tests"
+    & $GodotPath --headless --path $projectRoot "res://tests/audio_battlefield_test.tscn" -- --test
+    Assert-LastExitCode -Action "Godot battlefield audio tests"
 }
 
 $outputRoot = [System.IO.Path]::GetFullPath((Join-Path $repositoryRoot "outputs/pc-godot"))
@@ -160,6 +168,11 @@ $creditSources = [ordered]@{
     "THIRD_PARTY_ASSETS.md" = "assets/THIRD_PARTY_ASSETS.md"
     "audio/README.md" = "assets/audio/combat/README.md"
     "audio/provenance.json" = "assets/audio/combat/provenance.json"
+    "audio/battlefield/README.md" = "assets/audio/battlefield/README.md"
+    "audio/battlefield/provenance.json" = "assets/audio/battlefield/provenance.json"
+    "models/environment/CREDITS.md" = "assets/models/environment/polyhaven_factory/CREDITS.md"
+    "models/environment/LICENSE.txt" = "assets/models/environment/polyhaven_factory/LICENSE.txt"
+    "models/ordnance/README.md" = "assets/models/ordnance/README.md"
     "models/challenger2/SOURCE_LICENSE.txt" = "assets/models/realistic/challenger2/SOURCE_LICENSE.txt"
     "models/kf51/SOURCE_LICENSE.txt" = "assets/models/realistic/kf51/SOURCE_LICENSE.txt"
     "models/kv2/SOURCE_LICENSE.txt" = "assets/models/realistic/kv2/SOURCE_LICENSE.txt"
@@ -175,7 +188,7 @@ foreach ($credit in $creditSources.GetEnumerator()) {
     }
 }
 
-$productVersion = "0.3.0"
+$productVersion = "0.4.0"
 $manifestPath = Join-Path $artifactDirectory "build-manifest.json"
 $payloadFiles = @(Get-ChildItem -LiteralPath $artifactDirectory -File -Recurse | Sort-Object FullName)
 $manifestFiles = @(

@@ -1,0 +1,192 @@
+{
+  "result": "PASS",
+  "checks": 93,
+  "assets": 23,
+  "bytes": 8133618,
+  "files": [
+    {
+      "file": "music/industrial-war.wav",
+      "peak_dbfs": -1.111,
+      "rms_dbfs": -12.432,
+      "duration": 14.118,
+      "loop_seam": 0.00262451171875,
+      "ffmpeg_decode": "PASS"
+    },
+    {
+      "file": "music/electronic-pursuit.wav",
+      "peak_dbfs": -1.111,
+      "rms_dbfs": -12.67,
+      "duration": 12.0,
+      "loop_seam": 0.00421142578125,
+      "ffmpeg_decode": "PASS"
+    },
+    {
+      "file": "music/epic-siege.wav",
+      "peak_dbfs": -1.111,
+      "rms_dbfs": -12.008,
+      "duration": 13.333,
+      "loop_seam": 0.00286865234375,
+      "ffmpeg_decode": "PASS"
+    },
+    {
+      "file": "vehicle/track-engine.wav",
+      "peak_dbfs": -2.159,
+      "rms_dbfs": -15.016,
+      "duration": 4.8,
+      "loop_seam": 0.0,
+      "ffmpeg_decode": "PASS"
+    },
+    {
+      "file": "vehicle/track-treads.wav",
+      "peak_dbfs": -2.854,
+      "rms_dbfs": -15.558,
+      "duration": 2.5,
+      "loop_seam": 0.0,
+      "ffmpeg_decode": "PASS"
+    },
+    {
+      "file": "vehicle/track-turn.wav",
+      "peak_dbfs": -4.732,
+      "rms_dbfs": -18.372,
+      "duration": 2.5,
+      "loop_seam": 0.0,
+      "ffmpeg_decode": "PASS"
+    },
+    {
+      "file": "radio/ammo_depleted.wav",
+      "peak_dbfs": -2.328,
+      "rms_dbfs": -19.968,
+      "duration": 3.545,
+      "radio_band_energy_fraction": 0.9843,
+      "ffmpeg_decode": "PASS"
+    },
+    {
+      "file": "radio/ammo_low.wav",
+      "peak_dbfs": -2.306,
+      "rms_dbfs": -20.751,
+      "duration": 3.397,
+      "radio_band_energy_fraction": 0.9819,
+      "ffmpeg_decode": "PASS"
+    },
+    {
+      "file": "radio/armor_critical.wav",
+      "peak_dbfs": -2.343,
+      "rms_dbfs": -21.609,
+      "duration": 3.438,
+      "radio_band_energy_fraction": 0.9782,
+      "ffmpeg_decode": "PASS"
+    },
+    {
+      "file": "radio/armor_low.wav",
+      "peak_dbfs": -2.321,
+      "rms_dbfs": -21.514,
+      "duration": 2.862,
+      "radio_band_energy_fraction": 0.9755,
+      "ffmpeg_decode": "PASS"
+    },
+    {
+      "file": "radio/armor_restored.wav",
+      "peak_dbfs": -2.356,
+      "rms_dbfs": -21.722,
+      "duration": 2.687,
+      "radio_band_energy_fraction": 0.9793,
+      "ffmpeg_decode": "PASS"
+    },
+    {
+      "file": "radio/boss_destroyed.wav",
+      "peak_dbfs": -2.316,
+      "rms_dbfs": -20.001,
+      "duration": 2.167,
+      "radio_band_energy_fraction": 0.9781,
+      "ffmpeg_decode": "PASS"
+    },
+    {
+      "file": "radio/boss_detected.wav",
+      "peak_dbfs": -2.306,
+      "rms_dbfs": -21.366,
+      "duration": 3.482,
+      "radio_band_energy_fraction": 0.9643,
+      "ffmpeg_decode": "PASS"
+    },
+    {
+      "file": "radio/command_online.wav",
+      "peak_dbfs": -2.307,
+      "rms_dbfs": -22.345,
+      "duration": 3.254,
+      "radio_band_energy_fraction": 0.9734,
+      "ffmpeg_decode": "PASS"
+    },
+    {
+      "file": "radio/enemy_approaching.wav",
+      "peak_dbfs": -2.319,
+      "rms_dbfs": -20.586,
+      "duration": 2.625,
+      "radio_band_energy_fraction": 0.9775,
+      "ffmpeg_decode": "PASS"
+    },
+    {
+      "file": "radio/enemy_spotted.wav",
+      "peak_dbfs": -2.354,
+      "rms_dbfs": -22.224,
+      "duration": 2.668,
+      "radio_band_energy_fraction": 0.9778,
+      "ffmpeg_decode": "PASS"
+    },
+    {
+      "file": "radio/mine_deployed.wav",
+      "peak_dbfs": -2.32,
+      "rms_dbfs": -20.684,
+      "duration": 3.347,
+      "radio_band_energy_fraction": 0.9424,
+      "ffmpeg_decode": "PASS"
+    },
+    {
+      "file": "radio/mines_cleared.wav",
+      "peak_dbfs": -2.329,
+      "rms_dbfs": -21.788,
+      "duration": 3.47,
+      "radio_band_energy_fraction": 0.9648,
+      "ffmpeg_decode": "PASS"
+    },
+    {
+      "file": "radio/mission_complete.wav",
+      "peak_dbfs": -2.355,
+      "rms_dbfs": -20.945,
+      "duration": 2.996,
+      "radio_band_energy_fraction": 0.9848,
+      "ffmpeg_decode": "PASS"
+    },
+    {
+      "file": "radio/mission_failed.wav",
+      "peak_dbfs": -2.306,
+      "rms_dbfs": -22.882,
+      "duration": 2.729,
+      "radio_band_energy_fraction": 0.9636,
+      "ffmpeg_decode": "PASS"
+    },
+    {
+      "file": "radio/multiple_targets.wav",
+      "peak_dbfs": -2.314,
+      "rms_dbfs": -21.853,
+      "duration": 2.995,
+      "radio_band_energy_fraction": 0.9867,
+      "ffmpeg_decode": "PASS"
+    },
+    {
+      "file": "radio/objective_secured.wav",
+      "peak_dbfs": -2.308,
+      "rms_dbfs": -19.109,
+      "duration": 3.26,
+      "radio_band_energy_fraction": 0.9794,
+      "ffmpeg_decode": "PASS"
+    },
+    {
+      "file": "radio/target_destroyed.wav",
+      "peak_dbfs": -2.311,
+      "rms_dbfs": -18.747,
+      "duration": 1.384,
+      "radio_band_energy_fraction": 0.9856,
+      "ffmpeg_decode": "PASS"
+    }
+  ]
+}

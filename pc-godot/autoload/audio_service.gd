@@ -11,17 +11,78 @@ const ARMOR_VARIANTS := [preload("res://assets/audio/combat/impact-armor-01.wav"
 const MACHINE_RECORDING := preload("res://assets/audio/combat/mg-fire.wav")
 const ROCKET_RECORDING := preload("res://assets/audio/combat/rocket-launch.wav")
 const RICOCHET_RECORDING := preload("res://assets/audio/combat/ricochet-01.wav")
+const VehicleAudioRig := preload("res://scripts/vehicle_audio_rig.gd")
+const MUSIC_TRACKS := [
+	{"id": "industrial-war", "name": "钢铁风暴", "stream": preload("res://assets/audio/battlefield/music/industrial-war.wav")},
+	{"id": "electronic-pursuit", "name": "极速追击", "stream": preload("res://assets/audio/battlefield/music/electronic-pursuit.wav")},
+	{"id": "epic-siege", "name": "决战重围", "stream": preload("res://assets/audio/battlefield/music/epic-siege.wav")},
+]
+const ENGINE_LOOP := preload("res://assets/audio/battlefield/vehicle/track-engine.wav")
+const TREAD_LOOP := preload("res://assets/audio/battlefield/vehicle/track-treads.wav")
+const TURN_LOOP := preload("res://assets/audio/battlefield/vehicle/track-turn.wav")
+const RADIO_CLIPS := {
+	"command_online": preload("res://assets/audio/battlefield/radio/command_online.wav"),
+	"enemy_spotted": preload("res://assets/audio/battlefield/radio/enemy_spotted.wav"),
+	"enemy_approaching": preload("res://assets/audio/battlefield/radio/enemy_approaching.wav"),
+	"target_destroyed": preload("res://assets/audio/battlefield/radio/target_destroyed.wav"),
+	"multiple_targets": preload("res://assets/audio/battlefield/radio/multiple_targets.wav"),
+	"armor_low": preload("res://assets/audio/battlefield/radio/armor_low.wav"),
+	"armor_critical": preload("res://assets/audio/battlefield/radio/armor_critical.wav"),
+	"boss_detected": preload("res://assets/audio/battlefield/radio/boss_detected.wav"),
+	"boss_destroyed": preload("res://assets/audio/battlefield/radio/boss_destroyed.wav"),
+	"mission_complete": preload("res://assets/audio/battlefield/radio/mission_complete.wav"),
+	"mission_failed": preload("res://assets/audio/battlefield/radio/mission_failed.wav"),
+	"ammo_low": preload("res://assets/audio/battlefield/radio/ammo_low.wav"),
+	"ammo_depleted": preload("res://assets/audio/battlefield/radio/ammo_depleted.wav"),
+	"armor_restored": preload("res://assets/audio/battlefield/radio/armor_restored.wav"),
+	"objective_secured": preload("res://assets/audio/battlefield/radio/objective_secured.wav"),
+	"mine_deployed": preload("res://assets/audio/battlefield/radio/mine_deployed.wav"),
+	"mines_cleared": preload("res://assets/audio/battlefield/radio/mines_cleared.wav"),
+}
+const RADIO_CAPTIONS := {
+	"command_online": "指挥链路已建立。战车就位。", "enemy_spotted": "发现敌军。准备接敌。",
+	"enemy_approaching": "注意，敌方装甲正在逼近。", "target_destroyed": "目标已摧毁。",
+	"multiple_targets": "发现多辆敌车。注意侧翼。", "armor_low": "装甲受损。寻找掩体。",
+	"armor_critical": "车体重创！立即撤离交火区。", "boss_detected": "敌方指挥战车出现。集中火力。",
+	"boss_destroyed": "敌方指挥战车已击毁。", "mission_complete": "任务完成。战场已控制。",
+	"mission_failed": "战车失联。任务终止。", "ammo_low": "弹药储备不足。前往补给点。",
+	"ammo_depleted": "当前武器弹药耗尽。切换武器。", "armor_restored": "补给完成。装甲修复。",
+	"objective_secured": "目标已控制。准备下一阶段。", "mine_deployed": "地雷已部署。注意安全距离。",
+	"mines_cleared": "脉冲完成。附近地雷已清除。",
+}
+const RADIO_PRIORITIES := {"mission_failed": 100, "mission_complete": 100, "armor_critical": 90,
+	"boss_detected": 85, "boss_destroyed": 80, "ammo_depleted": 72, "enemy_approaching": 65,
+	"multiple_targets": 60, "armor_low": 58, "objective_secured": 55, "command_online": 52}
+const RADIO_COOLDOWNS := {"enemy_spotted": 25.0, "enemy_approaching": 22.0, "multiple_targets": 28.0,
+	"target_destroyed": 5.5, "armor_low": 32.0, "armor_critical": 24.0, "ammo_low": 24.0,
+	"ammo_depleted": 18.0, "mine_deployed": 12.0, "mines_cleared": 12.0}
+const RADIO_ALIASES := {"enemy_near": "enemy_approaching", "enemy_destroyed": "target_destroyed",
+	"player_critical": "armor_critical", "boss_incoming": "boss_detected",
+	"mission_start": "command_online", "resupply": "armor_restored"}
 
 var streams: Dictionary = {}
 var _rng := RandomNumberGenerator.new()
+var _game_mode := "title"
+var _music_index := 0
+var _music_players: Array[AudioStreamPlayer] = []
+var _music_active := 0
+var _music_transition := 1.0
+var _music_duck_db := 0.0
+var _radio_player: AudioStreamPlayer
+var _radio_id := ""
+var _radio_remaining := 0.0
+var _radio_gap := 0.0
+var _radio_queue: Array[String] = []
+var _radio_cooldowns: Dictionary = {}
+var _audio_clock := 0.0
+var _loop_cache: Dictionary = {}
 
 
 func _ready() -> void:
-	if DisplayServer.get_name() == "headless":
-		return
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	_rng.seed = 20490317
 	for kind in ["cannon", "machine", "explosion", "mine", "emp", "boss_warning", "hit", "pickup", "click", "victory", "defeat", "engine"]:
-		streams[kind] = _synthesize(kind)
+		streams[kind] = CANNON_VARIANTS[0] if DisplayServer.get_name() == "headless" else _synthesize(kind)
 	# Recorded CC0 field audio adds the pressure wave and outdoor reflections;
 	# the synthesized layers keep the close transient responsive in the mix.
 	streams["cannon_tail"] = CANNON_VARIANTS[0]
@@ -33,20 +94,222 @@ func _ready() -> void:
 	streams["armor_hit"] = ARMOR_VARIANTS[0]
 	streams["ground_hit"] = streams["hit"]
 	streams["ricochet"] = RICOCHET_RECORDING
+	streams["engine"] = _as_loop(ENGINE_LOOP)
+	streams["collision"] = ARMOR_VARIANTS[0]
+	_ensure_bus("Radio")
+	for index in range(2):
+		var music := AudioStreamPlayer.new()
+		music.name = "MusicDeck%d" % index
+		music.bus = "Music"
+		music.volume_db = -80.0
+		add_child(music)
+		_music_players.append(music)
+	_radio_player = AudioStreamPlayer.new()
+	_radio_player.name = "CommandRadio"
+	_radio_player.bus = "Radio"
+	_radio_player.volume_db = -2.0
+	add_child(_radio_player)
+	_radio_player.finished.connect(_finish_radio)
+	set_music_track(int(SettingsService.get("music_track")), true)
+
+
+func _ensure_bus(bus_name: String) -> void:
+	if AudioServer.get_bus_index(bus_name) >= 0:
+		return
+	AudioServer.add_bus()
+	var index := AudioServer.bus_count - 1
+	AudioServer.set_bus_name(index, bus_name)
+	AudioServer.set_bus_send(index, "Master")
+
+
+func _as_loop(source: AudioStreamWAV) -> AudioStreamWAV:
+	var key := source.get_instance_id()
+	if _loop_cache.has(key):
+		return _loop_cache[key]
+	var loop := source.duplicate() as AudioStreamWAV
+	loop.loop_mode = AudioStreamWAV.LOOP_FORWARD
+	loop.loop_begin = 0
+	loop.loop_end = roundi(source.get_length() * source.mix_rate)
+	_loop_cache[key] = loop
+	return loop
+
+
+func _process(delta: float) -> void:
+	_tick_audio(delta)
+
+
+func _exit_tree() -> void:
+	shutdown()
+
+
+func shutdown() -> void:
+	set_process(false)
+	for voice: Node in get_children():
+		if voice is AudioStreamPlayer or voice is AudioStreamPlayer3D:
+			voice.stop()
+			voice.stream = null
+	_music_players.clear()
+	_loop_cache.clear()
+	streams.clear()
+	for rig: Node in get_tree().get_nodes_in_group("vehicle_audio"):
+		rig.stop()
+
+
+func _tick_audio(delta: float) -> void:
+	if _game_mode not in ["paused", "settings"]:
+		_audio_clock += delta
+		_radio_gap = maxf(0.0, _radio_gap - delta)
+		if _radio_remaining > 0.0:
+			_radio_remaining = maxf(0.0, _radio_remaining - delta)
+			if _radio_remaining <= 0.0:
+				_finish_radio()
+		if _radio_id.is_empty() and _radio_gap <= 0.0 and not _radio_queue.is_empty():
+			_start_radio(_radio_queue.pop_front())
+	_music_transition = minf(1.0, _music_transition + delta / 0.65)
+	var target_duck := -10.0 if not _radio_id.is_empty() and _game_mode not in ["paused", "settings"] else 0.0
+	_music_duck_db = move_toward(_music_duck_db, target_duck, delta * (45.0 if target_duck < _music_duck_db else 8.0))
+	var scene_gain := -11.0 if _game_mode in ["paused", "settings"] else (-5.0 if _game_mode == "title" else 0.0)
+	for index in range(_music_players.size()):
+		var weight := _music_transition if index == _music_active else 1.0 - _music_transition
+		_music_players[index].volume_db = -12.0 + scene_gain + _music_duck_db + linear_to_db(maxf(weight, 0.0001))
+		if weight <= 0.0 and index != _music_active:
+			_music_players[index].stop()
+
+
+func set_game_state(mode: String) -> void:
+	if mode == _game_mode:
+		return
+	var previous := _game_mode
+	_game_mode = mode
+	var paused := mode in ["paused", "settings"]
+	_radio_player.stream_paused = paused
+	for node: Node in get_children():
+		if node is AudioStreamPlayer3D:
+			node.stream_paused = paused
+			if mode == "title":
+				node.queue_free()
+	if mode != "playing":
+		for rig: Node in get_tree().get_nodes_in_group("vehicle_audio"):
+			rig.stop()
+	if mode == "title" or (mode == "playing" and previous not in ["paused", "settings"]):
+		_clear_radio()
+		_radio_cooldowns.clear()
+	if mode in ["won", "lost"]:
+		_radio_queue.clear()
+
+
+func cycle_music() -> Dictionary:
+	set_music_track((_music_index + 1) % MUSIC_TRACKS.size())
+	return get_music_snapshot()
+
+
+func set_music_track(index: int, immediate := false) -> void:
+	_music_index = posmod(index, MUSIC_TRACKS.size())
+	if _music_players.is_empty():
+		return
+	_music_active = 1 - _music_active
+	var player := _music_players[_music_active]
+	player.stop()
+	player.stream = _as_loop(MUSIC_TRACKS[_music_index].stream)
+	player.volume_db = -80.0
+	player.play()
+	_music_transition = 1.0 if immediate else 0.0
+	_tick_audio(0.0)
+
+
+func get_music_snapshot() -> Dictionary:
+	return {"id": MUSIC_TRACKS[_music_index].id, "name": MUSIC_TRACKS[_music_index].name,
+		"index": _music_index, "count": MUSIC_TRACKS.size(),
+		"playing": not _music_players.is_empty() and _music_players[_music_active].playing,
+		"radio_event": _radio_id, "radio_caption": RADIO_CAPTIONS.get(_radio_id, ""),
+		"radio_pending": _radio_queue.size(), "duck_db": _music_duck_db}
+
+
+func get_radio_caption() -> String:
+	return RADIO_CAPTIONS.get(_radio_id, "")
+
+
+func radio(event: String) -> bool:
+	event = RADIO_ALIASES.get(event, event)
+	if not RADIO_CLIPS.has(event) or _game_mode in ["title", "paused", "settings"]:
+		return false
+	if float(_radio_cooldowns.get(event, -100.0)) > _audio_clock or event == _radio_id or event in _radio_queue:
+		return false
+	var priority := int(RADIO_PRIORITIES.get(event, 40))
+	var current_priority := int(RADIO_PRIORITIES.get(_radio_id, 40))
+	_radio_cooldowns[event] = _audio_clock + float(RADIO_COOLDOWNS.get(event, 10.0))
+	# Critical damage and terminal mission events can interrupt a low-value
+	# report; normal announcements wait for one voice plus receiver spacing.
+	if _radio_id.is_empty() and _radio_gap <= 0.0:
+		_start_radio(event)
+	elif priority == 100 or (priority >= 85 and priority >= current_priority + 20):
+		_radio_player.stop()
+		_start_radio(event)
+	else:
+		_radio_queue.append(event)
+		_radio_queue.sort_custom(func(a: String, b: String) -> bool: return int(RADIO_PRIORITIES.get(a, 40)) > int(RADIO_PRIORITIES.get(b, 40)))
+		if _radio_queue.size() > 3:
+			var dropped: String = _radio_queue.pop_back()
+			if dropped == event:
+				return false
+	return true
+
+
+func _start_radio(event: String) -> void:
+	_radio_id = event
+	_radio_player.stream = RADIO_CLIPS[event]
+	_radio_remaining = _radio_player.stream.get_length() + 0.05
+	_radio_player.play()
+
+
+func _finish_radio() -> void:
+	_radio_player.stop()
+	_radio_id = ""
+	_radio_remaining = 0.0
+	_radio_gap = 0.38
+
+
+func _clear_radio() -> void:
+	_finish_radio()
+	_radio_gap = 0.0
+	_radio_queue.clear()
+
+
+func attach_vehicle(parent: Node3D) -> Node3D:
+	var rig := VehicleAudioRig.new()
+	rig.name = "VehicleAudio"
+	rig.configure(_as_loop(ENGINE_LOOP), _as_loop(TREAD_LOOP), _as_loop(TURN_LOOP))
+	parent.add_child(rig)
+	return rig
+
+
+func update_vehicle(rig: Node3D, speed_mps: float, yaw_rate: float, impact_speed: float, delta: float) -> void:
+	if not is_instance_valid(rig):
+		return
+	if rig.update_motion(speed_mps, yaw_rate, impact_speed, delta, _game_mode == "playing"):
+		play_3d("collision", rig.global_position, lerpf(-17.0, -5.0, clampf(impact_speed / 9.0, 0.0, 1.0)), _rng.randf_range(0.63, 0.82))
+
+
+func stop_vehicle(rig: Node3D) -> void:
+	if is_instance_valid(rig):
+		rig.stop()
 
 
 func play_3d(kind: String, world_position: Vector3, volume_db := -5.0, pitch := 1.0) -> void:
-	if not streams.has(kind):
+	if not streams.has(kind) or _game_mode in ["paused", "settings"]:
 		return
 	var fast_effect := kind in ["machine", "machine_gun", "armor_hit", "ground_hit"]
 	var same_voices := 0
+	var effect_voices := 0
 	for node: Node in get_children():
+		if node.has_meta("audio_kind") and not node.is_queued_for_deletion():
+			effect_voices += 1
 		if node.get_meta("audio_kind", "") == kind and not node.is_queued_for_deletion():
 			same_voices += 1
 	# A burst cannot consume every voice and suppress the main gun or a Boss.
 	if fast_effect and same_voices >= 6:
 		return
-	if get_child_count() >= MAX_VOICES:
+	if effect_voices >= MAX_VOICES:
 		if fast_effect:
 			return
 		var released := false
@@ -89,7 +352,7 @@ func _select_stream(kind: String) -> AudioStream:
 			return CANNON_VARIANTS[_rng.randi_range(0, CANNON_VARIANTS.size() - 1)]
 		"explosion":
 			return EXPLOSION_VARIANTS[_rng.randi_range(0, EXPLOSION_VARIANTS.size() - 1)]
-		"armor_hit":
+		"armor_hit", "collision":
 			return ARMOR_VARIANTS[_rng.randi_range(0, ARMOR_VARIANTS.size() - 1)]
 	return streams[kind]
 
@@ -105,6 +368,7 @@ func play_ui(kind: String, volume_db := -8.0, pitch := 1.0) -> void:
 	if not streams.has(kind) or get_child_count() >= MAX_VOICES:
 		return
 	var voice := AudioStreamPlayer.new()
+	voice.set_meta("audio_kind", kind)
 	voice.stream = streams[kind]
 	voice.volume_db = volume_db
 	voice.pitch_scale = pitch

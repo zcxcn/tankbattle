@@ -58,7 +58,9 @@ func _shell(at: Vector3, kind: String, owner: TankActor = null) -> IronProjectil
 	shell.position = at
 	shell.weapon_kind = kind
 	shell.owner_tank = owner
-	shell.speed = 130.0 if kind == "machine_gun" else 56.0
+	for definition: Dictionary in CombatLoadout.WEAPONS:
+		if definition.id == kind:
+			shell.speed = definition.speed
 	shell.damage = 10.0
 	shell.direction = Vector3.FORWARD
 	if kind == "he" and owner != null:
@@ -83,7 +85,7 @@ func _run() -> void:
 	await get_tree().physics_frame
 	var shell := _shell(Vector3(0, 2, 0), "machine_gun")
 	shell._physics_process(0.2)
-	_check(shell.is_queued_for_deletion() and impacts.size() == 1 and absf(impacts[0].at.z + 8) < 0.03, "130 m/s round hits a 25 mm wall during a 200 ms frame")
+	_check(shell.is_queued_for_deletion() and impacts.size() == 1 and absf(impacts[0].at.z + 8) < 0.03, "500 m/s round hits a 25 mm wall during a 200 ms frame")
 	shell._physics_process(0.2)
 	_check(impacts.size() == 1, "resolved projectile cannot apply a second hit before queued cleanup")
 	wall.free()
@@ -112,7 +114,7 @@ func _run() -> void:
 	var prediction: Dictionary = preload("res://scripts/battle_telemetry.gd")._get_reticle(owner, owner._barrel, owner._muzzle, owner._turret, get_world_3d().direct_space_state, owner.aim_point)
 	var flight_time := 58.0 / -initial_velocity.z
 	var midpoint := Vector3(0, 2, -2) + initial_velocity * (flight_time * 0.5) + Vector3.DOWN * 4.9 * pow(flight_time * 0.5, 2)
-	_check(midpoint.y > 1.6 and he.direction.y > 0.0, "HE follows a lifted low-angle arc instead of a straight luminous beam")
+	_check(midpoint.y > 1.06 and is_equal_approx(he.gravity, 9.8) and is_equal_approx(he.speed, 185.0), "185 m/s HE follows a gravity-driven arc above the straight origin-target chord")
 	for frame in 150:
 		if he.is_queued_for_deletion():
 			break
@@ -137,6 +139,16 @@ func _run() -> void:
 	await get_tree().process_frame
 	target.free()
 	var tracers := 0
+	var ap_model := _shell(Vector3(20, 2, 0), "cannon", owner)
+	var ap_again := _shell(Vector3(23, 2, 0), "cannon", owner)
+	var first_ogive := ap_model.get_node("Shell/OgivePenetrator") as MeshInstance3D
+	var second_ogive := ap_again.get_node("Shell/OgivePenetrator") as MeshInstance3D
+	_check(first_ogive.mesh is ArrayMesh and first_ogive.mesh == second_ogive.mesh, "fired AP rounds share a real imported ogive mesh rather than per-shot primitives")
+	_check(ap_model.get_node_or_null("Shell/CopperBandForward") != null and ap_model.get_node_or_null("Shell/MachinedBase") != null, "solid AP model contains separate driving bands and machined base")
+	var tracer_mesh := (ap_model.get_node("Tracer") as MeshInstance3D).mesh
+	_check(tracer_mesh.get_aabb().size.z < 0.06, "tracer is a compact burning base with no stretched line or cylinder")
+	ap_model.free()
+	ap_again.free()
 	for index in 8:
 		var bullet := _shell(Vector3(20, 2, 0), "machine_gun", owner)
 		if bullet.has_tracer:
@@ -152,6 +164,7 @@ func _run() -> void:
 	running = true
 	paused_shell.free()
 	var rocket := _shell(Vector3(20, 2, 0), "rocket", owner)
+	_check(rocket.get_node_or_null("Shell/StabilizerFin4") != null and rocket.get_node_or_null("Shell/ExhaustNozzle") != null, "rocket has four modeled stabilizers and a recessed motor nozzle")
 	var smoke := rocket.get_node("RocketSmoke") as GPUParticles3D
 	rocket._physics_process(0.2)
 	rocket._finish()
@@ -161,4 +174,4 @@ func _run() -> void:
 	floor_body.free()
 	await get_tree().process_frame
 	print("BALLISTICS_RESULT: %d passed, %d failed" % [passed, failed])
-	get_tree().quit(0 if failed == 0 else 1)
+	await preload("res://tests/test_shutdown.gd").finish(get_tree(), 0 if failed == 0 else 1)

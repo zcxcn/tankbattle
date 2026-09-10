@@ -184,4 +184,4 @@ func _run() -> void:
 	game.free()
 	await _frames()
 	saves.reset_for_tests()
-	quit(0 if _failed == 0 else 1)
+	await preload("res://tests/test_shutdown.gd").finish(self, 0 if _failed == 0 else 1)

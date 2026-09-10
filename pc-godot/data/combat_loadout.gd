@@ -3,10 +3,10 @@ extends RefCounted
 ## Weapon state belongs to each vehicle. Switching never restarts a timer.
 
 const WEAPONS := [
-	{"id": "cannon", "name": "穿甲主炮", "interval": 2.9, "damage": 62.0, "speed": 66.0, "splash": 0.0, "capacity": -1, "reserve": 0},
-	{"id": "machine_gun", "name": "同轴机枪", "interval": 0.15, "damage": 3.4, "speed": 130.0, "splash": 0.0, "capacity": 40, "reserve": 240, "belt_reload": 4.4},
-	{"id": "he", "name": "高爆榴弹", "interval": 3.8, "damage": 52.0, "speed": 56.0, "splash": 5.2, "capacity": 24, "reserve": 0},
-	{"id": "rocket", "name": "反装甲火箭", "interval": 5.8, "damage": 88.0, "speed": 42.0, "splash": 4.2, "capacity": 8, "reserve": 0},
+	{"id": "cannon", "name": "穿甲主炮", "interval": 2.9, "damage": 62.0, "speed": 260.0, "splash": 0.0, "capacity": -1, "reserve": 0},
+	{"id": "machine_gun", "name": "同轴机枪", "interval": 0.15, "damage": 3.4, "speed": 500.0, "splash": 0.0, "capacity": 40, "reserve": 240, "belt_reload": 4.4},
+	{"id": "he", "name": "高爆榴弹", "interval": 3.8, "damage": 52.0, "speed": 185.0, "splash": 8.0, "capacity": 24, "reserve": 0},
+	{"id": "rocket", "name": "反装甲火箭", "interval": 5.8, "damage": 88.0, "speed": 95.0, "splash": 6.0, "capacity": 8, "reserve": 0},
 ]
 
 var selected := 0

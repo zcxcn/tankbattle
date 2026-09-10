@@ -330,4 +330,4 @@ func _run() -> void:
 	game.queue_free()
 	await _frames(3)
 	SaveService.reset_for_tests()
-	get_tree().quit(0 if failed == 0 else 1)
+	await preload("res://tests/test_shutdown.gd").finish(get_tree(), 0 if failed == 0 else 1)

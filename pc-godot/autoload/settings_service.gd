@@ -4,6 +4,7 @@ extends Node
 signal settings_changed
 
 const CONFIG_PATH := "user://settings.cfg"
+var config_path := CONFIG_PATH
 
 var display_mode := 0 # 0 windowed, 1 borderless fullscreen, 2 exclusive fullscreen.
 var resolution := Vector2i(1600, 900)
@@ -14,16 +15,22 @@ var screen_shake := true
 var master_volume := 80
 var music_volume := 45
 var effects_volume := 85
+var radio_volume := 85
+var music_track := 0
 
 
 func _ready() -> void:
+	# Automated runs get a private config and cannot alter the player's preferences.
+	if "--test" in OS.get_cmdline_user_args():
+		config_path = "user://tests/settings_%d.cfg" % OS.get_process_id()
+		DirAccess.make_dir_recursive_absolute("user://tests")
 	load_settings()
 	call_deferred("apply")
 
 
 func load_settings() -> void:
 	var config := ConfigFile.new()
-	if config.load(CONFIG_PATH) != OK:
+	if config.load(config_path) != OK:
 		return
 	display_mode = clampi(int(config.get_value("display", "mode", display_mode)), 0, 2)
 	resolution.x = clampi(int(config.get_value("display", "width", resolution.x)), 1280, 7680)
@@ -37,6 +44,8 @@ func load_settings() -> void:
 	master_volume = clampi(int(config.get_value("audio", "master", master_volume)), 0, 100)
 	music_volume = clampi(int(config.get_value("audio", "music", music_volume)), 0, 100)
 	effects_volume = clampi(int(config.get_value("audio", "effects", effects_volume)), 0, 100)
+	radio_volume = clampi(int(config.get_value("audio", "radio", radio_volume)), 0, 100)
+	music_track = clampi(int(config.get_value("audio", "track", music_track)), 0, 2)
 
 
 func save_settings() -> void:
@@ -51,7 +60,14 @@ func save_settings() -> void:
 	config.set_value("audio", "master", master_volume)
 	config.set_value("audio", "music", music_volume)
 	config.set_value("audio", "effects", effects_volume)
-	config.save(CONFIG_PATH)
+	config.set_value("audio", "radio", radio_volume)
+	config.set_value("audio", "track", music_track)
+	config.save(config_path)
+
+
+func _exit_tree() -> void:
+	if config_path != CONFIG_PATH:
+		DirAccess.remove_absolute(config_path)
 
 
 func apply() -> void:
@@ -107,6 +123,7 @@ func _apply_audio_buses() -> void:
 	_set_bus("Master", master_volume)
 	_set_bus("Music", music_volume)
 	_set_bus("SFX", effects_volume)
+	_set_bus("Radio", radio_volume)
 
 
 func _set_bus(bus_name: String, percent: int) -> void:
