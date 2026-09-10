@@ -35,7 +35,7 @@ func _make_layer(layer_name: String, stream: AudioStream, maximum_distance: floa
 	var layer := AudioStreamPlayer3D.new()
 	layer.name = layer_name
 	layer.stream = stream
-	layer.bus = "SFX"
+	layer.bus = "WorldSFX"
 	# The tactical listener sits around 32 m above its own tank. Calibrate the
 	# reference distance for that camera so tracks remain audible in both views.
 	layer.unit_size = 28.0

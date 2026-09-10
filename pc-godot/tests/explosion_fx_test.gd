@@ -19,7 +19,7 @@ func _check(condition: bool, label: String) -> void:
 
 
 func _run() -> void:
-	for kind in ["Fire", "Smoke", "Sparks", "Muzzle"]:
+	for kind in ["Fire", "Smoke", "Sparks", "Muzzle", "MuzzleCore"]:
 		var texture := ExplosionFX.particle_sprite(kind)
 		var image := texture.get_image()
 		var edges_clear := true
@@ -108,7 +108,9 @@ func _run() -> void:
 	var tongue := flame_jet.get_child(0) as MeshInstance3D
 	var tongue_mesh := tongue.mesh as QuadMesh
 	_check((-flame_jet.basis.z).is_equal_approx(firing_direction) and flame_jet.get_child_count() == 2, "crossed flame tongues follow the real barrel elevation and heading")
-	_check(tongue_mesh.size.y >= 2.5 and tongue_mesh.size.x <= 1.2 and (tongue_mesh.material as StandardMaterial3D).billboard_mode == BaseMaterial3D.BILLBOARD_DISABLED, "main cannon flash has a long directional jet rather than a view-facing fireball")
+	_check(tongue_mesh.size.y >= 3.0 and tongue_mesh.size.x >= 1.4 and tongue_mesh.size.y >= tongue_mesh.size.x * 2.0 and (tongue_mesh.material as StandardMaterial3D).billboard_mode == BaseMaterial3D.BILLBOARD_DISABLED, "cannon gas retains a broad but forward elongated barrel-axis silhouette")
+	var core_material := (muzzle._flash.mesh as QuadMesh).material as StandardMaterial3D
+	_check(core_material.billboard_mode == BaseMaterial3D.BILLBOARD_ENABLED and (muzzle._flash.mesh as QuadMesh).size.x >= 2.0 and core_material.albedo_texture == ExplosionFX.particle_sprite("MuzzleCore"), "camera-facing pressure body keeps hot gas visible when chase view sees axial sheets edge-on")
 	var muzzle_fire := muzzle.get_node("Fire") as GPUParticles3D
 	var muzzle_fire_process := muzzle_fire.process_material as ParticleProcessMaterial
 	_check(muzzle_fire_process.direction.is_equal_approx(firing_direction) and muzzle_fire_process.spread <= 15.0 and muzzle_fire_process.initial_velocity_max >= 16.0, "visible hot gas is ejected forward in a narrow high-speed cone")
@@ -128,8 +130,10 @@ func _run() -> void:
 	add_child(rocket_muzzle)
 	rocket_muzzle.set_process(false)
 	_check(rocket_muzzle.get_node_or_null("MuzzlePressure") == null and (rocket_muzzle.get_node("Fire") as GPUParticles3D).amount < muzzle_fire.amount, "rocket ignition uses a smaller forward plume without a tank-cannon pressure blast")
+	muzzle._process(0.12)
+	_check(flame_jet.visible and muzzle._flash.visible and core_material.albedo_color.a > 0.5 and muzzle._light.light_energy > muzzle._light_peak * 0.5, "hot pressure body and local illumination remain readable through the early discharge instead of vanishing in the first few frames")
 	muzzle._process(0.16)
-	_check(not flame_jet.visible and not muzzle._flash.visible and muzzle.get_node("Smoke") != null, "fire tongue and flash clear the aim line quickly while light propellant smoke remains")
+	_check(not flame_jet.visible and not muzzle._flash.visible and muzzle.get_node("Smoke") != null, "hot gas clears the aim line within 0.28 seconds while light propellant smoke remains")
 	muzzle.free()
 	machine_muzzle.free()
 	rocket_muzzle.free()
@@ -139,8 +143,28 @@ func _run() -> void:
 		add_child(discharge)
 		muzzle_effects.append(discharge)
 	_check(get_tree().get_nodes_in_group("muzzle_fx").size() == ExplosionFX.MAX_MUZZLES and get_tree().get_nodes_in_group("impact_flash_lights").size() <= ExplosionFX.MAX_FLASH_LIGHTS, "concurrent discharges and local flash lights remain capped in a large battle")
+	# Every slot is occupied by AI smoke; player feedback still has to start.
+	for discharge: ExplosionFX in muzzle_effects:
+		discharge._age = 0.7
+	var player_muzzle := ExplosionFX.create_muzzle(Vector3.ZERO, Vector3.FORWARD, 1.0, "cannon", true)
+	add_child(player_muzzle)
+	_check(not player_muzzle.is_queued_for_deletion() and player_muzzle._flash != null and player_muzzle._light != null and get_tree().get_nodes_in_group("muzzle_fx").size() == ExplosionFX.MAX_MUZZLES and get_tree().get_nodes_in_group("impact_flash_lights").size() <= ExplosionFX.MAX_FLASH_LIGHTS, "player discharge retires old AI smoke and receives a light without increasing either battle budget")
+	_check(muzzle_effects[0].is_queued_for_deletion() and not muzzle_effects[0].is_in_group("muzzle_fx"), "reclaimed smoke leaves the active muzzle group immediately in the same firing frame")
+	player_muzzle.free()
 	for discharge: ExplosionFX in muzzle_effects:
 		discharge.free()
+	# Exercise light contention independently: destruction occupies every light.
+	var light_effects: Array[ExplosionFX] = []
+	for index in ExplosionFX.MAX_FLASH_LIGHTS:
+		var lit_blast := ExplosionFX.create(Vector3.ZERO)
+		add_child(lit_blast)
+		light_effects.append(lit_blast)
+	player_muzzle = ExplosionFX.create_muzzle(Vector3.ZERO, Vector3.FORWARD, 1.0, "cannon", true)
+	add_child(player_muzzle)
+	_check(player_muzzle._light != null and get_tree().get_nodes_in_group("impact_flash_lights").size() == ExplosionFX.MAX_FLASH_LIGHTS, "player light replaces an existing fading flash even when all light slots belong to explosions")
+	player_muzzle.free()
+	for lit_blast: ExplosionFX in light_effects:
+		lit_blast.free()
 	var effects: Array[ExplosionFX] = []
 	for index in ExplosionFX.MAX_IMPACTS + 6:
 		var impact := ExplosionFX.create_impact(Vector3.ZERO, false, "ground", Vector3.UP, "machine_gun")

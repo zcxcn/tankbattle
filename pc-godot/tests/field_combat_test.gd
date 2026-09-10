@@ -15,7 +15,7 @@ class CombatFixture extends Node3D:
 		return get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(from, to, 1)).is_empty()
 	func spawn_projectile(owner_tank: Node3D, at: Vector3, direction: Vector3, damage: float, speed: float, splash: float, kind: String) -> void:
 		shots.append({"owner": owner_tank, "at": at, "direction": direction, "damage": damage, "speed": speed, "splash": splash, "kind": kind})
-	func spawn_muzzle_flash(_at: Vector3, _color: Color, _scale: float, _direction := Vector3.FORWARD, _kind := "cannon") -> void:
+	func spawn_muzzle_flash(_at: Vector3, _color: Color, _scale: float, _direction := Vector3.FORWARD, _kind := "cannon", _player_priority := false) -> void:
 		pass
 	func spawn_impact(_at: Vector3, _heavy: bool, _surface := "ground", _normal := Vector3.UP, _kind := "cannon") -> void:
 		pass

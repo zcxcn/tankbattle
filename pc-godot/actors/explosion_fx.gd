@@ -22,6 +22,7 @@ var _weapon_kind := "cannon"
 var _heavy := false
 var _light_peak := 0.0
 var _muzzle_forward := Vector3.FORWARD
+var _muzzle_priority := false
 var _muzzle_jet: Node3D
 var _jet_materials: Array[StandardMaterial3D] = []
 var _jet_duration := 0.13
@@ -50,12 +51,13 @@ static func create_impact(at: Vector3, heavy := false, surface_kind := "ground",
 	return effect
 
 
-static func create_muzzle(at: Vector3, forward: Vector3, strength := 1.0, weapon_kind := "cannon") -> ExplosionFX:
+static func create_muzzle(at: Vector3, forward: Vector3, strength := 1.0, weapon_kind := "cannon", player_priority := false) -> ExplosionFX:
 	var effect := ExplosionFX.new()
 	effect.position = at
 	effect.scale = Vector3.ONE * strength
 	effect._profile = "muzzle"
 	effect._weapon_kind = weapon_kind
+	effect._muzzle_priority = player_priority
 	effect._muzzle_forward = forward.normalized() if forward.length_squared() > 0.01 else Vector3.FORWARD
 	effect.set_meta("destructive", false)
 	return effect
@@ -79,7 +81,8 @@ func _ready() -> void:
 		queue_free()
 		return
 	if get_tree().get_nodes_in_group(group).size() >= maximum:
-		if _profile != "cookoff" or not _retire_oldest_destruction():
+		var reclaimed := (_profile == "cookoff" and _retire_oldest_destruction()) or (_profile == "muzzle" and _muzzle_priority and _retire_oldest_muzzle())
+		if not reclaimed:
 			queue_free()
 			return
 	add_to_group(group)
@@ -103,6 +106,23 @@ func _ready() -> void:
 	# The mastered explosion clips already include debris and outdoor decay.
 	# Layering the old long blast again would double the report and mask fire.
 	AudioService.play_3d("explosion", global_position, -2.0)
+
+
+func _retire_oldest_muzzle() -> bool:
+	# Lingering AI smoke must never consume the player's new discharge slot.
+	# Prefer retiring AI, but rapid player fire also replaces its oldest smoke.
+	var oldest: ExplosionFX
+	for candidate: Node in get_tree().get_nodes_in_group("muzzle_fx"):
+		if candidate is ExplosionFX:
+			if oldest == null or (oldest._muzzle_priority and not candidate._muzzle_priority) or (oldest._muzzle_priority == candidate._muzzle_priority and candidate._age > oldest._age):
+				oldest = candidate
+	if oldest == null:
+		return false
+	oldest.remove_from_group("muzzle_fx")
+	if is_instance_valid(oldest._light):
+		oldest._light.remove_from_group("impact_flash_lights")
+	oldest.queue_free()
+	return true
 
 
 func _retire_oldest_destruction() -> bool:
@@ -185,7 +205,8 @@ func _build_cookoff() -> void:
 
 func _add_light(energy: float, distance: float) -> void:
 	if get_tree().get_nodes_in_group("impact_flash_lights").size() >= MAX_FLASH_LIGHTS:
-		return
+		if not _muzzle_priority or not _retire_flash_light():
+			return
 	_light = OmniLight3D.new()
 	_light.add_to_group("impact_flash_lights")
 	_light.light_color = Color("ff8a3d")
@@ -195,6 +216,19 @@ func _add_light(energy: float, distance: float) -> void:
 	_light.shadow_enabled = false
 	_light.position.y = 0.3
 	add_child(_light)
+
+
+func _retire_flash_light() -> bool:
+	var weakest: OmniLight3D
+	for candidate: Node in get_tree().get_nodes_in_group("impact_flash_lights"):
+		if candidate is OmniLight3D:
+			if weakest == null or candidate.light_energy < weakest.light_energy:
+				weakest = candidate
+	if weakest == null:
+		return false
+	weakest.remove_from_group("impact_flash_lights")
+	weakest.queue_free()
+	return true
 
 
 func _add_flash(size: float, offset := Vector3.ZERO) -> void:
@@ -257,16 +291,21 @@ func _build_muzzle() -> void:
 	var machine := _weapon_kind == "machine_gun"
 	var rocket := _weapon_kind == "rocket"
 	_duration = 0.32 if machine else (1.15 if rocket else 1.45)
-	_flash_duration = 0.05 if machine else (0.075 if rocket else 0.12)
-	_jet_duration = 0.05 if machine else (0.10 if rocket else 0.15)
-	_add_flash(0.28 if machine else (0.46 if rocket else 1.12), _muzzle_forward * 0.20)
-	_build_muzzle_jet(0.55 if machine else (1.6 if rocket else 2.9), 0.18 if machine else (0.45 if rocket else 1.05))
+	_flash_duration = 0.065 if machine else (0.11 if rocket else 0.22)
+	_jet_duration = 0.075 if machine else (0.14 if rocket else 0.25)
+	_add_flash(0.38 if machine else (0.8 if rocket else 2.2), _muzzle_forward * (0.18 if machine else 0.5))
+	# A pressure body faces the camera in addition to the axial gas sheets.
+	# Axial quads alone become lines when the chase camera looks down the bore.
+	var core_material := (_flash.mesh as QuadMesh).material as StandardMaterial3D
+	core_material.albedo_texture = particle_sprite("MuzzleCore")
+	core_material.albedo_color = Color(3.8, 2.8, 1.5, 1.0)
+	_build_muzzle_jet(0.65 if machine else (1.8 if rocket else 3.5), 0.23 if machine else (0.60 if rocket else 1.65))
 	if machine:
 		var haze := _spawn_particles("Smoke", 3, 0.28, Color.GRAY, Color.TRANSPARENT, 1.8, 0.0, 0.08, true, false, _muzzle_forward)
 		_tint_muzzle_smoke(haze, 0.18)
 		return
-	_add_light(3.2 if rocket else 10.0, 5.5 if rocket else 11.0)
-	var flame := _spawn_particles("Fire", 6 if rocket else 12, 0.18 if rocket else 0.22, Color("ffddab"), Color.TRANSPARENT, 8.0 if rocket else 18.0, 0.0, 0.24 if rocket else 0.42, true, false, _muzzle_forward)
+	_add_light(4.0 if rocket else 14.0, 6.0 if rocket else 14.0)
+	var flame := _spawn_particles("Fire", 6 if rocket else 12, 0.18 if rocket else 0.26, Color("ffddab"), Color.TRANSPARENT, 8.0 if rocket else 18.0, 0.0, 0.28 if rocket else 0.62, true, false, _muzzle_forward)
 	var flame_process := flame.process_material as ParticleProcessMaterial
 	flame_process.spread = 10.0 if rocket else 13.0
 	flame_process.damping_min = 8.0
@@ -298,8 +337,8 @@ func _tint_muzzle_smoke(particles: GPUParticles3D, opacity: float) -> void:
 
 
 func _build_muzzle_jet(length_m: float, width_m: float) -> void:
-	# Two intersecting textured flame tongues retain the barrel's axis from
-	# tactical and chase cameras. Their short lifetime leaves the aim line clear.
+	# Side views read the forward gas impulse from two intersecting sheets;
+	# the separate camera-facing pressure body remains visible along the bore.
 	_muzzle_jet = Node3D.new()
 	_muzzle_jet.name = "DirectionalFlame"
 	var up := Vector3.RIGHT if absf(_muzzle_forward.dot(Vector3.UP)) > 0.98 else Vector3.UP
@@ -319,7 +358,7 @@ func _build_muzzle_jet(length_m: float, width_m: float) -> void:
 		material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 		material.cull_mode = BaseMaterial3D.CULL_DISABLED
 		material.albedo_texture = particle_sprite("Muzzle")
-		material.albedo_color = Color(2.6, 1.65, 0.60, 0.85)
+		material.albedo_color = Color(3.5, 2.3, 1.0, 0.95)
 		quad.material = material
 		card.mesh = quad
 		_jet_materials.append(material)
@@ -340,21 +379,29 @@ func _process(delta: float) -> void:
 			child.speed_scale = 1.0
 	_age += delta
 	if is_instance_valid(_light):
-		_light.light_energy = _light_peak * exp(-_age * (7.0 if _profile == "cookoff" else 24.0))
+		var light_fade := exp(-_age * (7.0 if _profile == "cookoff" else 24.0))
+		if _profile == "muzzle":
+			light_fade = 1.0 - smoothstep(0.035, _jet_duration + 0.04, _age)
+		_light.light_energy = _light_peak * light_fade
 		_light.light_color = Color("ffe0aa").lerp(Color("df5629"), clampf(_age * 3.0, 0.0, 1.0))
-		if _age > (0.7 if _profile == "cookoff" else 0.22):
+		if _age > (0.7 if _profile == "cookoff" else (_jet_duration + 0.04 if _profile == "muzzle" else 0.22)):
 			_light.queue_free()
 	if is_instance_valid(_flash):
-		_flash.scale = Vector3.ONE * (0.7 + _age * 3.0)
 		_flash.visible = _age < _flash_duration
-		((_flash.mesh as QuadMesh).material as StandardMaterial3D).albedo_color.a = exp(-_age * (26.0 if _profile == "muzzle" else 48.0))
+		if _profile == "muzzle":
+			var core_phase := clampf(_age / _flash_duration, 0.0, 1.0)
+			_flash.scale = Vector3.ONE * (0.80 + sin(core_phase * PI * 0.75) * 0.38)
+			((_flash.mesh as QuadMesh).material as StandardMaterial3D).albedo_color = Color(3.8 - core_phase * 1.2, 2.8 - core_phase * 1.7, 1.5 - core_phase * 1.3, 1.0 - smoothstep(0.23, 1.0, core_phase))
+		else:
+			_flash.scale = Vector3.ONE * (0.7 + _age * 3.0)
+			((_flash.mesh as QuadMesh).material as StandardMaterial3D).albedo_color.a = exp(-_age * 48.0)
 	if is_instance_valid(_muzzle_jet):
 		_muzzle_jet.visible = _age < _jet_duration
 		var phase := clampf(_age / _jet_duration, 0.0, 1.0)
 		_muzzle_jet.scale = Vector3.ONE * (0.78 + sin(phase * PI) * 0.26)
 		for material: StandardMaterial3D in _jet_materials:
-			var fade := pow(1.0 - phase, 1.4)
-			material.albedo_color = Color(2.6 - phase, 1.65 - phase * 1.25, 0.60 - phase * 0.50, fade * 0.85)
+			var fade := 1.0 - smoothstep(0.16, 1.0, phase)
+			material.albedo_color = Color(3.5 - phase, 2.3 - phase * 1.65, 1.0 - phase * 0.88, fade * 0.95)
 	if _age >= _duration:
 		queue_free()
 
@@ -613,6 +660,14 @@ static func particle_sprite(kind: String) -> ImageTexture:
 			if kind == "Sparks":
 				alpha = pow(maxf(0.0, 1.0 - absf(uv.x)), 2.5) * (1.0 - smoothstep(0.05, 1.0, absf(uv.y)))
 			var color := Color(1.0, 1.0, 1.0, alpha)
+			if kind == "MuzzleCore":
+				# Irregular hot gas lobes surround an opaque white-hot centre.
+				# This is a brief discharge body, never a looping flame or halo.
+				var angle := atan2(uv.y, uv.x)
+				var boundary := 0.73 + sin(angle * 5.0 + 0.7) * 0.11 + sin(angle * 9.0) * 0.05 + noise.get_noise_2d(float(x), float(y)) * 0.12
+				var body := 1.0 - smoothstep(0.18, boundary, radius)
+				var heat := 1.0 - smoothstep(0.10, 0.72, radius)
+				color = Color(1.0, lerpf(0.32, 0.96, heat), lerpf(0.025, 0.76, heat), body * lerpf(cloud, 1.0, heat))
 			if kind == "Muzzle":
 				# Quad +Y points down the barrel, and its texture V starts at 0.
 				var along := (1.0 - uv.y) * 0.5

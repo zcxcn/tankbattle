@@ -1,5 +1,5 @@
 {
-  "command_online": {"source": "Male/war_go_go_go.ogg", "transcript": "Go, go, go!", "caption": "前进！前进！", "performer": "Jeffrey M. Smith"},
+  "command_online": {"source": "Male/ready.ogg", "transcript": "Ready.", "caption": "准备就绪。", "performer": "Jeffrey M. Smith"},
   "enemy_spotted": {"source": "Male/war_target_engaged.ogg", "transcript": "Target engaged!", "caption": "正在接敌！", "performer": "Jeffrey M. Smith"},
   "enemy_approaching": {"source": "Male/war_look_out.ogg", "transcript": "Look out!", "caption": "小心！", "performer": "Jeffrey M. Smith"},
   "target_destroyed": {"source": "Male/war_target_destroyed.ogg", "transcript": "Target destroyed!", "caption": "目标已摧毁！", "performer": "Jeffrey M. Smith"},

@@ -36,7 +36,7 @@ func spawn_projectile(owner_tank: TankActor, at: Vector3, direction: Vector3, da
 	shells.append(shell)
 
 
-func spawn_muzzle_flash(_at: Vector3, _color: Color, _scale: float, _direction: Vector3, _kind: String) -> void:
+func spawn_muzzle_flash(_at: Vector3, _color: Color, _scale: float, _direction: Vector3, _kind: String, _player_priority := false) -> void:
 	pass
 
 

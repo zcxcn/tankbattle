@@ -72,7 +72,7 @@ func _ready() -> void:
 	get_tree().auto_accept_quit = false
 	Input.joy_connection_changed.connect(_on_joy_connection_changed)
 	_smoke_test = "--smoke-test" in OS.get_cmdline_user_args()
-	print("IRON_EMBERS_PC_READY | Godot native | Campaign 0.4.3 | human radio + fluid explosion + selectable weather")
+	print("IRON_EMBERS_PC_READY | Godot native | Campaign 0.4.4 | audible weapons + visible muzzle + stronger recoil")
 	if _smoke_test:
 		call_deferred("start_game")
 
@@ -483,8 +483,8 @@ func spawn_impact(at: Vector3, heavy: bool, surface_kind := "ground", normal := 
 	add_child(ExplosionScript.create_impact(at, heavy, surface_kind, normal, weapon_kind))
 
 
-func spawn_muzzle_flash(at: Vector3, _color: Color, scale_factor: float, forward := Vector3.FORWARD, weapon_kind := "cannon") -> void:
-	add_child(ExplosionScript.create_muzzle(at, forward, scale_factor, weapon_kind))
+func spawn_muzzle_flash(at: Vector3, _color: Color, scale_factor: float, forward := Vector3.FORWARD, weapon_kind := "cannon", player_priority := false) -> void:
+	add_child(ExplosionScript.create_muzzle(at, forward, scale_factor, weapon_kind, player_priority))
 
 
 func spawn_emp_visual(at: Vector3, scale_factor := 1.0) -> void:

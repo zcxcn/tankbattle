@@ -66,7 +66,8 @@ func _run() -> void:
 	await _check_motion_and_wheels(player)
 	await _check_aim_and_abilities(player)
 	await _check_boss_telegraph_and_cover(player)
-	if passed + failed != 29:
+	await _check_terminal_shot_reports()
+	if passed + failed != 41:
 		failed += 1
 		push_error("Vehicle regression runner stopped before all checks completed")
 	print("VEHICLE_REGRESSION_RESULT: %d passed, %d failed" % [passed, failed])
@@ -224,9 +225,23 @@ func _check_boss_telegraph_and_cover(player: TankActor) -> void:
 	var walls: Array[StaticBody3D] = []
 	for side in [-1.0, 1.0]:
 		walls.append(_box(boss.global_position + Vector3(side * 1.51, 3.0, 0.0), Vector3(0.025, 6.0, 5.0)))
+	for effect: Node in get_tree().get_nodes_in_group("muzzle_fx"):
+		effect.free()
+	for report: Node in _weapon_reports("rocket", false):
+		report.free()
+	var pod_positions: Array[Vector3] = []
+	for index in boss.boss_salvo_count():
+		pod_positions.append(boss._rocket_muzzles[index % boss._rocket_muzzles.size()].global_position)
 	await _frames(2)
 	boss._fire_boss_salvo(player)
 	_check(get_tree().get_nodes_in_group("projectiles").is_empty(), "rocket launch pods cannot bypass side cover they protrude into")
+	var muzzle_effects := get_tree().get_nodes_in_group("muzzle_fx")
+	var at_physical_pods := muzzle_effects.size() == pod_positions.size()
+	for index in mini(muzzle_effects.size(), pod_positions.size()):
+		at_physical_pods = at_physical_pods and muzzle_effects[index].global_position.distance_to(pod_positions[index]) < 0.001
+	_check(at_physical_pods, "wall-blocked Boss salvo flashes remain at every physical rocket pod rather than moving to wall impacts")
+	var salvo_reports := _weapon_reports("rocket", false)
+	_check(salvo_reports.size() == 1 and salvo_reports[0].playing, "one Boss volley starts exactly one recorded rocket report despite multiple wall impacts")
 	for wall: StaticBody3D in walls:
 		wall.free()
 	player.global_position = Vector3(300.0, 0.03, 20.0)
@@ -240,3 +255,46 @@ func _check_boss_telegraph_and_cover(player: TankActor) -> void:
 	player.select_weapon(0)
 	_check(player.try_fire() and get_tree().get_nodes_in_group("projectiles").is_empty(), "a long barrel inside thin cover resolves its impact without spawning a shell beyond the wall")
 	barrel_cover.free()
+
+
+func _weapon_reports(kind: String, local_report: bool) -> Array[Node]:
+	return AudioService.get_children().filter(func(node: Node) -> bool:
+		return node.get_meta("audio_kind", "") == kind and node.get_meta("player_weapon", false) == local_report and not node.is_queued_for_deletion())
+
+
+func _check_terminal_shot_reports() -> void:
+	# Overlap the real receiving hull with the barrel segment. Its synchronous
+	# receive_damage signal must transition the actual game before try_fire returns.
+	for outcome in ["won", "lost"]:
+		game.start_game()
+		for tank: TankActor in get_tree().get_nodes_in_group("tanks"):
+			tank.set_physics_process(false)
+			tank.set_process(false)
+		var shooter: TankActor = game.player if outcome == "won" else game.boss
+		var victim: TankActor = game.boss if outcome == "won" else game.player
+		shooter.active = true
+		shooter.global_position = Vector3(300, 0.03, 0)
+		shooter.rotation = Vector3.ZERO
+		shooter._turret.rotation = Vector3.ZERO
+		shooter._update_recoil(1.0)
+		shooter._enemy_weapon_kind = "cannon"
+		shooter.reload = 0.0
+		if shooter.is_player:
+			shooter.select_weapon(0)
+			shooter._loadout.tick(10.0)
+		var physical_muzzle := shooter._muzzle.global_position
+		var midpoint := (shooter._barrel.global_position + physical_muzzle) * 0.5
+		victim.rotation = Vector3.ZERO
+		victim.global_position = midpoint - victim.get_node("HullCollision").position
+		victim.active = true
+		victim.invulnerable = 0.0
+		victim.hp = 1.0
+		await _frames(2)
+		_check(shooter.try_fire(), "accepted close-range shot fires before synchronous " + outcome + " result")
+		_check(game.mode == outcome and victim.destroyed and get_tree().get_nodes_in_group("projectiles").is_empty(), "real barrel obstruction damage enters " + outcome + " before a projectile can be spawned")
+		var reports := _weapon_reports("cannon", shooter.is_player)
+		_check(reports.size() == 1 and reports[0].playing and not reports[0].stream_paused, "the final accepted cannon report survives the synchronous " + outcome + " transition exactly once")
+		var muzzle_effects := get_tree().get_nodes_in_group("muzzle_fx")
+		_check(muzzle_effects.size() == 1 and muzzle_effects[0].global_position.distance_to(physical_muzzle) < 0.001, "the terminal " + outcome + " shot retains its flash at the physical muzzle")
+		AudioService.play_weapon_fire("cannon", physical_muzzle, shooter.is_player)
+		_check(_weapon_reports("cannon", shooter.is_player).size() == reports.size(), "the " + outcome + " state still rejects newly requested weapon sounds")

@@ -142,20 +142,20 @@
     {
       "event": "command_online",
       "file": "radio/command_online.wav",
-      "bytes": 96148,
-      "sha256": "83e68c93c34294ab29a71283eddb38bfc33b493718b66e009b8c31743a912ce1",
+      "bytes": 69956,
+      "sha256": "aaa4e9c45f0462cbca6d9c8ea3f67b3a6fd54330e39575aaec0093feb10c1090",
       "sample_rate": 44100,
       "channels": 1,
-      "duration_seconds": 1.0896145124716554,
-      "peak": 0.719390869140625,
-      "rms": 0.16624327760584875,
+      "duration_seconds": 0.7926530612244898,
+      "peak": 0.879974365234375,
+      "rms": 0.15376062702214147,
       "clipped_samples": 0,
       "source": "kenney-voiceover-pack",
-      "source_file": "Male/war_go_go_go.ogg",
-      "source_sha256": "f8ca2d8e7713a471e9b5ad16806d4ad726c6ad76d6c70d64ccb73735b416dc40",
+      "source_file": "Male/ready.ogg",
+      "source_sha256": "64e189a22bcf6768a46d34bdade886e7698502d1e2864a9407c29638199c5f1c",
       "performer": "Jeffrey M. Smith",
-      "transcript": "Go, go, go!",
-      "caption": "前进！前进！",
+      "transcript": "Ready.",
+      "caption": "准备就绪。",
       "human_recording": true,
       "language": "en",
       "processing": "Original complete actor take; mono 44.1kHz PCM16; gentle 115Hz high-pass / 6.5kHz low-pass; transparent gain normalization and 5ms endpoint fades. No pitch or timing changes."
@@ -421,5 +421,5 @@
     "armor_restored": "补给完成。装甲修复。",
     "mines_cleared": "脉冲完成。附近地雷已清除。"
   },
-  "total_bytes": 7235274
+  "total_bytes": 7209082
 }

@@ -677,17 +677,18 @@ func _fire_boss_salvo(target: TankActor) -> void:
 	# Damage can advance a Boss phase during the warning. Keep the announced
 	# number of lanes for this volley; the stronger pattern begins next time.
 	var shots := _salvo_shot_count if _salvo_target_locked else boss_salvo_count()
+	# A muzzle obstruction can end combat synchronously. This accepted volley
+	# has already fired, so its single report precedes any of those impacts.
+	var audio_origin := _rocket_muzzles[0].global_position if not _rocket_muzzles.is_empty() else _muzzle.global_position
+	AudioService.play_weapon_fire("rocket", audio_origin, false, true, 0.82)
 	for index in range(shots):
 		var launch_marker := _rocket_muzzles[index % _rocket_muzzles.size()] if not _rocket_muzzles.is_empty() else _muzzle
 		var target_point := _salvo_aim_point if _salvo_target_locked else target.global_position + Vector3.UP
 		var base := (target_point - launch_marker.global_position).normalized()
 		var spread := deg_to_rad((float(index) - float(shots - 1) * 0.5) * 7.0)
 		var direction := base.rotated(Vector3.UP, spread)
-		var launch_position := _launch_weapon(_turret.global_position, launch_marker.global_position, direction, projectile_damage * 0.55, 95.0, 4.2, "rocket")
-		game.spawn_muzzle_flash(launch_position, Color("ff593d"), 0.82, direction, "rocket")
-	var audio_origin := _rocket_muzzles[0].global_position if not _rocket_muzzles.is_empty() else _muzzle.global_position
-	AudioService.play_3d("cannon", audio_origin, -1.0, 0.68)
-	AudioService.play_3d("cannon_tail", audio_origin, -4.5, 0.82)
+		game.spawn_muzzle_flash(launch_marker.global_position, Color("ff593d"), 0.82, direction, "rocket")
+		_launch_weapon(_turret.global_position, launch_marker.global_position, direction, projectile_damage * 0.55, 95.0, 4.2, "rocket")
 	_salvo_target_locked = false
 
 
@@ -921,20 +922,21 @@ func try_fire() -> bool:
 	elif kind == "rocket" and not _rocket_muzzles.is_empty():
 		muzzle = _rocket_muzzles[0]
 		origin = _turret.global_position
-	var launch_position := _launch_weapon(origin, muzzle.global_position, direction, damage, speed, splash, kind)
+	# Commit the accepted shot's feedback before a close-range obstruction can
+	# synchronously kill the last target and switch the audio service to won/lost.
 	if kind == "machine_gun":
-		game.spawn_muzzle_flash(launch_position, Color("ffd8a2"), 0.85, direction, kind)
+		game.spawn_muzzle_flash(muzzle.global_position, Color("ffd8a2"), 0.85, direction, kind, is_player)
 		add_camera_shake(0.012)
 		_rumble(0.07, 0.12, 0.065)
-		AudioService.play_3d("machine_gun", launch_position, -16.0, _rng.randf_range(0.96, 1.04))
+		AudioService.play_weapon_fire(kind, muzzle.global_position, is_player, is_boss, _rng.randf_range(0.96, 1.04))
 	elif kind == "rocket":
-		game.spawn_muzzle_flash(launch_position, Color("ffc392"), 0.7, direction, kind)
+		game.spawn_muzzle_flash(muzzle.global_position, Color("ffc392"), 0.7, direction, kind, is_player)
 		add_camera_shake(0.08)
 		_rumble(0.25, 0.4, 0.18)
-		AudioService.play_3d("rocket", launch_position, -6.0, 0.95)
+		AudioService.play_weapon_fire(kind, muzzle.global_position, is_player, is_boss, 0.95)
 	else:
-		game.spawn_muzzle_flash(launch_position, Color("ffcc6d") if team == TEAM_PLAYER else Color("ff5c43"), 1.0 if not is_boss else 1.5, direction, kind)
-		_recoil_peak = 0.75 if is_boss or archetype == "heavy" else 0.6
+		game.spawn_muzzle_flash(muzzle.global_position, Color("ffcc6d") if team == TEAM_PLAYER else Color("ff5c43"), 1.0 if not is_boss else 1.5, direction, kind, is_player)
+		_recoil_peak = 1.1 if is_boss or archetype == "heavy" else 0.95
 		_recoil_time = 0.0
 		_hull_recoil_axis = Vector3.UP.cross(global_basis.inverse() * -direction).normalized()
 		add_camera_shake(0.24)
@@ -942,22 +944,24 @@ func try_fire() -> bool:
 			_camera_pivot.kick_shot(1.25 if archetype == "heavy" else 1.0)
 		_rumble(0.45, 0.82, 0.24)
 		var firing_pitch := 1.04 if is_player else (0.72 if is_boss else 0.9)
-		AudioService.play_3d("cannon", launch_position, -3.0 if not is_boss else -1.0, firing_pitch)
-		AudioService.play_3d("cannon_tail", launch_position, -7.0 if not is_boss else -4.0, firing_pitch)
+		AudioService.play_weapon_fire(kind, muzzle.global_position, is_player, is_boss, firing_pitch)
+	_launch_weapon(origin, muzzle.global_position, direction, damage, speed, splash, kind)
 	return true
 
 
 func _update_recoil(delta: float) -> void:
 	_recoil_time += delta
-	if _recoil_time < 0.065:
-		_recoil = _recoil_peak * sin(_recoil_time / 0.065 * PI * 0.5)
+	if _recoil_time < 0.085:
+		_recoil = _recoil_peak * sin(_recoil_time / 0.085 * PI * 0.5)
+	elif _recoil_time < 0.145:
+		_recoil = _recoil_peak
 	else:
-		_recoil = _recoil_peak * pow(maxf(0.0, 1.0 - (_recoil_time - 0.065) / 0.56), 2.0)
+		_recoil = _recoil_peak * pow(maxf(0.0, 1.0 - (_recoil_time - 0.145) / 0.70), 1.5)
 	if is_instance_valid(_barrel):
 		_barrel.position = _base_barrel_position + _barrel.basis.z * _recoil
 	if is_instance_valid(_hull_body):
 		# Only the suspension artwork rocks; the physical hull stays authoritative.
-		_hull_body.rotation = _hull_base_rotation + _hull_recoil_axis * _recoil * 0.06
+		_hull_body.rotation = _hull_base_rotation + _hull_recoil_axis * _recoil * 0.075
 
 
 func _rumble(weak: float, strong: float, duration: float) -> void:

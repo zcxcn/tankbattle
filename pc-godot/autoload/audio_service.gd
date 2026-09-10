@@ -3,6 +3,7 @@ extends Node
 
 const SAMPLE_RATE := 44100
 const MAX_VOICES := 24
+const PLAYER_WEAPON_LIMITS := {"cannon": 4, "machine_gun": 6, "rocket": 4}
 const CANNON_RECORDING := preload("res://assets/audio/recorded/tank_shots_preview_hq.mp3")
 const EXPLOSION_RECORDING := preload("res://assets/audio/recorded/muffled_distant_explosion.wav")
 const CANNON_VARIANTS := [preload("res://assets/audio/combat/cannon-01.wav"), preload("res://assets/audio/combat/cannon-02.wav"), preload("res://assets/audio/combat/cannon-03.wav")]
@@ -38,7 +39,7 @@ const RADIO_CLIPS := {
 # Complete performances from the CC0 Kenney Voiceover Pack. The four status
 # messages without matching recorded words remain text + a quiet UI cue.
 const RADIO_CAPTIONS := {
-	"command_online": "前进！前进！", "enemy_spotted": "正在接敌！",
+	"command_online": "准备就绪。", "enemy_spotted": "正在接敌！",
 	"enemy_approaching": "小心！", "target_destroyed": "目标已摧毁！",
 	"multiple_targets": "掩护我的后方！", "armor_low": "掩护我！",
 	"armor_critical": "快隐蔽！", "boss_detected": "小心！",
@@ -74,15 +75,19 @@ var _radio_queue: Array[String] = []
 var _radio_cooldowns: Dictionary = {}
 var _audio_clock := 0.0
 var _loop_cache: Dictionary = {}
+var _weapon_duck_remaining := 0.0
+var _weapon_duck_db := 0.0
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_rng.seed = 20490317
-	for kind in ["cannon", "machine", "explosion", "mine", "emp", "boss_warning", "hit", "pickup", "click", "victory", "defeat", "engine"]:
-		streams[kind] = CANNON_VARIANTS[0] if DisplayServer.get_name() == "headless" else _synthesize(kind)
-	# Recorded CC0 field audio adds the pressure wave and outdoor reflections;
-	# the synthesized layers keep the close transient responsive in the mix.
+	for kind in ["mine", "emp", "boss_warning", "hit", "pickup", "click", "victory", "defeat"]:
+		streams[kind] = _synthesize(kind)
+	# Each recording already contains its immediate report and outdoor decay.
+	# Play it once: stacking a synthesized boom and a second full recording
+	# obscures the attack and wastes two voices on one discharge.
+	streams["cannon"] = CANNON_VARIANTS[0]
 	streams["cannon_tail"] = CANNON_VARIANTS[0]
 	streams["explosion_tail"] = EXPLOSION_RECORDING
 	streams["explosion"] = EXPLOSION_VARIANTS[0]
@@ -95,6 +100,24 @@ func _ready() -> void:
 	streams["engine"] = _as_loop(ENGINE_LOOP)
 	streams["collision"] = ARMOR_VARIANTS[0]
 	_ensure_bus("Radio")
+	_ensure_bus("WorldSFX", "SFX")
+	_ensure_bus("PlayerWeapons", "SFX")
+	var world_bus := AudioServer.get_bus_index("WorldSFX")
+	var world_compressor := AudioEffectCompressor.new()
+	world_compressor.threshold = -12.0
+	world_compressor.ratio = 4.0
+	world_compressor.attack_us = 2000.0
+	world_compressor.release_ms = 160.0
+	world_compressor.gain = 0.0
+	AudioServer.add_bus_effect(world_bus, world_compressor)
+	# Safety ceiling only; source and bus gains provide the working headroom.
+	# Both child buses still obey the user's SFX and master volume/mute.
+	var master := AudioServer.get_bus_index("Master")
+	if AudioServer.get_bus_effect_count(master) == 0:
+		var limiter := AudioEffectLimiter.new()
+		limiter.ceiling_db = -1.0
+		limiter.threshold_db = -1.0
+		AudioServer.add_bus_effect(master, limiter)
 	for index in range(2):
 		var music := AudioStreamPlayer.new()
 		music.name = "MusicDeck%d" % index
@@ -112,13 +135,13 @@ func _ready() -> void:
 	set_music_track(int(SettingsService.get("music_track")), true)
 
 
-func _ensure_bus(bus_name: String) -> void:
+func _ensure_bus(bus_name: String, send := "Master") -> void:
 	if AudioServer.get_bus_index(bus_name) >= 0:
 		return
 	AudioServer.add_bus()
 	var index := AudioServer.bus_count - 1
 	AudioServer.set_bus_name(index, bus_name)
-	AudioServer.set_bus_send(index, "Master")
+	AudioServer.set_bus_send(index, send)
 
 
 func _as_loop(source: AudioStreamWAV) -> AudioStreamWAV:
@@ -156,6 +179,11 @@ func shutdown() -> void:
 
 func _tick_audio(delta: float) -> void:
 	if _game_mode not in ["paused", "settings"]:
+		_weapon_duck_remaining = maxf(0.0, _weapon_duck_remaining - delta)
+	var weapon_target := -5.0 if _weapon_duck_remaining > 0.0 else 0.0
+	_weapon_duck_db = move_toward(_weapon_duck_db, weapon_target, delta * 18.0)
+	AudioServer.set_bus_volume_db(AudioServer.get_bus_index("WorldSFX"), _weapon_duck_db)
+	if _game_mode not in ["paused", "settings"]:
 		_audio_clock += delta
 		_radio_gap = maxf(0.0, _radio_gap - delta)
 		if _radio_remaining > 0.0:
@@ -183,7 +211,7 @@ func set_game_state(mode: String) -> void:
 	var paused := mode in ["paused", "settings"]
 	_radio_player.stream_paused = paused
 	for node: Node in get_children():
-		if node is AudioStreamPlayer3D or node.get_meta("battlefield_notice", false):
+		if node is AudioStreamPlayer3D or node.get_meta("player_weapon", false) or node.get_meta("battlefield_notice", false):
 			node.stream_paused = paused
 			if mode == "title":
 				node.queue_free()
@@ -191,6 +219,9 @@ func set_game_state(mode: String) -> void:
 		for rig: Node in get_tree().get_nodes_in_group("vehicle_audio"):
 			rig.stop()
 	if mode == "title" or (mode == "playing" and previous not in ["paused", "settings"]):
+		_weapon_duck_remaining = 0.0
+		_weapon_duck_db = 0.0
+		AudioServer.set_bus_volume_db(AudioServer.get_bus_index("WorldSFX"), 0.0)
 		_clear_radio()
 		_radio_cooldowns.clear()
 	if mode in ["won", "lost"]:
@@ -300,13 +331,65 @@ func stop_vehicle(rig: Node3D) -> void:
 		rig.stop()
 
 
-func play_3d(kind: String, world_position: Vector3, volume_db := -5.0, pitch := 1.0) -> void:
+func play_weapon_fire(kind: String, world_position: Vector3, is_player := false, is_boss := false, pitch := 1.0) -> void:
+	if _game_mode != "playing":
+		return
+	if kind == "machine":
+		kind = "machine_gun"
+	elif kind == "he":
+		kind = "cannon"
+	if not PLAYER_WEAPON_LIMITS.has(kind):
+		return
+	var gain := -3.0 if kind == "cannon" else (-11.0 if kind == "machine_gun" else -8.0)
+	if not is_player:
+		play_3d(kind, world_position, gain - (2.0 if is_boss else 6.0), pitch, 85 if is_boss else 65)
+		return
+	# The local report is heard inside the player's vehicle. It must not fall
+	# 30 dB with the high tactical camera or lose a slot to distant impacts.
+	# Reserve separate bounded pools for main gun, MG and rocket; only retire
+	# the oldest tail of the same weapon when its own pool is full.
+	var same: Array[Node] = []
+	for node: Node in get_children():
+		if node.get_meta("player_weapon", false) and node.get_meta("audio_kind", "") == kind and not node.is_queued_for_deletion():
+			same.append(node)
+	if same.size() >= int(PLAYER_WEAPON_LIMITS[kind]):
+		same[0].stop()
+		same[0].queue_free()
+	var voice := AudioStreamPlayer.new()
+	voice.name = "PlayerWeapon"
+	voice.set_meta("audio_kind", kind)
+	voice.set_meta("player_weapon", true)
+	voice.add_to_group("combat_effects")
+	voice.stream = _select_stream(kind)
+	voice.volume_db = gain
+	voice.pitch_scale = clampf(pitch, 0.65, 1.35)
+	voice.bus = "PlayerWeapons"
+	add_child(voice)
+	voice.tree_exiting.connect(_stop_local_voice.bind(voice))
+	voice.finished.connect(voice.queue_free)
+	voice.play()
+	if kind != "machine_gun":
+		# Give the attack a small window in the engine/enemy mix; radio and UI
+		# remain clear, and the world naturally recovers during the shot tail.
+		_weapon_duck_remaining = 0.18
+		_weapon_duck_db = -5.0
+		AudioServer.set_bus_volume_db(AudioServer.get_bus_index("WorldSFX"), _weapon_duck_db)
+
+
+func _stop_local_voice(voice: AudioStreamPlayer) -> void:
+	voice.stop()
+	voice.stream = null
+
+
+func play_3d(kind: String, world_position: Vector3, volume_db := -5.0, pitch := 1.0, priority := 40) -> void:
 	if not streams.has(kind) or _game_mode in ["paused", "settings"]:
 		return
 	var fast_effect := kind in ["machine", "machine_gun", "armor_hit", "ground_hit"]
 	var same_voices := 0
 	var effect_voices := 0
 	for node: Node in get_children():
+		if node.get_meta("player_weapon", false):
+			continue
 		if node.has_meta("audio_kind") and not node.is_queued_for_deletion():
 			effect_voices += 1
 		if node.get_meta("audio_kind", "") == kind and not node.is_queued_for_deletion():
@@ -315,11 +398,9 @@ func play_3d(kind: String, world_position: Vector3, volume_db := -5.0, pitch := 
 	if fast_effect and same_voices >= 6:
 		return
 	if effect_voices >= MAX_VOICES:
-		if fast_effect:
-			return
 		var released := false
 		for node: Node in get_children():
-			if node.get_meta("audio_kind", "") in ["machine", "machine_gun", "armor_hit", "ground_hit"]:
+			if node.has_meta("audio_kind") and not node.get_meta("player_weapon", false) and not node.is_queued_for_deletion() and int(node.get_meta("audio_priority", 20)) <= priority:
 				node.free()
 				released = true
 				break
@@ -328,13 +409,18 @@ func play_3d(kind: String, world_position: Vector3, volume_db := -5.0, pitch := 
 	var voice := AudioStreamPlayer3D.new()
 	voice.stream = _select_stream(kind)
 	voice.set_meta("audio_kind", kind)
+	voice.set_meta("audio_priority", priority)
 	voice.add_to_group("combat_effects")
 	voice.position = world_position
 	voice.volume_db = volume_db
 	voice.pitch_scale = pitch
 	voice.max_distance = 180.0
+	# Calibrated for the 32 m tactical listener, matching the vehicle loops.
+	# max_db prevents a close chase camera from amplifying above source gain.
+	voice.unit_size = 28.0
+	voice.max_db = volume_db
 	voice.attenuation_filter_cutoff_hz = 12000.0
-	voice.bus = "SFX"
+	voice.bus = "WorldSFX"
 	add_child(voice)
 	voice.tree_exiting.connect(_stop_spatial_voice.bind(voice))
 	voice.finished.connect(voice.queue_free)
@@ -353,7 +439,7 @@ func play_3d(kind: String, world_position: Vector3, volume_db := -5.0, pitch := 
 
 func _select_stream(kind: String) -> AudioStream:
 	match kind:
-		"cannon_tail":
+		"cannon", "cannon_tail":
 			return CANNON_VARIANTS[_rng.randi_range(0, CANNON_VARIANTS.size() - 1)]
 		"explosion":
 			return EXPLOSION_VARIANTS[_rng.randi_range(0, EXPLOSION_VARIANTS.size() - 1)]
@@ -370,10 +456,14 @@ func _stop_spatial_voice(voice: AudioStreamPlayer3D) -> void:
 
 
 func play_ui(kind: String, volume_db := -8.0, pitch := 1.0, battlefield_notice := false) -> void:
-	if not streams.has(kind) or get_child_count() >= MAX_VOICES:
+	if not streams.has(kind):
+		return
+	var ui_voices := get_children().filter(func(node: Node) -> bool: return node is AudioStreamPlayer and node.has_meta("audio_kind") and not node.get_meta("player_weapon", false) and not node.is_queued_for_deletion())
+	if ui_voices.size() >= 4:
 		return
 	var voice := AudioStreamPlayer.new()
 	voice.set_meta("audio_kind", kind)
+	voice.set_meta("audio_priority", 10)
 	voice.set_meta("battlefield_notice", battlefield_notice)
 	voice.stream = streams[kind]
 	voice.volume_db = volume_db
@@ -390,7 +480,7 @@ func attach_engine(parent: Node3D) -> AudioStreamPlayer3D:
 		player.stream = streams["engine"]
 	player.volume_db = -18.0
 	player.max_distance = 80.0
-	player.bus = "SFX"
+	player.bus = "WorldSFX"
 	parent.add_child(player)
 	player.play()
 	return player

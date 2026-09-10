@@ -87,15 +87,15 @@ func update_view(delta: float, shake: Vector3) -> void:
 		_shot_kick = 0.0
 	var running: bool = is_instance_valid(tank.game) and tank.game.is_combat_running()
 	if running:
-		_shot_kick = move_toward(_shot_kick, 0.0, delta * 5.0)
+		_shot_kick = move_toward(_shot_kick, 0.0, delta * 3.8)
 		var held := Input.get_action_strength("precision_aim") if InputMap.has_action("precision_aim") else 0.0
 		_precision = move_toward(_precision, held, delta * 5.0)
 	var pivot := Vector3(0.0, 1.25, -3.0).lerp(Vector3(0.0, 2.6, 0.0), _blend)
 	global_position = tank.global_position + pivot + shake * lerpf(1.0, 0.36, _blend)
 	rotation = Vector3.ZERO
-	arm.rotation = Vector3(lerpf(deg_to_rad(-55.0), pitch + _shot_kick * 0.025, _blend), lerp_angle(0.0, yaw, _blend), 0.0)
-	arm.spring_length = lerpf(tactical_distance, chase_distance + _shot_kick * 0.3, _blend)
-	camera.fov = lerpf(59.0, 66.0 - _precision * 12.0 + _shot_kick, _blend)
+	arm.rotation = Vector3(lerpf(deg_to_rad(-55.0) + _shot_kick * 0.018, pitch + _shot_kick * 0.055, _blend), lerp_angle(0.0, yaw, _blend), 0.0)
+	arm.spring_length = lerpf(tactical_distance + _shot_kick * 0.45, chase_distance + _shot_kick * 0.65, _blend)
+	camera.fov = lerpf(59.0 + _shot_kick * 0.35, 66.0 - _precision * 12.0 + _shot_kick * 1.6, _blend)
 
 func aim_screen_point() -> Vector2:
 	return get_viewport().get_visible_rect().size * 0.5
