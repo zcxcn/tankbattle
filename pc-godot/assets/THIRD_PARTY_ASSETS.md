@@ -171,6 +171,14 @@ conversion details and the source dedication are included in
 [monster credits](models/monsters/horror_creature/CREDITS.md) and
 [provenance](models/monsters/horror_creature/provenance.json).
 
+## PC 0.4.9 additional siege creatures
+
+Two additional authored meshes join the horror creature: CDmir/TinyWorlds'
+CC0 Forest Monster, and thecubber's CC BY 3.0 Reptile commissioned by the
+[OpenGameArt.org community](https://opengameart.org).
+The reptile is adapted with a skinned tail, dorsal scutes and a new walk animation.
+Source links, licenses and modification notes: [siege beast credits](models/monsters/siege_beasts/CREDITS.md).
+
 ## Original modeled ordnance
 
 AP shells, HE shells, machine-gun bullets and rockets are original closed GLB

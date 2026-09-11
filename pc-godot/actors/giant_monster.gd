@@ -4,15 +4,20 @@ extends CharacterBody3D
 ## The director owns rewards, the defendable objective and population limits.
 
 const CREATURE := preload("res://assets/models/monsters/horror_creature/horror_creature.glb")
+const FOREST := preload("res://assets/models/monsters/siege_beasts/forest.glb")
+const REPTILE := preload("res://assets/models/monsters/siege_beasts/reptile.glb")
 const SOURCE_HEIGHT := 1.86
 const FALL_SECONDS := 2.6
 const CORPSE_SECONDS := 28.0
 const ATTACK_WINDUP := 1.65
 const ATTACK_COOLDOWN := 4.6
 const ROLES := {
-	"shambler": {"height": 9.0, "hp": 170.0, "speed": 1.8, "damage": 38.0, "reward": 30, "name": "腐化巨尸", "tint": Color(0.70, 0.77, 0.66)},
-	"brute": {"height": 12.0, "hp": 340.0, "speed": 1.55, "damage": 62.0, "reward": 55, "name": "暴虐巨尸", "tint": Color(0.87, 0.59, 0.46)},
-	"titan": {"height": 16.0, "hp": 620.0, "speed": 1.3, "damage": 95.0, "reward": 110, "name": "灾厄泰坦", "tint": Color(0.50, 0.61, 0.70)},
+	"shambler": {"height": 14.0, "hp": 170.0, "speed": 1.8, "damage": 38.0, "reward": 30, "name": "腐化巨尸", "tint": Color(0.70, 0.77, 0.66)},
+	"brute": {"height": 24.0, "hp": 290.0, "speed": 1.55, "damage": 55.0, "reward": 55, "name": "暴虐巨尸", "tint": Color(0.87, 0.59, 0.46)},
+	"titan": {"height": 42.0, "hp": 560.0, "speed": 1.3, "damage": 80.0, "reward": 110, "name": "灾厄泰坦", "tint": Color(0.50, 0.61, 0.70)},
+	"forest": {"height": 22.0, "hp": 200.0, "speed": 1.5, "damage": 45.0, "reward": 40, "name": "枯林岩魔", "tint": Color(0.78, 0.81, 0.73)},
+	"reaver": {"height": 30.0, "hp": 240.0, "speed": 1.7, "damage": 48.0, "reward": 50, "name": "裂脊猎兽", "tint": Color(0.63, 0.74, 0.62)},
+	"kaiju": {"height": 60.0, "hp": 680.0, "speed": 1.15, "damage": 85.0, "reward": 150, "name": "灭城巨蜥", "tint": Color(0.44, 0.52, 0.55)},
 }
 static var _skin_materials: Dictionary = {}
 var game: Node
@@ -36,6 +41,8 @@ var corpse_age := 0.0
 var step_count := 0
 var _visual: Node3D
 var _skin: MeshInstance3D
+var _skins: Array[MeshInstance3D] = []
+var _model: Node3D
 var _animation: AnimationPlayer
 var _skeleton: Skeleton3D
 var _walk_name := ""
@@ -87,41 +94,52 @@ func _ready() -> void:
 	_fall_roll = -0.11 if get_instance_id() % 2 else 0.11
 	set_meta("monster_height", height)
 	set_meta("height", height)
-	set_meta("model_source", "HorrorGameMaker / CC0")
+	set_meta("model_source", "CDmir / CC0" if archetype == "forest" else ("thecubber / CC BY 3.0" if archetype in ["reaver", "kaiju"] else "HorrorGameMaker / CC0"))
 
 
 func _build_visual(tint: Color) -> void:
 	_visual = Node3D.new()
 	_visual.name = "FallingBody"
 	add_child(_visual)
-	var model := CREATURE.instantiate() as Node3D
+	var scene: PackedScene = FOREST if archetype == "forest" else (REPTILE if archetype in ["reaver", "kaiju"] else CREATURE)
+	var model := scene.instantiate() as Node3D
+	_model = model
 	model.name = "SkinnedCreature"
-	model.scale = Vector3.ONE * (height / SOURCE_HEIGHT)
-	model.rotation.y = PI
+	# New assets are normalized to one metre, feet at zero, facing -Z.
+	model.scale = Vector3.ONE * (height / SOURCE_HEIGHT if scene == CREATURE else height)
+	model.rotation.y = PI if scene == CREATURE else 0.0
 	_visual.add_child(model)
 	var meshes := model.find_children("*", "MeshInstance3D", true, false)
-	if not meshes.is_empty():
-		_skin = meshes[0] as MeshInstance3D
-		if not _skin_materials.has(archetype):
-			var material := _skin.get_active_material(0).duplicate() as StandardMaterial3D
-			material.albedo_color = tint
+	for mesh_node in meshes:
+		var mesh := mesh_node as MeshInstance3D
+		_skins.append(mesh)
+		if _skin == null:
+			_skin = mesh
+		for surface in mesh.mesh.get_surface_count():
+			var key := "%s/%s/%d" % [archetype, mesh.name, surface]
+			if _skin_materials.has(key):
+				mesh.set_surface_override_material(surface, _skin_materials[key])
+				continue
+			var source := mesh.get_active_material(surface) as StandardMaterial3D
+			var material := source.duplicate() as StandardMaterial3D if source != null else StandardMaterial3D.new()
+			material.albedo_color *= tint
 			material.metallic = 0.0
 			material.roughness = 0.84
 			# The old Maya map behaves as gloss in this asset. Use a physical
 			# roughness value while retaining the authored skin/normal detail.
 			material.roughness_texture = null
 			material.normal_scale = 0.82
-			_skin_materials[archetype] = material
-		_skin.material_override = _skin_materials[archetype]
+			_skin_materials[key] = material
+			mesh.set_surface_override_material(surface, material)
 		# Animated limbs and the larger falling envelope must not be culled
 		# using the narrow imported walk-pose bounds.
-		_skin.extra_cull_margin = 2.8
+		mesh.extra_cull_margin = 2.8
 	var animations := model.find_children("*", "AnimationPlayer", true, false)
 	if not animations.is_empty():
 		_animation = animations[0] as AnimationPlayer
 		_animation.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
 		for clip in _animation.get_animation_list():
-			if "walk" in clip.to_lower():
+			if "walk" in clip.to_lower() or "run" in clip.to_lower():
 				_walk_name = clip
 				break
 		if not _walk_name.is_empty():
@@ -130,14 +148,14 @@ func _build_visual(tint: Color) -> void:
 	var rigs := model.find_children("*", "Skeleton3D", true, false)
 	if not rigs.is_empty():
 		_skeleton = rigs[0] as Skeleton3D
-		for bone_name in ["joint14", "joint14_001", "joint14.001"]:
+		for bone_name in ["joint14", "joint14_001", "joint14.001", "upper_arm.L", "upper_arm.R", "Arm_L", "Arm_R"]:
 			var index := _skeleton.find_bone(bone_name)
 			if index >= 0:
 				_arm_indices.append(index)
 		_head_bone = _skeleton.find_bone("joint15")
 	_health_display = Label3D.new()
 	_health_display.name = "MonsterIdentity"
-	_health_display.position.y = height + 0.8
+	_health_display.position.y = minf(height + 0.8, 15.0)
 	_health_display.font_size = 42
 	_health_display.pixel_size = 0.017
 	_health_display.outline_size = 8
@@ -187,7 +205,7 @@ func _physics_process(delta: float) -> void:
 	var melee_range := height * 0.24 + 3.5
 	if is_instance_valid(player) and not bool(player.get("destroyed")) and global_position.distance_to(player.global_position) < melee_range and _clear_reach(player.global_position):
 		_begin_attack(player, false)
-	elif offset.length() < 3.8 and _clear_reach(goal):
+	elif offset.length() < base_attack_range() and _clear_reach(goal):
 		_begin_attack(null, true)
 	else:
 		var heading := offset.normalized()
@@ -213,11 +231,11 @@ func _physics_process(delta: float) -> void:
 func _tick_walk(delta: float) -> void:
 	if is_instance_valid(_animation) and not _walk_name.is_empty():
 		var clip := _animation.get_animation(_walk_name)
-		_walk_phase = fposmod(_walk_phase + delta * 0.42 * (9.0 / height), clip.length)
+		_walk_phase = fposmod(_walk_phase + delta * clampf(0.65 * sqrt(14.0 / height), 0.28, 0.75), clip.length)
 		_animation.seek(_walk_phase, true)
 	_step_clock -= delta
 	if _step_clock <= 0.0 and Vector2(velocity.x, velocity.z).length() > 0.2:
-		_step_clock = 1.45 * (height / 9.0)
+		_step_clock = 1.45 * sqrt(height / 14.0)
 		step_count += 1
 		_ground_contact(0.16, false)
 
@@ -227,6 +245,10 @@ func _clear_reach(at: Vector3) -> bool:
 	var end := at + Vector3.UP * 2.2
 	var query := PhysicsRayQueryParameters3D.create(start, end, 1)
 	return get_world_3d().direct_space_state.intersect_ray(query).is_empty()
+
+func base_attack_range() -> float:
+	# The 60m capsule touches the shelter well before its root reaches the door.
+	return maxf(3.8, height * 0.145 + 1.6)
 
 
 func _begin_attack(target: Node3D, is_base: bool) -> void:
@@ -263,7 +285,7 @@ func _tick_attack(delta: float) -> void:
 	_ground_contact(0.7, true)
 	if _base_attack and is_instance_valid(director):
 		var goal: Vector3 = director.get_monster_goal(self)
-		if Vector2(goal.x - global_position.x, goal.z - global_position.z).length() < 4.5 and _clear_reach(goal):
+		if Vector2(goal.x - global_position.x, goal.z - global_position.z).length() < base_attack_range() + 0.7 and _clear_reach(goal):
 			director.monster_reached_base(self, attack_damage)
 	elif is_instance_valid(_attack_target) and not bool(_attack_target.get("destroyed")):
 		var distance := global_position.distance_to(_attack_target.global_position)
@@ -290,7 +312,7 @@ func receive_damage(amount: float, attacker_team: int, hit_position := Vector3.Z
 	_health_display.visible = true
 	_health_display.text = "%s  %d%%" % [display_name, ceili(hp / max_hp * 100.0)]
 	if amount >= 45.0 and attack_remaining <= 0.0:
-		stunned = maxf(stunned, 0.16 if archetype == "titan" else 0.30)
+		stunned = maxf(stunned, 0.16 if height >= 42.0 else 0.30)
 	if hp <= 0.0:
 		_die()
 	return accepted
@@ -328,8 +350,26 @@ func _die() -> void:
 		_animation.seek(0.28, true)
 	if is_instance_valid(_skeleton):
 		var skeleton_to_visual := _visual.global_transform.affine_inverse() * _skeleton.global_transform
-		for index in _skeleton.get_bone_count():
-			_death_bone_points.append(skeleton_to_visual * _skeleton.get_bone_global_pose(index).origin)
+		# Only deform joints referenced by skin weights, never outlying IK controls.
+		var used: Dictionary = {}
+		for mesh in _skins:
+			var skin := mesh.skin
+			if skin == null:
+				continue
+			for surface in mesh.mesh.get_surface_count():
+				var arrays := mesh.mesh.surface_get_arrays(surface)
+				var bones: PackedInt32Array = arrays[Mesh.ARRAY_BONES]
+				var weights: PackedFloat32Array = arrays[Mesh.ARRAY_WEIGHTS]
+				for index in bones.size():
+					if weights[index] <= 0.001:
+						continue
+					var bind := bones[index]
+					var bone := _skeleton.find_bone(skin.get_bind_name(bind))
+					if bone < 0:
+						bone = skin.get_bind_bone(bind)
+					if bone >= 0 and not used.has(bone):
+						used[bone] = true
+						_death_bone_points.append(skeleton_to_visual * _skeleton.get_bone_global_pose(bone).origin)
 	if is_instance_valid(director):
 		director.monster_killed(self, reward)
 	AudioService.play_3d("explosion_tail", global_position + Vector3.UP * height * 0.6, -10.0, 0.65, 55)
@@ -337,11 +377,16 @@ func _die() -> void:
 
 func _tick_corpse(delta: float) -> void:
 	corpse_age += delta
-	var t := clampf(corpse_age / FALL_SECONDS, 0.0, 1.0)
+	var t := clampf(corpse_age / (FALL_SECONDS * maxf(1.0, sqrt(height / 24.0))), 0.0, 1.0)
 	# A visible stagger, accelerating fall and settling shoulder give the
 	# giant a readable weight. This is the same rigged body, never a swap.
 	var fall := smoothstep(0.12, 1.0, t * t)
-	_visual.rotation = Vector3(-1.55 * fall, 0.0, _fall_roll * fall)
+	# Long-tailed beasts collapse onto a flank so their tail settles along the
+	# road instead of pointing vertically into the sky after a rigid forward fall.
+	if archetype in ["reaver", "kaiju"]:
+		_visual.rotation = Vector3(-0.22 * fall, 0.0, signf(_fall_roll) * 1.52 * fall)
+	else:
+		_visual.rotation = Vector3(-1.55 * fall, 0.0, _fall_roll * fall)
 	# Fit the actual frozen pose to the ground. A fixed offset leaves a
 	# floating chest on some stride phases and buries hands on others.
 	var lowest := 0.0
@@ -352,8 +397,8 @@ func _tick_corpse(delta: float) -> void:
 		_death_impact = true
 		_ground_contact(1.05, true)
 	if corpse_age > CORPSE_SECONDS - 3.0:
-		if is_instance_valid(_skin):
-			_skin.transparency = clampf((corpse_age - (CORPSE_SECONDS - 3.0)) / 3.0, 0.0, 1.0)
+		for mesh in _skins:
+			mesh.transparency = clampf((corpse_age - (CORPSE_SECONDS - 3.0)) / 3.0, 0.0, 1.0)
 	if corpse_age >= CORPSE_SECONDS:
 		queue_free()
 
@@ -367,12 +412,12 @@ func _ground_contact(strength: float, heavy: bool) -> void:
 	if is_instance_valid(player) and player.has_method("add_camera_shake"):
 		var distance := global_position.distance_to(player.global_position)
 		var proximity := clampf(1.0 - distance / 72.0, 0.0, 1.0)
-		player.add_camera_shake(strength * proximity * (height / 9.0))
+		player.add_camera_shake(minf(1.25, strength * proximity * sqrt(height / 14.0)))
 
 
 func _update_identity(player: Node3D) -> void:
 	if attack_remaining > 0.0:
 		return
 	var close := is_instance_valid(player) and player.global_position.distance_to(global_position) < 38.0
-	_health_display.visible = _hit_clock > 0.0 or close or archetype == "titan"
+	_health_display.visible = _hit_clock > 0.0 or close or height >= 42.0
 	_health_display.text = "%s  %d%%" % [display_name, ceili(hp / max_hp * 100.0)]

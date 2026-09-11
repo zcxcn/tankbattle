@@ -12,7 +12,9 @@
 
 ## Godot PC 原生重制
 
-`pc-godot/` 是用 **Godot 4.7.2、Forward+ 和 Jolt Physics** 制作的 Windows 原生坦克游戏。PC **0.4.8** 提供六关连续战役，每张地图 **288 × 384 米**：工业外围、补给港区、指挥堡垒、钢厂反击、港口封锁和最后壁垒，分别执行肃清、占领或摧毁任务，然后迎战各关首领。普通敌车逐关增加到 **6 / 9 / 12 / 15 / 18 / 22 辆**，装甲、火力和装填能力逐步增强；通关解锁、整备补给和重玩奖励均独立结算。
+`pc-godot/` 是用 **Godot 4.7.2、Forward+ 和 Jolt Physics** 制作的 Windows / macOS 原生坦克游戏。PC **0.4.9** 提供六关连续战役，每张地图 **288 × 384 米**：工业外围、补给港区、指挥堡垒、钢厂反击、港口封锁和最后壁垒，分别执行肃清、占领或摧毁任务，然后迎战各关首领。普通敌车逐关增加到 **6 / 9 / 12 / 15 / 18 / 22 辆**，装甲、火力和装填能力逐步增强；通关解锁、整备补给和重玩奖励均独立结算。
+
+**0.4.9 巨兽扩展与续波修复。** 无尽模式现有六类怪物：14 米腐化巨尸、22 米枯林岩魔、24 米暴虐巨尸、30 米裂脊猎兽、42 米灾厄泰坦、60 米灭城巨蜥，使用三套不同的带纹理骨骼模型。第二波加入灭城巨蜥，每五波再次出现；每三波加入泰坦。新增岩魔和爬行巨兽保留原作网格、UV 与法线，爬行巨兽另有长尾、背甲和行走动作。清空在场怪物及本波待入场队列后，最多等待 6 秒进入下一波；未清场仍按 65 秒持续增援，HUD 显示在场数量、待入场数量与下波倒计时。无尽第三人称支持向上观察高楼级目标。[0.4.9 自检与截图](docs/pc-realistic/SELF_CHECK_0.4.9.md)。
 
 **0.4.8 新模式：无尽防守 · 巨兽围城。** 从主菜单进入，在独立的城市大道上守住避难所；巨型恐怖生物持续从三条路线逼近，波次每 65 秒推进，每三波加入巨型精英。怪物具有纹理皮肤、骨骼行走、攻击预备和倒地过程，接近时出现沉重脚步与距离衰减震动。防线或坦克被摧毁即结束本局。击杀获得战利品，按 **Esc / 手柄 Start** 暂停并购买弹头强化、自动装填、基地加固、维修或弹药。四种武器均可升级；地雷伤害与 EMP 踉跄同样作用于巨怪。局内成长重新开局时重置，最高波数、击杀和生存时间独立保存，不消耗或解锁战役进度。模式默认第三人称，**C / Y** 可切回俯视，远程桌面继续使用 **F8**。[无尽模式自检与实际截图](docs/pc-realistic/SELF_CHECK_0.4.8.md)。
 
@@ -104,11 +106,11 @@ $godot = (Resolve-Path .\work\tools\godot-4.7.2\editor\Godot_v4.7.2-stable_win64
 pwsh -NoProfile -File .\scripts\build-pc-godot.ps1 -Configuration Release
 ```
 
-构建脚本固定校验官方 Godot 可执行文件和模板的 SHA-256；其他位置的同版 console 程序可通过 `-GodotPath <路径>` 指定，Windows 模板仍放在 `work/tools/godot-4.7.2/templates/`。Release 成品位于 `outputs/pc-godot/windows-x86_64/`，可分发压缩包为 `outputs/pc-godot/Iron-Embers-Windows-x86_64-0.4.8.zip`。解压后双击 `IronEmbers.exe`，保留同目录 `IronEmbers.pck` 和 `credits/` 即可离线运行。当前 Windows 可执行文件未做代码签名，首次运行可能显示系统信誉提示。
+构建脚本固定校验官方 Godot 可执行文件和模板的 SHA-256；其他位置的同版 console 程序可通过 `-GodotPath <路径>` 指定，Windows 模板仍放在 `work/tools/godot-4.7.2/templates/`。Release 成品位于 `outputs/pc-godot/windows-x86_64/`，可分发压缩包为 `outputs/pc-godot/Iron-Embers-Windows-x86_64-0.4.9.zip`。解压后双击 `IronEmbers.exe`，保留同目录 `IronEmbers.pck` 和 `credits/` 即可离线运行。当前 Windows 可执行文件未做代码签名，首次运行可能显示系统信誉提示。
 
 本次 PC 重制的源码集中在 `pc-godot/`，构建与验收脚本为 `scripts/build-pc-godot.ps1`、`scripts/smoke-pc-godot.ps1`；`mobile/baseline/` 和 `android/` 未改动。
 
-**macOS 0.4.8 测试包**：`outputs/pc-godot/Iron-Embers-macOS-Universal-0.4.8.zip`，包含 Apple Silicon 原生 ARM64，适合 MacBook Pro M4。将整个 ZIP 传到 Mac 后解压，把 `IronEmbers.app` 拖到“应用程序”运行；首次未公证提示可按包内中文说明在“隐私与安全性”允许。可运行 `pwsh -File scripts/build-pc-macos.ps1` 重新导出；[Mac 构建与检查记录](docs/pc-realistic/MACOS_EXPORT_0.4.8.md)说明签名、权限、资源验证及尚未完成的 M4 实机测试。
+**macOS 0.4.9 测试包**：`outputs/pc-godot/Iron-Embers-macOS-Universal-0.4.9.zip`，包含 Apple Silicon 原生 ARM64，适合 MacBook Pro M4。将整个 ZIP 传到 Mac 后解压，把 `IronEmbers.app` 拖到“应用程序”运行；首次未公证提示可按包内中文说明在“隐私与安全性”允许。可运行 `pwsh -File scripts/build-pc-macos.ps1` 重新导出；[Mac 导出流程与检查说明](docs/pc-realistic/MACOS_EXPORT_0.4.8.md)介绍签名、权限、资源验证及尚未完成的 M4 实机测试。
 
 ## 2026-09 网页战斗升级
 

@@ -79,7 +79,8 @@ func handle_look(motion: Vector2) -> void:
 	if not third_person:
 		return
 	yaw = wrapf(yaw - motion.x * 0.0023, -PI, PI)
-	pitch = clampf(pitch - motion.y * 0.0021, -0.72, 0.12)
+	var ceiling := 0.85 if is_instance_valid(tank.game) and tank.game.get("run_type") == "endless" else 0.12
+	pitch = clampf(pitch - motion.y * 0.0021, -0.72, ceiling)
 
 func reset_remote_pointer(forget_position := true) -> void:
 	_remote_pointer_active = false

@@ -348,7 +348,7 @@ func _build_title_layer() -> void:
 	layout.add_child(HSeparator.new())
 	var footer := HBoxContainer.new()
 	layout.add_child(footer)
-	footer.add_child(_label("BUILD 0.4.8 · FORWARD+ / PBR ARMOR", &"Micro"))
+	footer.add_child(_label("BUILD 0.4.9 · FORWARD+ / PBR ARMOR", &"Micro"))
 	footer.add_child(_spacer(true, false))
 	var asset_credit := _label("3D：tomm8 · GRIP420 / David Falke · Comrade1280 · CC BY 4.0\n机枪录音：KuraiWolf / Nightshade Game Studios · CC BY 4.0", &"Micro")
 	asset_credit.name = "AssetCredit"
@@ -833,7 +833,7 @@ func _update_hud() -> void:
 		var defense := _endless_snapshot()
 		var base_hp := maxf(0.0, float(defense.get("base_hp", 0.0)))
 		var base_max := maxf(1.0, float(defense.get("base_max_hp", 1.0)))
-		_hud_objective.text = "第 %02d 波 · 逼近 %d" % [maxi(1, int(defense.get("wave", 1))), maxi(0, int(defense.get("alive", 0)))]
+		_hud_objective.text = "第 %02d 波 · 在场 %d · 待入场 %d" % [maxi(1, int(defense.get("wave", 1))), maxi(0, int(defense.get("alive", 0))), maxi(0, int(defense.get("pending", 0)))]
 		_hud_kills.text = "防线 %d / %d" % [ceili(base_hp), ceili(base_max)]
 		_hud_kill_bar.max_value = base_max
 		_hud_kill_bar.value = clampf(base_hp, 0.0, base_max)
@@ -841,7 +841,7 @@ func _update_hud() -> void:
 		_hud_score_caption.text = "整备资源"
 		_hud_score.text = str(maxi(0, int(defense.get("scrap", 0))))
 		var next_wave := maxf(0.0, float(defense.get("next_wave_in", 0.0)))
-		_hud_defense_hint.text = "击杀 %d · Esc / Start 打开升级%s" % [maxi(0, int(defense.get("kills", 0))), " · 下波 %ds" % ceili(next_wave) if next_wave > 0.0 else ""]
+		_hud_defense_hint.text = "%s · 下波 %ds · Esc / Start 整备" % ["本波已清除" if defense.get("cleared", false) else "击杀 %d" % maxi(0, int(defense.get("kills", 0))), ceili(next_wave)]
 	else:
 		_hud_kill_bar.modulate = Color.WHITE
 	var music: Dictionary = _snapshot.get("music", {})

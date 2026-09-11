@@ -38,10 +38,10 @@ func run() -> void:
 		get_tree().quit(2)
 		return
 	var actor := spawn("shambler")
-	check(actor.height == 9.0 and actor.max_hp == 170.0 and actor.get_meta("height") == 9.0, "ordinary giant has a nine-meter body and three-shell health")
+	check(actor.height == 14.0 and actor.max_hp == 170.0 and actor.get_meta("height") == 14.0, "ordinary giant grows to fourteen metres without inflated first-wave health")
 	check(actor._skeleton != null and actor._skeleton.get_bone_count() >= 60, "downloaded horror mesh retains its authored deform skeleton")
 	check(actor._skin.mesh.get_surface_count() == 1, "each monster uses one skinned mesh draw surface")
-	var skin := actor._skin.material_override as StandardMaterial3D
+	var skin := actor._skin.get_active_material(0) as StandardMaterial3D
 	check(skin.albedo_texture != null and skin.normal_texture != null and skin.roughness >= 0.7, "source color and tangent normals retain physical rough skin response")
 	check(skin.albedo_texture.get_width() == 2048 and skin.metallic == 0.0, "skin retains 2K detail and nonmetallic material response")
 	check(not actor._walk_name.is_empty(), "source walk animation imports with a usable name")
@@ -52,8 +52,8 @@ func run() -> void:
 	check(not before.is_equal_approx(after), "walk cycle actually moves the leg skeleton")
 	check(actor.receive_damage(20, 1) == 0.0 and actor.receive_damage(-20, 0) == 0.0 and actor.receive_damage(NAN, 0) == 0.0, "friendly, negative and non-finite damage cannot alter monster health")
 	var previous_hp: float = actor.hp
-	check(is_equal_approx(actor.receive_damage(10, 0, Vector3(0, 8.0, 0), "cannon"), 16.5), "direct fire to the upper head rewards accurate aiming")
-	check(is_equal_approx(actor.receive_damage(10, 0, Vector3(0, 8.0, 0), "blast"), 10.0), "explosion position cannot manufacture a headshot multiplier")
+	check(is_equal_approx(actor.receive_damage(10, 0, Vector3(0, actor.height * 0.9, 0), "cannon"), 16.5), "direct fire to the upper head rewards accurate aiming")
+	check(is_equal_approx(actor.receive_damage(10, 0, Vector3(0, actor.height * 0.9, 0), "blast"), 10.0), "explosion position cannot manufacture a headshot multiplier")
 	check(is_equal_approx(previous_hp - actor.hp, 26.5), "damage values are consumed exactly once")
 	actor.attack_remaining = 0.8
 	actor.apply_emp(3.0)
@@ -85,10 +85,22 @@ func run() -> void:
 	check(actor.is_queued_for_deletion(), "corpse lifetime is bounded even without director reclamation")
 	var brute := spawn("brute")
 	var titan := spawn("colossus")
-	check(brute.height == 12.0 and titan.height == 16.0 and titan.archetype == "titan", "brute and titan are substantially larger and support colossus alias")
+	check(brute.height == 24.0 and titan.height == 42.0 and titan.archetype == "titan", "brute and titan grow to 24m and 42m and support colossus alias")
 	check(brute.max_hp > 170.0 and titan.max_hp > brute.max_hp and titan.move_speed < actor.move_speed, "elite pressure comes from scale and resilience while movement stays slow")
-	check(brute._skin.material_override != titan._skin.material_override, "elite variants have distinct skin color materials")
+	check(brute._skin.get_active_material(0) != titan._skin.get_active_material(0), "elite variants have distinct skin color materials")
 	var another_brute := spawn("brute")
-	check(brute._skin.material_override == another_brute._skin.material_override, "same archetype instances share immutable PBR resources")
+	check(brute._skin.get_active_material(0) == another_brute._skin.get_active_material(0), "same archetype instances share immutable PBR resources")
+	for kind in ["forest", "reaver", "kaiju"]:
+		var beast := spawn(kind)
+		check(beast._skin.mesh != actor._skin.mesh, "%s uses a distinct downloaded mesh from the zombie" % kind)
+		check(beast._skeleton != null and not beast._walk_name.is_empty(), "%s has a functioning skinned walk" % kind)
+		var skeleton_before: Array[Quaternion] = []
+		for index in beast._skeleton.get_bone_count():
+			skeleton_before.append(beast._skeleton.get_bone_pose_rotation(index))
+		beast._tick_walk(0.8)
+		var moved := false
+		for index in beast._skeleton.get_bone_count():
+			moved = moved or not skeleton_before[index].is_equal_approx(beast._skeleton.get_bone_pose_rotation(index))
+		check(moved, "%s walk changes actual deform bones" % kind)
 	print("GIANT MONSTER TEST: %d passed, %d failed" % [passed, failed])
 	await preload("res://tests/test_shutdown.gd").finish(get_tree(), 0 if failed == 0 else 1)

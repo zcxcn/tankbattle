@@ -97,7 +97,7 @@ func _damage_and_pause(monster: Node3D) -> void:
 	check(is_equal_approx(before - monster.hp, 25.0), "body shot applies its actual cannon damage exactly once")
 	check(get_tree().get_nodes_in_group("projectiles").is_empty(), "shell resolves its giant impact and retires")
 	before = monster.hp
-	game.spawn_projectile(game.player, Vector3(0, 8.0, 16), Vector3.FORWARD, 20.0, 260.0, 0.0, "cannon")
+	game.spawn_projectile(game.player, Vector3(0, monster.height * 0.85, 16), Vector3.FORWARD, 20.0, 260.0, 0.0, "cannon")
 	await frames(12)
 	check(is_equal_approx(before - monster.hp, 33.0), "real direct head shot receives the giant weak-point damage bonus")
 	before = monster.hp

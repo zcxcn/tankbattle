@@ -7,6 +7,7 @@ const MAX_ALIVE := 18
 const MAX_CORPSES := 8
 const BASE_POSITION := Vector3(0, 0.05, 112)
 const WAVE_SECONDS := 65.0
+const CLEAR_BREAK_SECONDS := 6.0
 var game: Node3D
 var upgrades: RefCounted = Upgrades.new()
 var wave := 0
@@ -25,6 +26,8 @@ var _rewarded: Dictionary = {}
 var _rng := RandomNumberGenerator.new()
 var _warning_clock := 0.0
 var _elite_pending := 0
+var _clear_announced := false
+var _kaiju_pending := 0
 
 func _ready() -> void:
 	name = "EndlessDirector"
@@ -39,8 +42,17 @@ func _physics_process(delta: float) -> void:
 	_warning_clock = maxf(0.0, _warning_clock - delta)
 	monsters = monsters.filter(func(m: Node3D) -> bool: return is_instance_valid(m) and not m.destroyed)
 	corpses = corpses.filter(func(m: Node3D) -> bool: return is_instance_valid(m))
+	# A cleared battlefield advances promptly, independent of corpse lifetime.
+	# Pending reinforcements still belong to this wave and must not be skipped.
+	if wave > 0 and pending == 0 and monsters.is_empty() and not _clear_announced:
+		_clear_announced = true
+		wave_clock = minf(wave_clock, CLEAR_BREAK_SECONDS)
+		game.notify("第 %d 波已清除 · %.0f 秒后下一波\nEsc / Start 整备，暂停期间倒计时停止" % [wave, maxf(0.0, wave_clock)], 5.0)
 	if wave_clock <= 0.0:
 		begin_wave()
+	# Do not leave the player waiting for the next member of a cleared batch.
+	if pending > 0 and monsters.is_empty():
+		spawn_clock = minf(spawn_clock, 1.0)
 	if pending > 0 and spawn_clock <= 0.0 and monsters.size() < MAX_ALIVE:
 		if spawn_monster() != null:
 			spawn_clock = maxf(3.0, 7.0 - float(wave) * 0.22)
@@ -55,19 +67,26 @@ func _physics_process(delta: float) -> void:
 
 func begin_wave() -> void:
 	wave += 1
+	_clear_announced = false
 	wave_clock = WAVE_SECONDS
 	pending = mini(32, pending + mini(20, 5 + wave))
 	if wave % 3 == 0:
 		_elite_pending = mini(3, _elite_pending + 1)
+	if wave == 2 or wave % 5 == 0:
+		_kaiju_pending = mini(2, _kaiju_pending + 1)
 	spawn_clock = 0.0
-	game.notify("第 %d 波 · %s\nEsc / Start：升级火力、维修防线、购买弹药" % [wave, "巨型精英正在接近" if wave % 3 == 0 else "怪物正在穿过封锁区"], 5.0)
-	AudioService.radio("boss_incoming" if wave % 3 == 0 else "mission_start")
+	var giant_wave := wave == 2 or wave % 5 == 0
+	var warning := "60 米灭城巨蜥正在接近" if giant_wave else ("42 米灾厄泰坦正在接近" if wave % 3 == 0 else "怪物正在穿过封锁区")
+	game.notify("第 %d 波 · %s\nEsc / Start：升级火力、维修防线、购买弹药" % [wave, warning], 5.0)
+	AudioService.radio("boss_incoming" if giant_wave or wave % 3 == 0 else "mission_start")
 	# A wave is an interval, not a requirement to kill the previous wave.
 	# A stalled front remains bounded by MAX_ALIVE and the pending queue cap.
 
 func spawn_monster() -> Node3D:
 	if monsters.size() >= MAX_ALIVE or pending <= 0 or not game.is_combat_running():
 		return null
+	var role := next_archetype()
+	var radius := float(Monster.ROLES[role].height) * 0.145
 	var lane := spawned % 3
 	var chosen := Vector3.ZERO
 	var found := false
@@ -75,15 +94,15 @@ func spawn_monster() -> Node3D:
 	for attempt in 6:
 		lane = (spawned + attempt) % 3
 		var spawn_x: float = [-32.0, 0.0, 32.0][lane] + _rng.randf_range(-5.0, 5.0)
-		var spawn_z := -96.0 - _rng.randf_range(0.0, 18.0) - float(attempt / 3) * 12.0
+		var spawn_z := -64.0 - _rng.randf_range(0.0, 12.0) - float(attempt / 3) * 28.0
 		if wave == 1 and spawned < 2:
 			spawn_z = -42.0 - spawned * 12.0
 		chosen = Vector3(spawn_x, 0.1, spawn_z)
 		var occupied := false
 		for other in monsters:
-			if is_instance_valid(other) and other.global_position.distance_to(chosen) < 11.0:
+			if is_instance_valid(other) and other.global_position.distance_to(chosen) < maxf(11.0, radius + other.height * 0.145 + 3.0):
 				occupied = true
-		if chosen.distance_to(game.player.global_position) >= 28.0 and not occupied:
+		if chosen.distance_to(game.player.global_position) >= maxf(28.0, radius + 20.0) and not occupied:
 			found = true
 			break
 	if not found:
@@ -94,9 +113,11 @@ func spawn_monster() -> Node3D:
 	monster.game = game
 	monster.director = self
 	monster.wave = maxi(1, wave)
-	monster.archetype = "titan" if _elite_pending > 0 else ("brute" if wave >= 2 and spawned % 4 == 3 else "shambler")
-	if _elite_pending > 0:
+	monster.archetype = role
+	if role == "titan" and _elite_pending > 0:
 		_elite_pending -= 1
+	elif role == "kaiju" and _kaiju_pending > 0:
+		_kaiju_pending -= 1
 	monster.position = chosen
 	monster.set_meta("siege_lane", lane)
 	game.add_child(monster)
@@ -104,6 +125,14 @@ func spawn_monster() -> Node3D:
 	spawned += 1
 	pending -= 1
 	return monster
+
+func next_archetype() -> String:
+	if _elite_pending > 0:
+		return "titan"
+	if _kaiju_pending > 0:
+		return "kaiju"
+	var roster := ["shambler", "forest", "reaver", "shambler", "brute", "forest"]
+	return roster[spawned % roster.size()]
 
 func get_monster_goal(monster: Node3D) -> Vector3:
 	# Broad parallel lanes prevent a single tank/body from blocking the entire horde.
@@ -195,5 +224,5 @@ func snapshot() -> Dictionary:
 		if offer.id == "ammo" and is_instance_valid(game.player) and not game.player.needs_resupply():
 			offer.available = false
 	return {"wave": wave, "kills": kills, "scrap": upgrades.scrap, "base_hp": base_hp, "base_max_hp": base_max_hp,
-		"alive": monsters.size(), "next_wave_in": maxf(0.0, wave_clock), "best_wave": SaveService.profile.get("endless_best_wave", 0),
+		"alive": monsters.size(), "pending": pending, "cleared": _clear_announced, "next_wave_in": maxf(0.0, wave_clock), "best_wave": SaveService.profile.get("endless_best_wave", 0),
 		"best_kills": SaveService.profile.get("endless_best_kills", 0), "upgrades": offers, "defeat_reason": defeat_reason}
