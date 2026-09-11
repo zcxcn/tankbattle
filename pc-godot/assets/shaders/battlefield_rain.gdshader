@@ -2,6 +2,7 @@ shader_type spatial;
 render_mode unshaded, cull_disabled, depth_draw_never, skip_vertex_transform, fog_disabled;
 
 uniform sampler2D roof_height : filter_nearest, repeat_disable;
+uniform sampler2D surface_height : filter_linear, repeat_disable;
 uniform vec2 map_origin;
 uniform vec2 map_size;
 uniform vec2 field_center;
@@ -20,8 +21,11 @@ void vertex() {
 	vec2 wind = vec2(0.82, 0.25) * rain_time;
 	vec2 world_xz = field_center + mod(seed_position + wind - field_center + field_radius, field_radius * 2.0) - field_radius;
 	float fall = fract(random.z - rain_time * fall_speed / fall_height);
-	float height = 0.075 + fall * fall_height;
-	float roof = texture(roof_height, (world_xz - map_origin) / map_size).r;
+	vec2 map_uv = (world_xz - map_origin) / map_size;
+	float ground = texture(surface_height, map_uv).r;
+	vec2 sky = texture(roof_height, map_uv).rg;
+	float height = ground + fall * fall_height;
+	float roof = sky.g > 0.5 ? sky.r : ground;
 	vec3 right = normalize(INV_VIEW_MATRIX[0].xyz);
 	vec3 world_position = vec3(world_xz.x, height, world_xz.y) + right * VERTEX.x + vec3(-0.04, 1.0, -0.015) * VERTEX.y;
 	float distance_to_edge = max(abs(world_xz.x - field_center.x), abs(world_xz.y - field_center.y));

@@ -1,0 +1,9 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="PackedScene" path="res://assets/models/environment/polyhaven_rock09/rock_09_1k.gltf" id="1_rock"]
+
+[node name="Rock09" type="Node3D"]
+
+[node name="Scan" parent="." instance=ExtResource("1_rock")]
+position = Vector3(-0.00188179, 0.00396957, -0.07778458)
+scale = Vector3(6.91445718, 6.91445718, 6.91445718)

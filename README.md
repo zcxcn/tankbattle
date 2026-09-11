@@ -12,7 +12,9 @@
 
 ## Godot PC 原生重制
 
-`pc-godot/` 是用 **Godot 4.7.2、Forward+ 和 Jolt Physics** 制作的 Windows 原生坦克游戏。PC **0.4.6** 提供六关连续战役，每张地图 **288 × 384 米**：工业外围、补给港区、指挥堡垒、钢厂反击、港口封锁和最后壁垒，分别执行肃清、占领或摧毁任务，然后迎战各关首领。普通敌车逐关增加到 **6 / 9 / 12 / 15 / 18 / 22 辆**，装甲、火力和装填能力逐步增强；通关解锁、整备补给和重玩奖励均独立结算。
+`pc-godot/` 是用 **Godot 4.7.2、Forward+ 和 Jolt Physics** 制作的 Windows 原生坦克游戏。PC **0.4.7** 提供六关连续战役，每张地图 **288 × 384 米**：工业外围、补给港区、指挥堡垒、钢厂反击、港口封锁和最后壁垒，分别执行肃清、占领或摧毁任务，然后迎战各关首领。普通敌车逐关增加到 **6 / 9 / 12 / 15 / 18 / 22 辆**，装甲、火力和装填能力逐步增强；通关解锁、整备补给和重玩奖励均独立结算。
+
+0.4.7 把平坦厂区扩展为城市河谷战场：战区加入约 38–70 米的退台办公楼、住宅高层与市政塔楼，配有倒角外壳、玻璃窗、阳台、入口雨棚和屋顶设备，外围还有十栋天际线建筑。28 米宽的河道穿过地图，三座带实体桥面、护栏、桥墩和钢拱的桥连接主干道；河水低于路面，具有流动细浪与岸线泡沫。东南街区替换为可驾驶的起伏山丘，远处增加山岭和草地平原。实拍岩石、现代混凝土立面、草地与泥石 PBR 使用 Poly Haven CC0 资源，完整原始素材约 5.95 MB。雨雪落地高度、积水、屋顶遮挡和桥梁通行均已适配；[地形与城市自检](docs/pc-realistic/SELF_CHECK_0.4.7.md)记录实际物理验证和渲染截图。
 
 主菜单可选择 KF51、Challenger 2 和 KV-2 三种授权写实 PBR 底盘，分别偏重机动、均衡和重装甲。敌军扩展为 **11 种作战角色**：原有侦察、主战、重装、远射、机枪和火箭车，加上巡护、突击、榴弹、抢修和重型歼击车。它们共用三种原始车体，具有不同装备外观和实际行为；抢修车消耗有限维修储备修复附近可见友军；原布雷车改为主炮巡护车，敌人和 Boss 均不再具备布雷能力。单车原始模型为 63,016–176,035 三角面，保留完整 PBR 材质、独立炮塔与炮管。作者与许可见 [`资产来源`](pc-godot/assets/THIRD_PARTY_ASSETS.md)。
 
@@ -100,7 +102,7 @@ $godot = (Resolve-Path .\work\tools\godot-4.7.2\editor\Godot_v4.7.2-stable_win64
 pwsh -NoProfile -File .\scripts\build-pc-godot.ps1 -Configuration Release
 ```
 
-构建脚本固定校验官方 Godot 可执行文件和模板的 SHA-256；其他位置的同版 console 程序可通过 `-GodotPath <路径>` 指定，Windows 模板仍放在 `work/tools/godot-4.7.2/templates/`。Release 成品位于 `outputs/pc-godot/windows-x86_64/`，可分发压缩包为 `outputs/pc-godot/Iron-Embers-Windows-x86_64-0.4.6.zip`。解压后双击 `IronEmbers.exe`，保留同目录 `IronEmbers.pck` 和 `credits/` 即可离线运行。当前 Windows 可执行文件未做代码签名，首次运行可能显示系统信誉提示。
+构建脚本固定校验官方 Godot 可执行文件和模板的 SHA-256；其他位置的同版 console 程序可通过 `-GodotPath <路径>` 指定，Windows 模板仍放在 `work/tools/godot-4.7.2/templates/`。Release 成品位于 `outputs/pc-godot/windows-x86_64/`，可分发压缩包为 `outputs/pc-godot/Iron-Embers-Windows-x86_64-0.4.7.zip`。解压后双击 `IronEmbers.exe`，保留同目录 `IronEmbers.pck` 和 `credits/` 即可离线运行。当前 Windows 可执行文件未做代码签名，首次运行可能显示系统信誉提示。
 
 本次 PC 重制的源码集中在 `pc-godot/`，构建与验收脚本为 `scripts/build-pc-godot.ps1`、`scripts/smoke-pc-godot.ps1`；`mobile/baseline/` 和 `android/` 未改动。
 

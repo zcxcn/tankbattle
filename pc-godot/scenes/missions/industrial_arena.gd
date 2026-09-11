@@ -1,11 +1,13 @@
 class_name IndustrialArena
 extends Node3D
-## Three authored industrial districts sharing real-world scale modular fittings.
+## Six combat districts with city blocks, bridged waterways and rolling terrain.
 
 const DetailsBuilder = preload("res://scripts/industrial_details.gd")
 const Catalog = preload("res://data/mission_catalog.gd")
 const FacadeLibrary = preload("res://scripts/factory_facade_library.gd")
 const WeatherScript = preload("res://scripts/battlefield_weather.gd")
+const CityBuilder = preload("res://scripts/city_architecture.gd")
+const TerrainBuilder = preload("res://scripts/river_terrain.gd")
 const SNOW_COVER_SHADER = preload("res://assets/shaders/snow_cover.gdshader")
 const WEATHER_KINDS := ["dry", "light_rain", "heavy_rain", "snow", "fog"]
 
@@ -27,6 +29,12 @@ var weather: Node3D
 var weather_kind := ""
 var _weather_roofs: Array[AABB] = []
 var _weather_baseline: Array[Dictionary] = []
+var landscape: Node3D
+var _city: RefCounted
+var _landscape_data: Dictionary = {}
+const HILL_CENTER := Vector3(48, -0.05, 108)
+const HILL_RADII := Vector2(25, 17)
+const HILL_HEIGHT := 4.6
 
 
 func _ready() -> void:
@@ -55,15 +63,22 @@ func _ready() -> void:
 	_glass = ArtFactory.material(Color("354952"), 0.48, 0.24)
 	_lamp_lens = ArtFactory.material(Color("ffe3b3"), 0.0, 0.3, 2.3)
 	_details = DetailsBuilder.new()
+	_city = CityBuilder.new()
 	_build_environment()
 	_build_ground()
+	landscape = TerrainBuilder.new()
+	_landscape_data = landscape.build(self, _concrete, _asphalt, _metal)
+	landscape.add_hill(self, HILL_CENTER, HILL_RADII, HILL_HEIGHT)
+	_weather_roofs.append_array(_landscape_data.get("weather_roofs", []))
 	_build_boundaries()
 	_build_industrial_blocks()
 	_build_cover()
 	_build_details()
 	_build_landmarks()
+	_build_city_skyline()
+	_weather_roofs.append_array(_city.roofs)
 	_details.bake(self)
-	set_meta("industrial_detail_pieces", _details.piece_count)
+	set_meta("industrial_detail_pieces", _details.piece_count + _city.piece_count)
 	set_meta("mission_index", mission_index)
 	set_meta("arena_bounds", get_radar_bounds())
 	set_meta("building_types", _building_types)
@@ -89,6 +104,8 @@ func _remember_weather_properties(target: Object, properties: Array) -> void:
 func _capture_weather_baseline() -> void:
 	for surface in [_asphalt, _concrete, _building, _metal, _dark_metal]:
 		_remember_weather_properties(surface, ["albedo_color", "roughness", "normal_scale", "next_pass"])
+	for surface in [_city.concrete, _city.stone, _city.metal]:
+		_remember_weather_properties(surface, ["albedo_color", "next_pass"])
 	var environment: Environment = get_node("WorldEnvironment").environment
 	_remember_weather_properties(environment, ["ambient_light_energy", "fog_light_color", "fog_density", "volumetric_fog_density", "fog_sky_affect", "volumetric_fog_sky_affect"])
 	_remember_weather_properties(environment.sky.sky_material, ["sky_top_color", "sky_horizon_color"])
@@ -136,6 +153,8 @@ func _apply_rain() -> void:
 	_asphalt.normal_scale = 0.46
 	_concrete.albedo_color = Color("757e7e")
 	_concrete.roughness = 0.63
+	_city.concrete.albedo_color = _city.concrete.albedo_color.darkened(0.12)
+	_city.stone.albedo_color = _city.stone.albedo_color.darkened(0.12)
 	var environment: Environment = get_node("WorldEnvironment").environment
 	var sky_material: ProceduralSkyMaterial = environment.sky.sky_material
 	sky_material.sky_top_color = Color("52616d")
@@ -158,7 +177,7 @@ func _apply_snow() -> void:
 	cover.set_shader_parameter("map_size", WeatherScript.MAP_SIZE)
 	# The extra pass only coats upward, sky-exposed faces. Original texture,
 	# normals and imported building materials are left intact underneath.
-	for surface in [_asphalt, _concrete, _building, _metal, _dark_metal]:
+	for surface in [_asphalt, _concrete, _building, _metal, _dark_metal, _city.concrete, _city.stone, _city.metal]:
 		surface.next_pass = cover
 	_asphalt.albedo_color = Color("8b989f")
 	_asphalt.roughness = 0.86
@@ -255,14 +274,20 @@ func _build_environment() -> void:
 
 
 func _build_ground() -> void:
-	ArtFactory.add_box(self, "Terrain", Vector3(0, -0.45, 0), Vector3(290, 0.8, 386), _concrete, true)
+	# Leave a genuine 28m opening: water is below street level, with bridge
+	# collision providing the only ground across the channel.
+	for segment in [Vector2(-193, 22), Vector2(50, 193)]:
+		ArtFactory.add_box(self, "Terrain", Vector3(0, -0.45, (segment.x + segment.y) * 0.5), Vector3(290, 0.8, segment.y - segment.x), _concrete, true)
 	for x in [-96.0, 0.0, 96.0]:
-		ArtFactory.add_box(self, "MainAvenue", Vector3(x, 0.015, 0), Vector3(24 if x == 0 else 20, 0.05, 380), _asphalt)
+		for segment in [Vector2(-190, 22), Vector2(50, 190)]:
+			ArtFactory.add_box(self, "MainAvenue", Vector3(x, 0.015, (segment.x + segment.y) * 0.5), Vector3(24 if x == 0 else 20, 0.05, segment.y - segment.x), _asphalt)
 	for z in [-144.0, -72.0, 0.0, 72.0, 144.0]:
 		ArtFactory.add_box(self, "CrossStreet", Vector3(0, 0.025, z), Vector3(282, 0.06, 18), _asphalt)
 	var stripe := ArtFactory.material(Color("d3bd72"), 0.05, 0.6, 0.12)
 	for x in [-96.0, 0.0, 96.0]:
 		for z in range(-184, 185, 8):
+			if z > 20 and z < 52:
+				continue
 			_details.box(Vector3(x, 0.065, float(z)), Vector3(0.18, 0.025, 3.4), stripe)
 	for z in [-144.0, -72.0, 0.0, 72.0, 144.0]:
 		for x in range(-136, 137, 8):
@@ -270,6 +295,8 @@ func _build_ground() -> void:
 	# Loading aprons, kerbs and drainage sit outside the three clear vehicle lanes.
 	for side in [-1.0, 1.0]:
 		for z in [-108.0, -36.0, 36.0, 108.0]:
+			if z == 36.0 or (side > 0 and z == 108.0):
+				continue
 			_details.box(Vector3(side * 48, 0.04, z), Vector3(66, 0.04, 48), _asphalt)
 			for dz in [-25.0, 25.0]:
 				_details.box(Vector3(side * 48, 0.15, z + dz), Vector3(64, 0.24, 0.4), _concrete)
@@ -304,6 +331,8 @@ func _build_industrial_blocks() -> void:
 	for row in range(4):
 		var z := -108.0 + row * 72.0
 		for side in [-1.0, 1.0]:
+			if row == 2 or (row == 3 and side > 0):
+				continue # River corridor and a drivable hillside park replace parcels.
 			if _district == 1 and side > 0:
 				continue # This district's eastern parcels are working container yards.
 			if _district == 2 and row % 2 == 0:
@@ -319,11 +348,23 @@ func _build_industrial_blocks() -> void:
 			buildings.append([Vector3(side * 48, height * 0.5, z), Vector3(width, height, depth)])
 	for side in [-1.0, 1.0]:
 		buildings.append([Vector3(side * 55, 5.0, 175), Vector3(42, 10, 20)])
+		buildings.append([Vector3(side * 125, 3.0, -36), Vector3(18, 6, 22)])
 		if _district != 1:
 			buildings.append([Vector3(side * 58, 7.0, -174), Vector3(42, 14, 20)])
 	for index in range(buildings.size()):
 		var data: Array = buildings[index]
-		_construct_building(data[0], data[1], index)
+		var at: Vector3 = data[0]
+		if at.z == -108.0 or (at.x < 0 and at.z == 108.0):
+			# Consolidate the fort's paired magazines into one street-scale tower.
+			if absf(at.x) == 64.0:
+				continue
+			var center := Vector3(signf(at.x) * 48.0, 0, at.z)
+			var variant := posmod(index + mission_index, 3)
+			var tower: Node3D = _city.build(self, center, 36.0, 23.0, 38.0 + variant * 13.0 + _district * 3.0, variant)
+			if not _building_types.has(tower.get_meta("building_type")):
+				_building_types.append(tower.get_meta("building_type"))
+		else:
+			_construct_building(data[0], data[1], index)
 	_details.placement = Transform3D.IDENTITY
 
 
@@ -394,6 +435,8 @@ func _build_cover() -> void:
 		Vector3(-116, 0, 122), Vector3(116, 0, 84), Vector3(-116, 0, -84), Vector3(116, 0, -152),
 	]
 	for index in range(positions.size()):
+		if positions[index].z > 17.0 and positions[index].z < 55.0:
+			continue
 		var cover := DestructibleCover.new()
 		cover.name = "DestructibleCover_%02d" % index
 		cover.game = game
@@ -412,6 +455,8 @@ func _build_details() -> void:
 			_street_lamp(center, side)
 	for z in [-120.0, 24.0, 120.0]:
 		for side in [-1.0, 1.0]:
+			if z == 24.0 or (side > 0 and z == 120.0):
+				continue
 			_utility_station(Vector3(side * 78.0, 0, z))
 	var container_paints: Array[StandardMaterial3D] = [
 		_weathered_steel(Color("7b4b39")),
@@ -422,9 +467,13 @@ func _build_details() -> void:
 	var container_rows := [-128.0, -88.0, -56.0, -16.0, 16.0, 56.0, 88.0, 128.0]
 	for index in range(16):
 		var side := -1.0 if index % 2 == 0 else 1.0
+		if container_rows[index >> 1] in [16.0, 56.0] or (side > 0 and container_rows[index >> 1] > 80.0):
+			continue
 		_add_container(Vector3(side * 60, 1.3, container_rows[index >> 1]), container_paints[index % 3], index)
 	if _district == 1:
 		for row in range(4):
+			if row >= 2:
+				continue
 			for column in range(4):
 				var z := -108.0 + row * 72.0
 				var x := 29.0 + column * 13.0
@@ -462,23 +511,21 @@ func _build_landmarks() -> void:
 	match _district:
 		1:
 			# The quay and water are beyond the perimeter: every playable road stays solid.
-			var water := ArtFactory.material(Color("264753"), 0.3, 0.18)
-			ArtFactory.add_box(self, "HarborWater", Vector3(208, -0.22, 0), Vector3(124, 0.1, 420), water)
-			for z in [-108.0, 36.0, 108.0]:
+			for z in [-108.0, 108.0]:
 				_port_crane(Vector3(124, 0, z))
 			for z in range(-174, 175, 24):
 				_details.cylinder(Vector3(140, 0.75, float(z)), 0.7, 1.5, _dark_metal)
 				_details.cylinder(Vector3(140, 1.5, float(z)), 0.95, 0.25, _metal)
 		2:
 			for side in [-1.0, 1.0]:
-				for z in [-108.0, 36.0, 108.0]:
+				for z in [-108.0, 108.0]:
 					_watch_tower(Vector3(side * 125, 0, z))
 				for z in [-36.0, 108.0]:
 					# Cast revetments around the outer forts have gaps aligned to cross streets.
 					ArtFactory.add_box(self, "FortRevetment", Vector3(side * 126, 2, z + 23), Vector3(20, 4, 2.4), _concrete, true)
 			_radar_mast(Vector3(58, 14.2, -174))
 		_:
-			for z in [-108.0, 36.0]:
+			for z in [-108.0]:
 				for x in [-125.0, 125.0]:
 					_storage_tank(Vector3(x, 0, z))
 			_radar_mast(Vector3(-58, 14.2, -174))
@@ -642,6 +689,48 @@ func set_boss_gate_open(open: bool) -> void:
 
 func get_radar_bounds() -> Rect2:
 	return Catalog.ARENA_BOUNDS
+
+
+func get_surface_height(at: Vector3) -> float:
+	if at.z > 22.0 and at.z < 50.0:
+		for x in [-96.0, 0.0, 96.0]:
+			if absf(at.x - x) <= (9.0 if x == 0 else 8.0):
+				return 0.075
+		return -3.2
+	var hill := TerrainBuilder.hill_height(Vector2(at.x, at.z), Vector2(HILL_CENTER.x, HILL_CENTER.z), HILL_RADII, HILL_HEIGHT)
+	return maxf(0.075, HILL_CENTER.y + hill)
+
+
+func _build_city_skyline() -> void:
+	# Buildings outside the perimeter give the combat streets an urban context;
+	# the larger playable towers above remain real ballistic/camera obstacles.
+	for index in 7:
+		var x := -115.0 + index * 43.0
+		var z := -245.0 - float(index % 3) * 32.0
+		_city.build(self, Vector3(x, -0.3, z), 25.0 + (index % 2) * 8.0, 22.0, 54.0 + (index * 17 + mission_index * 7) % 49, index, false)
+	for index in 3:
+		_city.build(self, Vector3(204.0 + index * 25.0, -0.3, -115.0 + index * 110.0), 25.0, 24.0, 45.0 + index * 19.0, index + 1, false)
+	_build_river_rocks()
+	set_meta("city_towers", 10)
+	set_meta("river_bounds", Rect2(-144, 22, 288, 28))
+	set_meta("bridges", _landscape_data.get("bridges", []))
+	set_meta("drivable_hill", {"center": HILL_CENTER, "radii": HILL_RADII, "height": HILL_HEIGHT})
+
+
+func _build_river_rocks() -> void:
+	var source: PackedScene = load("res://assets/models/environment/polyhaven_rock09/rock_09_normalized.tscn")
+	for index in 12:
+		var x := -129.0 + index * 23.0
+		if absf(x) < 17.0 or absf(absf(x) - 96.0) < 17.0:
+			continue
+		for side in [-1.0, 1.0]:
+			var rock: Node3D = source.instantiate()
+			rock.name = "ScannedRiverRock"
+			rock.position = Vector3(x, -3.5, 36.0 + side * 11.2)
+			rock.rotation.y = index * 1.77 + side
+			rock.scale = Vector3.ONE * (3.6 + (index % 3) * 0.9)
+			add_child(rock)
+			rock.set_meta("licensed_rock", true)
 
 
 func get_spawn_candidates() -> Array[Vector3]:

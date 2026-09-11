@@ -36,8 +36,10 @@ void fragment() {
 	float broad = sample_snow_noise(world_position.xz * 0.13) * 0.65 + sample_snow_noise(world_position.xz * 0.63) * 0.35;
 	float grains = sample_snow_noise(world_position.xz * 8.0);
 	float exposed_top = smoothstep(0.58, 0.94, world_normal.y);
-	float roof = texture(roof_height, (world_position.xz - map_origin) / map_size).r;
-	exposed_top *= 1.0 - step(world_position.y + 0.4, roof);
+	vec2 sky = texture(roof_height, (world_position.xz - map_origin) / map_size).rg;
+	// The terrain is already the surface being shaded; only an actual static
+	// roof above it may hide snow, not a neighbouring texel higher on the hill.
+	exposed_top *= 1.0 - sky.g * step(world_position.y + 0.4, sky.r);
 	// A thin broken layer leaves road grain and worn routes visible underneath.
 	float coverage = smoothstep(0.18, 0.76, broad + grains * 0.08);
 	ALBEDO = mix(vec3(0.55, 0.63, 0.69), vec3(0.81, 0.85, 0.88), grains * 0.16 + broad * 0.84);

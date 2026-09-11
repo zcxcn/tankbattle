@@ -1,0 +1,36 @@
+{
+  "asset": "concrete_tile_facade",
+  "artist": "Charlotte Baglioni",
+  "publisher": "Poly Haven",
+  "powered_by": "https://polyhaven.com/",
+  "source": "https://polyhaven.com/a/concrete_tile_facade",
+  "file_api": "https://api.polyhaven.com/files/concrete_tile_facade",
+  "license": "CC0-1.0",
+  "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+  "license_confirmation": "https://polyhaven.com/license",
+  "retrieved": "2026-09-11",
+  "resolution": "1K",
+  "files": [
+    {
+      "path": "textures/concrete_tile_facade_diff_1k.jpg",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/concrete_tile_facade/concrete_tile_facade_diff_1k.jpg",
+      "size": 625160,
+      "md5": "73a90c8d921e477164100855aad21bc6",
+      "sha256": "5ee9dbcaf3351b3d8193a5bd9e024adb484a078a60acf90eb240f7aaae1b53cd"
+    },
+    {
+      "path": "textures/concrete_tile_facade_nor_gl_1k.jpg",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/concrete_tile_facade/concrete_tile_facade_nor_gl_1k.jpg",
+      "size": 936569,
+      "md5": "1433f810643d6bcbf50abdaf98fe9022",
+      "sha256": "a11ac18036dac0a5a548552a3d859ddec778d4f1eb82e051b5169379125fd987"
+    },
+    {
+      "path": "textures/concrete_tile_facade_arm_1k.jpg",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/concrete_tile_facade/concrete_tile_facade_arm_1k.jpg",
+      "size": 636755,
+      "md5": "d123208761adb829b634024d1fe60fd9",
+      "sha256": "e9a0f6af13184acd225feb93f6e923dcb37248fcbfc176ac1388d873fa920854"
+    }
+  ]
+}

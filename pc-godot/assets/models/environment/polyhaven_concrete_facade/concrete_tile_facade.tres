@@ -1,0 +1,17 @@
+[gd_resource type="ORMMaterial3D" load_steps=4 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/models/environment/polyhaven_concrete_facade/textures/concrete_tile_facade_diff_1k.jpg" id="1"]
+[ext_resource type="Texture2D" path="res://assets/models/environment/polyhaven_concrete_facade/textures/concrete_tile_facade_nor_gl_1k.jpg" id="2"]
+[ext_resource type="Texture2D" path="res://assets/models/environment/polyhaven_concrete_facade/textures/concrete_tile_facade_arm_1k.jpg" id="3"]
+
+[resource]
+resource_name = "Poly Haven Concrete Tile Facade 1K"
+albedo_texture = ExtResource("1")
+normal_enabled = true
+normal_scale = 0.5
+normal_texture = ExtResource("2")
+orm_texture = ExtResource("3")
+texture_filter = 4
+uv1_triplanar = true
+uv1_world_triplanar = true
+uv1_scale = Vector3(0.4761905, 0.4761905, 0.4761905)

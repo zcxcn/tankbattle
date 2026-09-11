@@ -2,6 +2,7 @@ shader_type spatial;
 render_mode unshaded, cull_disabled, depth_draw_never, skip_vertex_transform;
 
 uniform sampler2D roof_height : filter_nearest, repeat_disable;
+uniform sampler2D surface_height : filter_linear, repeat_disable;
 uniform vec2 map_origin;
 uniform vec2 map_size;
 uniform vec2 field_center;
@@ -15,10 +16,17 @@ void vertex() {
 	vec2 seed_position = (random.xy - 0.5) * field_radius * 2.0;
 	vec2 world_xz = field_center + mod(seed_position - field_center + field_radius, field_radius * 2.0) - field_radius;
 	life = fract(random.z + rain_time * mix(1.3, 2.4, random.w));
-	float roof = texture(roof_height, (world_xz - map_origin) / map_size).r;
+	vec2 map_uv = (world_xz - map_origin) / map_size;
+	float ground = texture(surface_height, map_uv).r;
+	vec2 sky = texture(roof_height, map_uv).rg;
+	float roof = sky.g > 0.5 ? sky.r : ground;
 	float distance_to_edge = max(abs(world_xz.x - field_center.x), abs(world_xz.y - field_center.y));
-	visibility = (1.0 - step(0.3, roof)) * (1.0 - smoothstep(field_radius - 8.0, field_radius, distance_to_edge));
-	vec3 world_position = vec3(world_xz.x, 0.097, world_xz.y) + VERTEX;
+	visibility = (1.0 - step(ground + 0.3, roof)) * (1.0 - smoothstep(field_radius - 8.0, field_radius, distance_to_edge));
+	// Sample every corner against the terrain, so rings follow rounded slopes
+	// and water three metres below the road rather than hovering at world Y=0.
+	vec2 corner_xz = world_xz + VERTEX.xz;
+	float corner_height = texture(surface_height, (corner_xz - map_origin) / map_size).r;
+	vec3 world_position = vec3(corner_xz.x, corner_height + 0.022, corner_xz.y);
 	VERTEX = (VIEW_MATRIX * vec4(world_position, 1.0)).xyz;
 }
 

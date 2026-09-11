@@ -158,6 +158,16 @@ if (-not $SkipTests) {
     Assert-LastExitCode -Action "Godot track mark surface and lifecycle tests"
     & $GodotPath --headless --path $projectRoot --script "res://tests/weather_settings_test.gd" -- --test
     Assert-LastExitCode -Action "Godot random weather preferences and live settings tests"
+    & $GodotPath --headless --path $projectRoot "res://tests/river_terrain_test.tscn" -- --test
+    Assert-LastExitCode -Action "Godot river bridge and terrain geometry tests"
+    & $GodotPath --headless --path $projectRoot "res://tests/world_weather_test.tscn" -- --test
+    Assert-LastExitCode -Action "Godot city terrain weather integration tests"
+    & $GodotPath --headless --fixed-fps 60 --path $projectRoot "res://tests/world_traversal_test.tscn" -- --test
+    Assert-LastExitCode -Action "Godot actual tank bridge and hill traversal tests"
+    & $GodotPath --headless --fixed-fps 60 --path $projectRoot "res://tests/river_navigation_test.tscn" -- --test
+    Assert-LastExitCode -Action "Godot enemy river crossing navigation tests"
+    & $GodotPath --headless --path $projectRoot "res://tests/city_architecture_test.tscn" -- --test
+    Assert-LastExitCode -Action "Godot modeled city architecture tests"
 }
 
 $outputRoot = [System.IO.Path]::GetFullPath((Join-Path $repositoryRoot "outputs/pc-godot"))
@@ -194,6 +204,12 @@ $creditSources = [ordered]@{
     "fx/fluid/provenance.json" = "assets/fx/fluid/provenance.json"
     "models/environment/CREDITS.md" = "assets/models/environment/polyhaven_factory/CREDITS.md"
     "models/environment/LICENSE.txt" = "assets/models/environment/polyhaven_factory/LICENSE.txt"
+    "models/environment/rock09/CREDITS.md" = "assets/models/environment/polyhaven_rock09/CREDITS.md"
+    "models/environment/rock09/LICENSE.txt" = "assets/models/environment/polyhaven_rock09/LICENSE.txt"
+    "models/environment/concrete_facade/CREDITS.md" = "assets/models/environment/polyhaven_concrete_facade/CREDITS.md"
+    "models/environment/concrete_facade/LICENSE.txt" = "assets/models/environment/polyhaven_concrete_facade/LICENSE.txt"
+    "models/environment/aerial_grass/CREDITS.md" = "assets/models/environment/polyhaven_aerial_grass/CREDITS.md"
+    "models/environment/aerial_grass/LICENSE.txt" = "assets/models/environment/polyhaven_aerial_grass/LICENSE.txt"
     "models/ordnance/README.md" = "assets/models/ordnance/README.md"
     "models/challenger2/SOURCE_LICENSE.txt" = "assets/models/realistic/challenger2/SOURCE_LICENSE.txt"
     "models/kf51/SOURCE_LICENSE.txt" = "assets/models/realistic/kf51/SOURCE_LICENSE.txt"
@@ -210,7 +226,7 @@ foreach ($credit in $creditSources.GetEnumerator()) {
     }
 }
 
-$productVersion = "0.4.6"
+$productVersion = "0.4.7"
 $manifestPath = Join-Path $artifactDirectory "build-manifest.json"
 $payloadFiles = @(Get-ChildItem -LiteralPath $artifactDirectory -File -Recurse | Sort-Object FullName)
 $manifestFiles = @(

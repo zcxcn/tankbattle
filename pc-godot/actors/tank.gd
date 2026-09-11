@@ -10,6 +10,7 @@ const TEAM_ENEMY := 1
 const TrackedDriveScript = preload("res://scripts/tracked_drive.gd")
 const CombatLoadoutScript = preload("res://data/combat_loadout.gd")
 const VehicleCatalogScript = preload("res://data/vehicle_catalog.gd")
+const RiverNavigationScript = preload("res://scripts/river_navigation.gd")
 const MODEL_SCENES := {
 	"challenger2": preload("res://assets/models/realistic/challenger2/challenger2.glb"),
 	"kf51": preload("res://assets/models/realistic/kf51/kf51_panther.glb"),
@@ -561,7 +562,7 @@ func _ai_control(delta: float) -> void:
 	var desired := Vector3.ZERO
 	if distance > _ideal_distance + 7.0:
 		ai_state = "navigate"
-		desired = target_delta.normalized()
+		desired = _navigation_offset(target.global_position).normalized()
 	elif distance < _ideal_distance - 12.0:
 		ai_state = "retreat"
 		desired = -target_delta.normalized()
@@ -633,7 +634,7 @@ func _patrol_control(delta: float) -> void:
 		_set_planar_velocity(Vector3.ZERO, delta, move_speed)
 	else:
 		aim_point = waypoint
-		_set_planar_velocity(_avoid_obstacles(offset.normalized()), delta, move_speed * 0.58)
+		_set_planar_velocity(_avoid_obstacles(_navigation_offset(waypoint).normalized()), delta, move_speed * 0.58)
 	_update_turret(delta)
 
 
@@ -644,12 +645,22 @@ func _search_control(delta: float) -> void:
 	offset.y = 0.0
 	if offset.length() > 7.0 and _search_remaining > 2.0:
 		aim_point = _last_seen_position
-		_set_planar_velocity(_avoid_obstacles(offset.normalized()), delta, move_speed * 0.65)
+		_set_planar_velocity(_avoid_obstacles(_navigation_offset(_last_seen_position).normalized()), delta, move_speed * 0.65)
 	else:
 		var heading := offset.normalized() if offset.length_squared() > 0.1 else -global_basis.z
 		aim_point = global_position + heading.rotated(Vector3.UP, sin(_search_scan * 1.5) * 1.05) * 20.0
 		_set_planar_velocity(Vector3.ZERO, delta, move_speed)
 	_update_turret(delta)
+
+
+func _navigation_offset(target: Vector3) -> Vector3:
+	var waypoint := target
+	var world: Node = game.get("arena") if is_instance_valid(game) else null
+	if is_instance_valid(world) and world.has_meta("river_bounds"):
+		waypoint = RiverNavigationScript.next_waypoint(global_position, target)
+	var offset := waypoint - global_position
+	offset.y = 0.0
+	return offset
 
 
 func alert_from_hit(hit_position: Vector3) -> void:

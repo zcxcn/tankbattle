@@ -1,0 +1,36 @@
+{
+  "asset": "aerial_grass_rock",
+  "artist": "Rob Tuytel",
+  "publisher": "Poly Haven",
+  "powered_by": "https://polyhaven.com/",
+  "source": "https://polyhaven.com/a/aerial_grass_rock",
+  "file_api": "https://api.polyhaven.com/files/aerial_grass_rock",
+  "license": "CC0-1.0",
+  "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+  "license_confirmation": "https://polyhaven.com/license",
+  "retrieved": "2026-09-11",
+  "resolution": "1K",
+  "files": [
+    {
+      "path": "textures/aerial_grass_rock_diff_1k.jpg",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/aerial_grass_rock/aerial_grass_rock_diff_1k.jpg",
+      "size": 666655,
+      "md5": "e920ce36afd0abff000b8366d3d768d3",
+      "sha256": "57b8041bfe0d0f01430e4dbaad45e7ddddf0a9fc97317f90dbc51f7b0d9e1b5d"
+    },
+    {
+      "path": "textures/aerial_grass_rock_nor_gl_1k.jpg",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/aerial_grass_rock/aerial_grass_rock_nor_gl_1k.jpg",
+      "size": 904956,
+      "md5": "c8aa4c4f09b113cc7edef89ddeaccad9",
+      "sha256": "1aa3e23bff453f152e089b9f83aa36b4901651e019f7e2ca01d5331a9bbbda78"
+    },
+    {
+      "path": "textures/aerial_grass_rock_arm_1k.jpg",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/aerial_grass_rock/aerial_grass_rock_arm_1k.jpg",
+      "size": 216829,
+      "md5": "1f37fdb9b46b7fe34932ed9aa77df0bf",
+      "sha256": "95d8f5180bafaab3f76c394cee3dca9b4f8ca6531281c00c4a06e4485d0ab956"
+    }
+  ]
+}

@@ -1,0 +1,2 @@
+# Preserve the publisher's exact glTF bytes for manifest hash verification.
+rock_09_1k.gltf -text

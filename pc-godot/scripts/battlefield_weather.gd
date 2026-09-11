@@ -25,15 +25,20 @@ var rain: MultiMeshInstance3D
 var snow: MultiMeshInstance3D
 var splashes: MultiMeshInstance3D
 var puddles: MultiMeshInstance3D
+var puddle_transforms: Array[Transform3D] = []
 var rain_audio: AudioStreamPlayer
 var roof_image: Image
 var roof_texture: ImageTexture
+var surface_image: Image
+var surface_texture: ImageTexture
 var _rain_material: ShaderMaterial
 var _snow_material: ShaderMaterial
 var _splash_material: ShaderMaterial
 var _puddle_material: ShaderMaterial
 var _rng := RandomNumberGenerator.new()
 var _follow_target := Vector3.ZERO
+var _surface_low := 0.075
+var _surface_high := 0.075
 
 
 func _ready() -> void:
@@ -71,7 +76,7 @@ func _sync_follow_target() -> void:
 	for surface in [_rain_material, _splash_material, _snow_material]:
 		if is_instance_valid(surface):
 			surface.set_shader_parameter("field_center", center)
-	var aabb := AABB(Vector3(center.x - FIELD_RADIUS - 4, -1, center.y - FIELD_RADIUS - 4), Vector3(FIELD_RADIUS * 2 + 8, RAIN_HEIGHT + 4, FIELD_RADIUS * 2 + 8))
+	var aabb := AABB(Vector3(center.x - FIELD_RADIUS - 4, _surface_low - 1.0, center.y - FIELD_RADIUS - 4), Vector3(FIELD_RADIUS * 2 + 8, RAIN_HEIGHT + _surface_high - _surface_low + 4, FIELD_RADIUS * 2 + 8))
 	for batch in [rain, splashes, snow]:
 		if is_instance_valid(batch):
 			batch.custom_aabb = aabb
@@ -101,6 +106,7 @@ func _common_material(shader: Shader) -> ShaderMaterial:
 	var surface := ShaderMaterial.new()
 	surface.shader = shader
 	surface.set_shader_parameter("roof_height", roof_texture)
+	surface.set_shader_parameter("surface_height", surface_texture)
 	surface.set_shader_parameter("map_origin", MAP_ORIGIN)
 	surface.set_shader_parameter("map_size", MAP_SIZE)
 	surface.set_shader_parameter("field_radius", FIELD_RADIUS)
@@ -156,25 +162,71 @@ func _build_puddles() -> void:
 	var mesh := PlaneMesh.new()
 	mesh.size = Vector2.ONE
 	puddles = _instance_batch("RoadPuddles", mesh, MAX_PUDDLES, _puddle_material)
+	puddle_transforms.clear()
 	for index in MAX_PUDDLES:
-		var x: float
-		var z: float
-		if index % 2 == 0:
-			x = [-96.0, 0.0, 96.0][index % 3] + _rng.randf_range(-7.0, 7.0)
-			z = _rng.randf_range(-180.0, 180.0)
-		else:
-			x = _rng.randf_range(-135.0, 135.0)
-			z = [-144.0, -72.0, 0.0, 72.0, 144.0][index % 5] + _rng.randf_range(-6.0, 6.0)
-		var size := Vector3(_rng.randf_range(2.3, 6.4), 1.0, _rng.randf_range(1.2, 3.2))
-		var transform := Transform3D(Basis(Vector3.UP, _rng.randf_range(-PI, PI)).scaled(size), Vector3(x, 0.083, z))
+		# A complete puddle must rest on one exposed, nearly level road surface.
+		# Checking the footprint also rejects a dry centre with corners over water.
+		var transform := Transform3D.IDENTITY
+		for attempt in 64:
+			var x: float
+			var z: float
+			if index % 2 == 0:
+				x = [-96.0, 0.0, 96.0][index % 3] + _rng.randf_range(-7.0, 7.0)
+				z = _rng.randf_range(-180.0, 180.0)
+			else:
+				x = _rng.randf_range(-135.0, 135.0)
+				z = [-144.0, -72.0, 0.0, 72.0, 144.0][index % 5] + _rng.randf_range(-6.0, 6.0)
+			var size := Vector3(_rng.randf_range(2.3, 6.4), 1.0, _rng.randf_range(1.2, 3.2))
+			transform = Transform3D(Basis(Vector3.UP, _rng.randf_range(-PI, PI)).scaled(size), Vector3(x, 0, z))
+			if _puddle_supported(transform):
+				break
+		if not _puddle_supported(transform):
+			# All campaign intersections are authored open ground. Keep the fixed
+			# instance budget even if a future parcel consumes many road margins.
+			transform = Transform3D(Basis.IDENTITY.scaled(Vector3(2.3, 1.0, 1.2)), Vector3([-96.0, 0.0, 96.0][index % 3], 0, [-144.0, -72.0, 0.0, 72.0, 144.0][index % 5]))
+		transform.origin.y = _authored_surface_height(transform.origin) + 0.008
+		# Keep this bounded submission list inspectable without GPU readback.
+		puddle_transforms.append(transform)
 		puddles.multimesh.set_instance_transform(index, transform)
 		puddles.multimesh.set_instance_custom_data(index, Color(_rng.randf(), _rng.randf(), _rng.randf(), _rng.randf()))
 
 
-func _build_roof_heightmap() -> void:
-	roof_image = Image.create(MAP_PIXELS.x, MAP_PIXELS.y, false, Image.FORMAT_RF)
-	roof_image.fill(Color(0.075, 0, 0, 1))
+func _puddle_supported(pose: Transform3D) -> bool:
+	var level := _authored_surface_height(pose.origin)
+	if level < -0.2:
+		return false
+	for x in [-0.5, 0.0, 0.5]:
+		for z in [-0.5, 0.0, 0.5]:
+			var at := pose * Vector3(x, 0.0, z)
+			var surface := _authored_surface_height(at)
+			if surface < -0.2 or absf(surface - level) > 0.08 or sample_roof_height(at) > surface + 0.3:
+				return false
+	return true
+
+
+func _authored_surface_height(at: Vector3) -> float:
 	var arena := get_parent()
+	return arena.get_surface_height(at) if arena.has_method("get_surface_height") else 0.075
+
+
+func _build_roof_heightmap() -> void:
+	# R holds the actual sky-facing height; G marks a building/roof obstruction.
+	# Separate smoothly sampled terrain prevents a curved hill becoming a box
+	# shaped rain shelter while keeping conservative, sharp building boundaries.
+	roof_image = Image.create(MAP_PIXELS.x, MAP_PIXELS.y, false, Image.FORMAT_RGF)
+	surface_image = Image.create(MAP_PIXELS.x, MAP_PIXELS.y, false, Image.FORMAT_RF)
+	var arena := get_parent()
+	var samples_terrain := arena.has_method("get_surface_height")
+	_surface_low = 0.075
+	_surface_high = 0.075
+	for y in MAP_PIXELS.y:
+		for x in MAP_PIXELS.x:
+			var point := MAP_ORIGIN + (Vector2(x, y) + Vector2.ONE * 0.5) / Vector2(MAP_PIXELS) * MAP_SIZE
+			var surface: float = arena.get_surface_height(Vector3(point.x, 0, point.y)) if samples_terrain else 0.075
+			roof_image.set_pixel(x, y, Color(surface, 0, 0, 1))
+			surface_image.set_pixel(x, y, Color(surface, 0, 0, 1))
+			_surface_low = minf(_surface_low, surface)
+			_surface_high = maxf(_surface_high, surface)
 	for collider in arena.find_children("*", "CollisionShape3D", true, false):
 		var body: Node = collider.get_parent()
 		# Destructible cover can disappear: don't bake it into the static sky mask.
@@ -188,6 +240,7 @@ func _build_roof_heightmap() -> void:
 	for bounds: AABB in arena.get_meta("weather_roofs", []):
 		_stamp_roof(bounds)
 	roof_texture = ImageTexture.create_from_image(roof_image)
+	surface_texture = ImageTexture.create_from_image(surface_image)
 
 
 func _stamp_roof(bounds: AABB) -> void:
@@ -198,13 +251,23 @@ func _stamp_roof(bounds: AABB) -> void:
 	for y in range(maxi(0, from_pixel.y), mini(MAP_PIXELS.y, to_pixel.y + 1)):
 		for x in range(maxi(0, from_pixel.x), mini(MAP_PIXELS.x, to_pixel.x + 1)):
 			if bounds.end.y > roof_image.get_pixel(x, y).r:
-				roof_image.set_pixel(x, y, Color(bounds.end.y, 0, 0, 1))
+				roof_image.set_pixel(x, y, Color(bounds.end.y, 1, 0, 1))
 
 
 func sample_roof_height(at: Vector3) -> float:
 	var uv := (Vector2(at.x, at.z) - MAP_ORIGIN) / MAP_SIZE
 	var pixel := Vector2i((uv * Vector2(MAP_PIXELS)).floor())
-	return roof_image.get_pixel(clampi(pixel.x, 0, MAP_PIXELS.x - 1), clampi(pixel.y, 0, MAP_PIXELS.y - 1)).r
+	var sky := roof_image.get_pixel(clampi(pixel.x, 0, MAP_PIXELS.x - 1), clampi(pixel.y, 0, MAP_PIXELS.y - 1))
+	return sky.r if sky.g > 0.5 else sample_surface_height(at)
+
+
+func sample_surface_height(at: Vector3) -> float:
+	# Match the shader's linear filtering at texel centres, including map edges.
+	var pixel := ((Vector2(at.x, at.z) - MAP_ORIGIN) / MAP_SIZE * Vector2(MAP_PIXELS) - Vector2.ONE * 0.5).clamp(Vector2.ZERO, Vector2(MAP_PIXELS - Vector2i.ONE))
+	var cell := Vector2i(pixel.floor())
+	var next := (cell + Vector2i.ONE).min(MAP_PIXELS - Vector2i.ONE)
+	var blend := pixel - Vector2(cell)
+	return lerpf(lerpf(surface_image.get_pixel(cell.x, cell.y).r, surface_image.get_pixel(next.x, cell.y).r, blend.x), lerpf(surface_image.get_pixel(cell.x, next.y).r, surface_image.get_pixel(next.x, next.y).r, blend.x), blend.y)
 
 
 func _build_audio() -> void:

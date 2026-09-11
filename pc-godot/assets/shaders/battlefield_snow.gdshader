@@ -2,6 +2,7 @@ shader_type spatial;
 render_mode unshaded, cull_disabled, depth_draw_never, skip_vertex_transform;
 
 uniform sampler2D roof_height : filter_nearest, repeat_disable;
+uniform sampler2D surface_height : filter_linear, repeat_disable;
 uniform vec2 map_origin;
 uniform vec2 map_size;
 uniform vec2 field_center;
@@ -21,8 +22,11 @@ void vertex() {
 	drift += vec2(sin(rain_time * 0.64 + phase), cos(rain_time * 0.45 + phase)) * 0.65;
 	vec2 world_xz = field_center + mod(seed_position + drift - field_center + field_radius, field_radius * 2.0) - field_radius;
 	float fall = fract(random.z - rain_time * fall_speed * mix(0.72, 1.18, random.w) / fall_height);
-	float height = 0.075 + fall * fall_height;
-	float roof = texture(roof_height, (world_xz - map_origin) / map_size).r;
+	vec2 map_uv = (world_xz - map_origin) / map_size;
+	float ground = texture(surface_height, map_uv).r;
+	vec2 sky = texture(roof_height, map_uv).rg;
+	float height = ground + fall * fall_height;
+	float roof = sky.g > 0.5 ? sky.r : ground;
 	float spin = rain_time * mix(-0.5, 0.6, random.z) + phase;
 	vec2 rotated = mat2(vec2(cos(spin), sin(spin)), vec2(-sin(spin), cos(spin))) * VERTEX.xy;
 	float size = mix(0.45, 1.2, random.w);

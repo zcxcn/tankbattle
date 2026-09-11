@@ -137,6 +137,28 @@ The PC renderer uses adapted texture sheets inside Godot; the engine is unchange
 [Source archives, license and processing](fx/fluid/README.md),
 [asset checksums](fx/fluid/provenance.json).
 
+## PC 0.4.7 city and river landscape
+
+Three additional CC0 resources from **Poly Haven** are packaged offline. The
+11 original payload files total 5,951,345 bytes; publisher MD5, size and SHA-256
+are recorded in each directory's download manifest.
+
+- **Rock 09**, Jenelle van Heerden: [original scanned model](https://polyhaven.com/a/rock_09).
+  The original glTF and 1K PBR maps are retained. A scene wrapper grounds,
+  centers and scales the model for shared riverbank placements.
+  [Source and license](models/environment/polyhaven_rock09/CREDITS.md).
+- **Concrete Tile Facade**, Charlotte Baglioni: [original surface](https://polyhaven.com/a/concrete_tile_facade).
+  Original 1K color, normal and ARM maps dress game-authored stepped towers.
+  [Source and license](models/environment/polyhaven_concrete_facade/CREDITS.md).
+- **Aerial Grass Rock**, Rob Tuytel: [original surface](https://polyhaven.com/a/aerial_grass_rock).
+  Original 1K color, normal and ARM maps are blended across continuous hills.
+  [Source and license](models/environment/polyhaven_aerial_grass/CREDITS.md).
+
+The tower geometry, engineered bridges, river shader and hill heightfields are
+original game code. They are not downloaded landmark replicas and are not
+attributed to the above artists. Reproduction and checksum verification:
+`scripts/pc047_import_environment.py`.
+
 ## Original modeled ordnance
 
 AP shells, HE shells, machine-gun bullets and rockets are original closed GLB
