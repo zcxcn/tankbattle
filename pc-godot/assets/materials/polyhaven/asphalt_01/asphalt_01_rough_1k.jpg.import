@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://txokhy1rg7i2"
 path.bptc="res://.godot/imported/asphalt_01_rough_1k.jpg-47a0ef23b88e8b2093a138bd9b07cc7c.bptc.ctex"
+path.astc="res://.godot/imported/asphalt_01_rough_1k.jpg-47a0ef23b88e8b2093a138bd9b07cc7c.astc.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/materials/polyhaven/asphalt_01/asphalt_01_rough_1k.jpg"
-dest_files=["res://.godot/imported/asphalt_01_rough_1k.jpg-47a0ef23b88e8b2093a138bd9b07cc7c.bptc.ctex"]
+dest_files=["res://.godot/imported/asphalt_01_rough_1k.jpg-47a0ef23b88e8b2093a138bd9b07cc7c.bptc.ctex", "res://.godot/imported/asphalt_01_rough_1k.jpg-47a0ef23b88e8b2093a138bd9b07cc7c.astc.ctex"]
 
 [params]
 

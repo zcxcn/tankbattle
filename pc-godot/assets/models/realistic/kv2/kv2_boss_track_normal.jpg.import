@@ -4,8 +4,9 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://6ljy1316nk1v"
 path.bptc="res://.godot/imported/kv2_boss_track_normal.jpg-1ac1fc42f20588ff252a82672a36a751.bptc.ctex"
+path.astc="res://.godot/imported/kv2_boss_track_normal.jpg-1ac1fc42f20588ff252a82672a36a751.astc.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 generator_parameters={
@@ -15,7 +16,7 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/models/realistic/kv2/kv2_boss_track_normal.jpg"
-dest_files=["res://.godot/imported/kv2_boss_track_normal.jpg-1ac1fc42f20588ff252a82672a36a751.bptc.ctex"]
+dest_files=["res://.godot/imported/kv2_boss_track_normal.jpg-1ac1fc42f20588ff252a82672a36a751.bptc.ctex", "res://.godot/imported/kv2_boss_track_normal.jpg-1ac1fc42f20588ff252a82672a36a751.astc.ctex"]
 
 [params]
 

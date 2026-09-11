@@ -4,8 +4,9 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://65kr56a0xrg7"
 path.bptc="res://.godot/imported/kf51_panther_Image_5.png-b8059eb2a8d343cf3a9bb62ec50597d9.bptc.ctex"
+path.astc="res://.godot/imported/kf51_panther_Image_5.png-b8059eb2a8d343cf3a9bb62ec50597d9.astc.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 generator_parameters={
@@ -15,7 +16,7 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/models/realistic/kf51/kf51_panther_Image_5.png"
-dest_files=["res://.godot/imported/kf51_panther_Image_5.png-b8059eb2a8d343cf3a9bb62ec50597d9.bptc.ctex"]
+dest_files=["res://.godot/imported/kf51_panther_Image_5.png-b8059eb2a8d343cf3a9bb62ec50597d9.bptc.ctex", "res://.godot/imported/kf51_panther_Image_5.png-b8059eb2a8d343cf3a9bb62ec50597d9.astc.ctex"]
 
 [params]
 

@@ -4,8 +4,9 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://bqr1h22qk7c1f"
 path.bptc="res://.godot/imported/kv2_boss_track_metallicRoughness.png-a9f17c5a0e6f1a5c42abb9caf0082b08.bptc.ctex"
+path.astc="res://.godot/imported/kv2_boss_track_metallicRoughness.png-a9f17c5a0e6f1a5c42abb9caf0082b08.astc.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 generator_parameters={
@@ -15,7 +16,7 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/models/realistic/kv2/kv2_boss_track_metallicRoughness.png"
-dest_files=["res://.godot/imported/kv2_boss_track_metallicRoughness.png-a9f17c5a0e6f1a5c42abb9caf0082b08.bptc.ctex"]
+dest_files=["res://.godot/imported/kv2_boss_track_metallicRoughness.png-a9f17c5a0e6f1a5c42abb9caf0082b08.bptc.ctex", "res://.godot/imported/kv2_boss_track_metallicRoughness.png-a9f17c5a0e6f1a5c42abb9caf0082b08.astc.ctex"]
 
 [params]
 

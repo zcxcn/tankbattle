@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://b04pnwqweool1"
 path.bptc="res://.godot/imported/rough_concrete_nor_gl_1k.jpg-b2aea5ba06194723ff8de1d93b37e8dc.bptc.ctex"
+path.astc="res://.godot/imported/rough_concrete_nor_gl_1k.jpg-b2aea5ba06194723ff8de1d93b37e8dc.astc.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/materials/polyhaven/rough_concrete/rough_concrete_nor_gl_1k.jpg"
-dest_files=["res://.godot/imported/rough_concrete_nor_gl_1k.jpg-b2aea5ba06194723ff8de1d93b37e8dc.bptc.ctex"]
+dest_files=["res://.godot/imported/rough_concrete_nor_gl_1k.jpg-b2aea5ba06194723ff8de1d93b37e8dc.bptc.ctex", "res://.godot/imported/rough_concrete_nor_gl_1k.jpg-b2aea5ba06194723ff8de1d93b37e8dc.astc.ctex"]
 
 [params]
 

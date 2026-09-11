@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://dl2o6i48vqxwp"
 path.bptc="res://.godot/imported/rough_concrete_diff_1k.jpg-fe5c27997117c84b45a349591e031f08.bptc.ctex"
+path.astc="res://.godot/imported/rough_concrete_diff_1k.jpg-fe5c27997117c84b45a349591e031f08.astc.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/materials/polyhaven/rough_concrete/rough_concrete_diff_1k.jpg"
-dest_files=["res://.godot/imported/rough_concrete_diff_1k.jpg-fe5c27997117c84b45a349591e031f08.bptc.ctex"]
+dest_files=["res://.godot/imported/rough_concrete_diff_1k.jpg-fe5c27997117c84b45a349591e031f08.bptc.ctex", "res://.godot/imported/rough_concrete_diff_1k.jpg-fe5c27997117c84b45a349591e031f08.astc.ctex"]
 
 [params]
 

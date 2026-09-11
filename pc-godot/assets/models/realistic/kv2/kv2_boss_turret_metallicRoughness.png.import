@@ -4,8 +4,9 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://dk1lft8wc5sbt"
 path.bptc="res://.godot/imported/kv2_boss_turret_metallicRoughness.png-3867163490ba6daae610ed191db007f0.bptc.ctex"
+path.astc="res://.godot/imported/kv2_boss_turret_metallicRoughness.png-3867163490ba6daae610ed191db007f0.astc.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 generator_parameters={
@@ -15,7 +16,7 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/models/realistic/kv2/kv2_boss_turret_metallicRoughness.png"
-dest_files=["res://.godot/imported/kv2_boss_turret_metallicRoughness.png-3867163490ba6daae610ed191db007f0.bptc.ctex"]
+dest_files=["res://.godot/imported/kv2_boss_turret_metallicRoughness.png-3867163490ba6daae610ed191db007f0.bptc.ctex", "res://.godot/imported/kv2_boss_turret_metallicRoughness.png-3867163490ba6daae610ed191db007f0.astc.ctex"]
 
 [params]
 

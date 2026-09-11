@@ -4,8 +4,9 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://b0w8m8h3dpbf6"
 path.bptc="res://.godot/imported/kv2_boss_wheels_baseColor.jpg-538730acd34ca54fad5c6d13383148ed.bptc.ctex"
+path.astc="res://.godot/imported/kv2_boss_wheels_baseColor.jpg-538730acd34ca54fad5c6d13383148ed.astc.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 generator_parameters={
@@ -15,7 +16,7 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/models/realistic/kv2/kv2_boss_wheels_baseColor.jpg"
-dest_files=["res://.godot/imported/kv2_boss_wheels_baseColor.jpg-538730acd34ca54fad5c6d13383148ed.bptc.ctex"]
+dest_files=["res://.godot/imported/kv2_boss_wheels_baseColor.jpg-538730acd34ca54fad5c6d13383148ed.bptc.ctex", "res://.godot/imported/kv2_boss_wheels_baseColor.jpg-538730acd34ca54fad5c6d13383148ed.astc.ctex"]
 
 [params]
 

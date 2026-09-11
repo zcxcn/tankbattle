@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://dy8xx1j0tm3g5"
 path.bptc="res://.godot/imported/asphalt_01_nor_gl_1k.jpg-375124fd306706d005aa3d3c91fb4821.bptc.ctex"
+path.astc="res://.godot/imported/asphalt_01_nor_gl_1k.jpg-375124fd306706d005aa3d3c91fb4821.astc.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/materials/polyhaven/asphalt_01/asphalt_01_nor_gl_1k.jpg"
-dest_files=["res://.godot/imported/asphalt_01_nor_gl_1k.jpg-375124fd306706d005aa3d3c91fb4821.bptc.ctex"]
+dest_files=["res://.godot/imported/asphalt_01_nor_gl_1k.jpg-375124fd306706d005aa3d3c91fb4821.bptc.ctex", "res://.godot/imported/asphalt_01_nor_gl_1k.jpg-375124fd306706d005aa3d3c91fb4821.astc.ctex"]
 
 [params]
 

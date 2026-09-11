@@ -4,8 +4,9 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://lk3060djm2xp"
 path.bptc="res://.godot/imported/challenger2_Image_17.png-5074eeda131ec1203db60c461d767f4f.bptc.ctex"
+path.astc="res://.godot/imported/challenger2_Image_17.png-5074eeda131ec1203db60c461d767f4f.astc.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 generator_parameters={
@@ -15,7 +16,7 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/models/realistic/challenger2/challenger2_Image_17.png"
-dest_files=["res://.godot/imported/challenger2_Image_17.png-5074eeda131ec1203db60c461d767f4f.bptc.ctex"]
+dest_files=["res://.godot/imported/challenger2_Image_17.png-5074eeda131ec1203db60c461d767f4f.bptc.ctex", "res://.godot/imported/challenger2_Image_17.png-5074eeda131ec1203db60c461d767f4f.astc.ctex"]
 
 [params]
 

@@ -4,8 +4,9 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://w65ojfw7pm8k"
 path.bptc="res://.godot/imported/kv2_boss_hull_baseColor.jpg-68e61dd4ac8778cbe89f4aa16e063d23.bptc.ctex"
+path.astc="res://.godot/imported/kv2_boss_hull_baseColor.jpg-68e61dd4ac8778cbe89f4aa16e063d23.astc.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 generator_parameters={
@@ -15,7 +16,7 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/models/realistic/kv2/kv2_boss_hull_baseColor.jpg"
-dest_files=["res://.godot/imported/kv2_boss_hull_baseColor.jpg-68e61dd4ac8778cbe89f4aa16e063d23.bptc.ctex"]
+dest_files=["res://.godot/imported/kv2_boss_hull_baseColor.jpg-68e61dd4ac8778cbe89f4aa16e063d23.bptc.ctex", "res://.godot/imported/kv2_boss_hull_baseColor.jpg-68e61dd4ac8778cbe89f4aa16e063d23.astc.ctex"]
 
 [params]
 

@@ -108,6 +108,8 @@ pwsh -NoProfile -File .\scripts\build-pc-godot.ps1 -Configuration Release
 
 本次 PC 重制的源码集中在 `pc-godot/`，构建与验收脚本为 `scripts/build-pc-godot.ps1`、`scripts/smoke-pc-godot.ps1`；`mobile/baseline/` 和 `android/` 未改动。
 
+**macOS 0.4.8 测试包**：`outputs/pc-godot/Iron-Embers-macOS-Universal-0.4.8.zip`，包含 Apple Silicon 原生 ARM64，适合 MacBook Pro M4。将整个 ZIP 传到 Mac 后解压，把 `IronEmbers.app` 拖到“应用程序”运行；首次未公证提示可按包内中文说明在“隐私与安全性”允许。可运行 `pwsh -File scripts/build-pc-macos.ps1` 重新导出；[Mac 构建与检查记录](docs/pc-realistic/MACOS_EXPORT_0.4.8.md)说明签名、权限、资源验证及尚未完成的 M4 实机测试。
+
 ## 2026-09 网页战斗升级
 
 按 image2 绘制了三张新的材质贴图：磨损喷漆装甲、工业沥青路面和旧砖墙，已用于实际战场与车库。三张图均为 1254 × 1254，网页 WebP 合计约 1.24 MiB；完整提示词和生成记录见 [贴图说明](web/assets/generated/README.md)。装甲继续保留各车型配色，窗户、道路标线仍由实际几何呈现；没有混用与新图错位的旧法线贴图。其余地面、工业金属和树木材质继续使用原有资源。
