@@ -116,7 +116,10 @@ func _impact(hit: Dictionary) -> void:
 	if collider is TankActor:
 		collider.receive_damage(damage, team, at, weapon_kind)
 	elif collider != null and collider.has_method("receive_damage"):
-		collider.call("receive_damage", damage, team, at)
+		if collider is Node and collider.is_in_group("monsters"):
+			collider.call("receive_damage", damage, team, at, weapon_kind)
+		else:
+			collider.call("receive_damage", damage, team, at)
 	if splash_radius > 0.0:
 		game.radial_damage(at, splash_radius, damage * 0.55, team, {}, weapon_kind)
 	game.spawn_impact(at, splash_radius > 0.0, surface_kind, normal, weapon_kind, collider is TankActor and collider.is_player)

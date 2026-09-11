@@ -4,6 +4,8 @@ extends Control
 ## It never changes scenes, pauses the tree, or touches persistence directly.
 
 signal start_requested
+signal endless_requested
+signal upgrade_requested(id: String)
 signal resume_requested
 signal retry_requested
 signal menu_requested
@@ -44,6 +46,8 @@ var _settings_layer: Control
 var _result_layer: Control
 
 var _title_start_button: Button
+var _title_endless_button: Button
+var _title_endless_record: Label
 var _title_kills: Label
 var _title_level: Label
 var _title_best: Label
@@ -61,6 +65,8 @@ var _hud_objective: Label
 var _hud_kills: Label
 var _hud_kill_bar: ProgressBar
 var _hud_score: Label
+var _hud_score_caption: Label
+var _hud_defense_hint: Label
 var _hud_time: Label
 var _hud_boss_panel: PanelContainer
 var _hud_boss_name: Label
@@ -82,6 +88,21 @@ var _hud_radio: Label
 var _hud_controls: Label
 
 var _pause_notice: Label
+var _pause_panel: PanelContainer
+var _pause_grid: GridContainer
+var _pause_scroll: ScrollContainer
+var _pause_heading: Label
+var _pause_kicker: Label
+var _pause_controls: Label
+var _pause_tactics: Label
+var _pause_retry: Button
+var _pause_buttons: Array[Button] = []
+var _shop_box: VBoxContainer
+var _shop_wallet: Label
+var _shop_summary: Label
+var _upgrade_buttons: Dictionary = {}
+var _upgrade_descriptions: Dictionary = {}
+var _pause_focus_key := ""
 var _result_panel: PanelContainer
 var _result_kicker: Label
 var _result_title: Label
@@ -90,6 +111,11 @@ var _result_kills: Label
 var _result_time: Label
 var _result_career: Label
 var _result_primary: Button
+var _result_retry: Button
+var _result_menu: Button
+var _result_score_caption: Label
+var _result_kills_caption: Label
+var _result_time_caption: Label
 
 
 func _init() -> void:
@@ -234,11 +260,18 @@ func _build_title_layer() -> void:
 	body.add_theme_constant_override(&"separation", 0)
 	layout.add_child(body)
 
+	var command_scroll := ScrollContainer.new()
+	command_scroll.name = "TitleScroll"
+	command_scroll.custom_minimum_size = Vector2(580.0, 0.0)
+	command_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	command_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	command_scroll.follow_focus = true
+	body.add_child(command_scroll)
 	var command := VBoxContainer.new()
 	command.name = "TitleCommand"
-	command.custom_minimum_size = Vector2(520.0, 0.0)
+	command.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	command.add_theme_constant_override(&"separation", 8)
-	body.add_child(command)
+	command_scroll.add_child(command)
 	body.add_child(_spacer(true, false))
 	command.add_child(_label("TACTICAL ARMORED COMMAND", &"Kicker"))
 	var game_title := _label("钢铁余烬", &"DisplayTitle")
@@ -260,11 +293,18 @@ func _build_title_layer() -> void:
 	_title_vehicle = _label("", &"Micro")
 	_title_vehicle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	command.add_child(_title_vehicle)
+	_title_endless_button = _button("无尽防守 · 巨兽围城", &"DangerButton", func() -> void: endless_requested.emit())
+	_title_endless_button.name = "EndlessStart"
+	_title_endless_button.tooltip_text = "守住防线，抵挡不断逼近的巨型怪物。击杀获得资源，暂停时升级武器、修复防线。"
+	command.add_child(_title_endless_button)
+	_title_endless_record = _label("巨型怪物持续来袭 · 击杀换取武器升级", &"Micro")
+	_title_endless_record.add_theme_color_override(&"font_color", ThemeFactory.GOLD)
+	command.add_child(_title_endless_record)
 	var settings_button := _button("作战设置", &"CommandButton", func() -> void: settings_requested.emit())
 	command.add_child(settings_button)
 	var quit_button := _button("退出游戏", &"DangerButton", func() -> void: quit_requested.emit())
 	command.add_child(quit_button)
-	_wire_vertical_focus([_title_start_button, _title_mission, _title_chassis, settings_button, quit_button])
+	_wire_vertical_focus([_title_start_button, _title_mission, _title_chassis, _title_endless_button, settings_button, quit_button])
 	_focus_targets["title"] = _title_start_button
 	command.add_child(_spacer(false, true))
 
@@ -308,7 +348,7 @@ func _build_title_layer() -> void:
 	layout.add_child(HSeparator.new())
 	var footer := HBoxContainer.new()
 	layout.add_child(footer)
-	footer.add_child(_label("BUILD 0.4.7 · FORWARD+ / PBR ARMOR", &"Micro"))
+	footer.add_child(_label("BUILD 0.4.8 · FORWARD+ / PBR ARMOR", &"Micro"))
 	footer.add_child(_spacer(true, false))
 	var asset_credit := _label("3D：tomm8 · GRIP420 / David Falke · Comrade1280 · CC BY 4.0\n机枪录音：KuraiWolf / Nightshade Game Studios · CC BY 4.0", &"Micro")
 	asset_credit.name = "AssetCredit"
@@ -377,6 +417,9 @@ func _build_hud_layer() -> void:
 	_hud_kill_bar = _progress(&"ObjectiveBar", 6.0)
 	_hud_kill_bar.custom_minimum_size.y = 4.0
 	objective_box.add_child(_hud_kill_bar)
+	_hud_defense_hint = _label("Esc / Start 打开升级", &"Micro")
+	_hud_defense_hint.add_theme_color_override(&"font_color", ThemeFactory.GOLD)
+	objective_box.add_child(_hud_defense_hint)
 
 	var score_panel := _panel(&"HUDPanel")
 	_hud_panels.append(score_panel)
@@ -385,7 +428,8 @@ func _build_hud_layer() -> void:
 	var score_box := VBoxContainer.new()
 	score_box.alignment = BoxContainer.ALIGNMENT_CENTER
 	score_panel.add_child(score_box)
-	score_box.add_child(_label("作战评分", &"Muted"))
+	_hud_score_caption = _label("作战评分", &"Muted")
+	score_box.add_child(_hud_score_caption)
 	_hud_score = _label("00000", &"Metric")
 	_hud_score.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	score_box.add_child(_hud_score)
@@ -493,47 +537,87 @@ func _build_hud_layer() -> void:
 
 func _build_pause_layer() -> void:
 	_pause_layer = _new_layer("PauseLayer")
-	_add_dimmer(_pause_layer, 0.76)
+	_add_dimmer(_pause_layer, 0.82)
 	var center := CenterContainer.new()
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_pause_layer.add_child(center)
-	var panel := _panel(&"OverlayPanel")
-	panel.custom_minimum_size = Vector2(570.0, 590.0)
-	center.add_child(panel)
+	_pause_panel = _panel(&"OverlayPanel")
+	center.add_child(_pause_panel)
+	_pause_scroll = ScrollContainer.new()
+	_pause_scroll.name = "PauseScroll"
+	_pause_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_pause_scroll.follow_focus = true
+	_pause_panel.add_child(_pause_scroll)
+	_pause_grid = GridContainer.new()
+	_pause_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_pause_grid.add_theme_constant_override(&"h_separation", 30)
+	_pause_grid.add_theme_constant_override(&"v_separation", 22)
+	_pause_scroll.add_child(_pause_grid)
 	var box := VBoxContainer.new()
-	box.alignment = BoxContainer.ALIGNMENT_CENTER
-	box.add_theme_constant_override(&"separation", 14)
-	panel.add_child(box)
-	box.add_child(_label("OPERATION SUSPENDED", &"Kicker"))
-	var heading := _label("战场已暂停", &"ScreenTitle")
-	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(heading)
+	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	box.add_theme_constant_override(&"separation", 12)
+	_pause_grid.add_child(box)
+	_pause_kicker = _label("OPERATION SUSPENDED", &"Kicker")
+	box.add_child(_pause_kicker)
+	_pause_heading = _label("战场已暂停", &"ScreenTitle")
+	box.add_child(_pause_heading)
 	_pause_notice = _label("所有作战计时已经停止。", &"Muted")
-	_pause_notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_pause_notice.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(_pause_notice)
-	var controls := _label("WASD / 左摇杆：移动    鼠标 / 右摇杆：瞄准    LT：精细瞄准\n左键 / RT：开火    C / Y：切换视角    滚轮 / 十字键上下：变焦\n1–4：选择武器    R / X / 十字键右：切武器    N / 十字键左：音乐\nM / R3：布雷    E / RB：脉冲排雷    空格 / LB：短时加速", &"Muted")
-	controls.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(controls)
-	var tactics := _label("N：切换战斗音乐。绿色整备点提供补给；起火残骸可能殉爆，保持距离。", &"Muted")
-	tactics.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	tactics.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	box.add_child(tactics)
+	_pause_controls = _label("WASD / 左摇杆：移动    鼠标 / 右摇杆：瞄准\n左键 / RT：开火    C / Y：视角    LT：精瞄\n1–4：选武器    R / X：切武器    N：音乐\nM / R3：布雷    E / RB：EMP    空格 / LB：加速", &"Muted")
+	_pause_controls.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(_pause_controls)
+	_pause_tactics = _label("绿色整备点提供补给；起火残骸可能殉爆，保持距离。", &"Muted")
+	_pause_tactics.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(_pause_tactics)
 	box.add_child(HSeparator.new())
 	var resume_button := _button("继续行动", &"PrimaryButton", func() -> void: resume_requested.emit())
 	box.add_child(resume_button)
-	var retry_button := _button("重新部署", &"CommandButton", func() -> void: retry_requested.emit())
-	box.add_child(retry_button)
+	_pause_retry = _button("重新部署", &"CommandButton", func() -> void: retry_requested.emit())
+	box.add_child(_pause_retry)
 	var settings_button := _button("作战设置", &"CommandButton", func() -> void: settings_requested.emit())
 	box.add_child(settings_button)
 	var menu_button := _button("返回指挥中心", &"DangerButton", func() -> void: menu_requested.emit())
 	box.add_child(menu_button)
-	_wire_vertical_focus([resume_button, retry_button, settings_button, menu_button])
+	_pause_buttons.assign([resume_button, _pause_retry, settings_button, menu_button])
 	_focus_targets["paused"] = resume_button
-	box.add_child(_spacer(false, true))
-	var hint := _label("ESC / START  继续    A / ENTER  确认    F8  远程鼠标", &"Micro")
-	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var hint := _label("ESC / START  继续    A / ENTER  确认\nF8  远程鼠标", &"Micro")
 	box.add_child(hint)
+
+	_shop_box = VBoxContainer.new()
+	_shop_box.name = "EndlessUpgrades"
+	_shop_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_shop_box.add_theme_constant_override(&"separation", 10)
+	_pause_grid.add_child(_shop_box)
+	_shop_box.add_child(_label("FIELD WORKSHOP / 本局升级", &"Kicker"))
+	_shop_wallet = _label("整备资源 0", &"Metric")
+	_shop_box.add_child(_shop_wallet)
+	_shop_summary = _label("第 1 波 · 防线 1000 / 1000", &"Muted")
+	_shop_summary.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_shop_box.add_child(_shop_summary)
+	_shop_box.add_child(HSeparator.new())
+	for entry: Array in [
+		["firepower", "火力强化"], ["autoloader", "装填升级"],
+		["fortification", "防线加固"], ["repair", "战场维修"], ["ammo", "弹药补给"],
+	]:
+		var id := String(entry[0])
+		var row := VBoxContainer.new()
+		row.add_theme_constant_override(&"separation", 3)
+		_shop_box.add_child(row)
+		var button := _button(String(entry[1]), &"SettingButton", upgrade_requested.emit.bind(id))
+		button.name = "Upgrade_" + id
+		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		button.clip_text = true
+		button.custom_minimum_size = Vector2(0.0, 60.0)
+		row.add_child(button)
+		_upgrade_buttons[id] = button
+		var description := _label("", &"Muted")
+		description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		row.add_child(description)
+		_upgrade_descriptions[id] = description
+	var note := _label("升级立即生效。结束本局后重置装备；最高波次与击杀纪录保留。", &"Micro")
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_shop_box.add_child(note)
 
 
 func _build_settings_layer() -> void:
@@ -618,10 +702,15 @@ func _build_result_layer() -> void:
 	_result_panel = _panel(&"OverlayPanel")
 	_result_panel.custom_minimum_size = Vector2(760.0, 640.0)
 	center.add_child(_result_panel)
+	var result_scroll := ScrollContainer.new()
+	result_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	result_scroll.follow_focus = true
+	_result_panel.add_child(result_scroll)
 	var box := VBoxContainer.new()
+	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	box.alignment = BoxContainer.ALIGNMENT_CENTER
 	box.add_theme_constant_override(&"separation", 16)
-	_result_panel.add_child(box)
+	result_scroll.add_child(box)
 	_result_kicker = _label("MISSION ACCOMPLISHED", &"Kicker")
 	_result_kicker.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(_result_kicker)
@@ -635,12 +724,15 @@ func _build_result_layer() -> void:
 	box.add_child(stats)
 	var score_card := _metric_card("作战评分")
 	_result_score = score_card.get_meta("value") as Label
+	_result_score_caption = score_card.get_meta("caption") as Label
 	stats.add_child(score_card)
 	var kills_card := _metric_card("本次击毁")
 	_result_kills = kills_card.get_meta("value") as Label
+	_result_kills_caption = kills_card.get_meta("caption") as Label
 	stats.add_child(kills_card)
 	var time_card := _metric_card("作战用时")
 	_result_time = time_card.get_meta("value") as Label
+	_result_time_caption = time_card.get_meta("caption") as Label
 	stats.add_child(time_card)
 	_result_career = _label("坦克等级 LV.01 · 累计击毁 0 · 最高评分 0", &"Body")
 	_result_career.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -649,11 +741,11 @@ func _build_result_layer() -> void:
 	box.add_child(_spacer(false, true))
 	_result_primary = _button("返回指挥中心", &"PrimaryButton", func() -> void: _result_primary_action())
 	box.add_child(_result_primary)
-	var retry_button := _button("再战本关", &"CommandButton", func() -> void: retry_requested.emit())
-	box.add_child(retry_button)
-	var menu_button := _button("返回指挥中心", &"CommandButton", func() -> void: menu_requested.emit())
-	box.add_child(menu_button)
-	_wire_vertical_focus([_result_primary, retry_button, menu_button])
+	_result_retry = _button("再战本关", &"CommandButton", func() -> void: retry_requested.emit())
+	box.add_child(_result_retry)
+	_result_menu = _button("返回指挥中心", &"CommandButton", func() -> void: menu_requested.emit())
+	box.add_child(_result_menu)
+	_wire_vertical_focus([_result_primary, _result_retry, _result_menu])
 	_focus_targets["won"] = _result_primary
 	_focus_targets["lost"] = _result_primary
 	box.add_child(_label("ENTER / A  确认    ESC / B  返回指挥中心", &"Micro"))
@@ -706,6 +798,9 @@ func _update_title() -> void:
 	_title_vehicle.text = str(_snapshot.get("vehicle_description", ""))
 	_title_chapter.text = "任务 %02d / %02d · 已解锁 %d" % [chapter, _int_value("mission_count", 3), _int_value("unlocked_missions", 1)]
 	_title_briefing.text = str(_snapshot.get("mission_briefing", "清除巡逻车队，击败首领。"))
+	var defense := _endless_snapshot()
+	var best_wave := maxi(0, int(defense.get("best_wave", 0)))
+	_title_endless_record.text = "最高守至第 %d 波 · 最多击杀 %d" % [best_wave, maxi(0, int(defense.get("best_kills", 0)))] if best_wave > 0 else "巨型怪物持续来袭 · 击杀换取武器升级"
 
 
 func _update_hud() -> void:
@@ -731,7 +826,24 @@ func _update_hud() -> void:
 		_hud_kill_bar.max_value = 1.0
 		_hud_kill_bar.value = progress
 	_hud_score.text = "%05d" % maxi(0, _int_value("score", 0))
+	_hud_score_caption.text = "作战评分"
 	_hud_time.text = _format_time(_float_value("time", 0.0))
+	_hud_defense_hint.visible = _is_endless()
+	if _is_endless():
+		var defense := _endless_snapshot()
+		var base_hp := maxf(0.0, float(defense.get("base_hp", 0.0)))
+		var base_max := maxf(1.0, float(defense.get("base_max_hp", 1.0)))
+		_hud_objective.text = "第 %02d 波 · 逼近 %d" % [maxi(1, int(defense.get("wave", 1))), maxi(0, int(defense.get("alive", 0)))]
+		_hud_kills.text = "防线 %d / %d" % [ceili(base_hp), ceili(base_max)]
+		_hud_kill_bar.max_value = base_max
+		_hud_kill_bar.value = clampf(base_hp, 0.0, base_max)
+		_hud_kill_bar.modulate = ThemeFactory.RED if base_hp / base_max < 0.3 else Color.WHITE
+		_hud_score_caption.text = "整备资源"
+		_hud_score.text = str(maxi(0, int(defense.get("scrap", 0))))
+		var next_wave := maxf(0.0, float(defense.get("next_wave_in", 0.0)))
+		_hud_defense_hint.text = "击杀 %d · Esc / Start 打开升级%s" % [maxi(0, int(defense.get("kills", 0))), " · 下波 %ds" % ceili(next_wave) if next_wave > 0.0 else ""]
+	else:
+		_hud_kill_bar.modulate = Color.WHITE
 	var music: Dictionary = _snapshot.get("music", {})
 	_hud_music.text = "N · " + str(music.get("name", "战斗音乐"))
 	_hud_radio.text = "[车组通信] " + str(_snapshot.get("radio_caption", ""))
@@ -819,6 +931,52 @@ func _update_settings() -> void:
 
 
 func _update_pause() -> void:
+	var endless := _is_endless()
+	_shop_box.visible = endless
+	_pause_heading.text = "防线整备" if endless else "战场已暂停"
+	_pause_kicker.text = "ENDLESS DEFENSE / TIME FROZEN" if endless else "OPERATION SUSPENDED"
+	_pause_retry.text = "重新防守" if endless else "重新部署"
+	_pause_tactics.text = "怪物与倒计时已停止。购买升级后继续防守；注意保护防线和自己的战车。" if endless else "绿色整备点提供补给；起火残骸可能殉爆，保持距离。"
+	var focus_before := get_viewport().gui_get_focus_owner()
+	var focus_key := str(endless)
+	if endless:
+		var defense := _endless_snapshot()
+		_shop_wallet.text = "整备资源 %d" % maxi(0, int(defense.get("scrap", 0)))
+		_shop_summary.text = "第 %d 波 · 防线 %d / %d · 击杀 %d" % [maxi(1, int(defense.get("wave", 1))), ceili(maxf(0.0, float(defense.get("base_hp", 0.0)))), ceili(maxf(1.0, float(defense.get("base_max_hp", 1.0)))), maxi(0, int(defense.get("kills", 0)))]
+		var entries: Dictionary = {}
+		for upgrade: Dictionary in defense.get("upgrades", []):
+			entries[str(upgrade.get("id", ""))] = upgrade
+		for id: String in _upgrade_buttons:
+			var button := _upgrade_buttons[id] as Button
+			var entry: Dictionary = entries.get(id, {})
+			var level := maxi(0, int(entry.get("level", 0)))
+			var maximum := maxi(0, int(entry.get("max_level", 0)))
+			var cost := maxi(0, int(entry.get("cost", 0)))
+			var maxed := maximum > 0 and level >= maximum
+			var can_buy := not entry.is_empty() and bool(entry.get("available", false)) and not maxed and cost <= maxi(0, int(defense.get("scrap", 0)))
+			button.disabled = not can_buy
+			var rank := " · LV.%d/%d" % [level, maximum] if maximum > 0 else ""
+			var price := "已达上限" if maxed else "%d 资源%s" % [cost, " · 资源不足" if cost > int(defense.get("scrap", 0)) else (" · 暂无需整备" if not can_buy else "")]
+			button.text = "%s%s\n%s" % [str(entry.get("name", "整备项目")), rank, price]
+			var description := str(entry.get("description", "等待整备信息"))
+			(_upgrade_descriptions[id] as Label).text = description
+			button.tooltip_text = description
+			focus_key += id + str(can_buy)
+	if focus_key != _pause_focus_key:
+		_pause_focus_key = focus_key
+		var focus_buttons: Array[Button] = [_pause_buttons[0]]
+		if endless:
+			for id: String in _upgrade_buttons:
+				var upgrade_button := _upgrade_buttons[id] as Button
+				if not upgrade_button.disabled:
+					focus_buttons.append(upgrade_button)
+		focus_buttons.append_array(_pause_buttons.slice(1))
+		_wire_vertical_focus(focus_buttons)
+		# A purchased upgrade may become unaffordable or maxed. Keep controller
+		# navigation on a usable item instead of stranding it on a disabled button.
+		if _mode == "paused" and focus_before is Button and (focus_before as Button).disabled:
+			focus_buttons[0].grab_focus()
+	_apply_pause_layout()
 	var notice := str(_snapshot.get("notice", ""))
 	if not notice.is_empty():
 		_pause_notice.text = notice
@@ -833,6 +991,27 @@ func _update_pause() -> void:
 
 
 func _update_result() -> void:
+	if _is_endless():
+		var defense := _endless_snapshot()
+		_result_kicker.text = "ENDLESS DEFENSE / FINAL REPORT"
+		_result_kicker.add_theme_color_override(&"font_color", ThemeFactory.GOLD)
+		_result_title.text = str(defense.get("defeat_reason", "防守结束"))
+		_result_score.text = str(maxi(1, int(defense.get("wave", 1))))
+		_result_score_caption.text = "抵达波次"
+		_result_kills.text = str(maxi(0, int(defense.get("kills", 0))))
+		_result_kills_caption.text = "击退巨兽"
+		_result_time.text = _format_time(_float_value("time", 0.0))
+		_result_time_caption.text = "坚守时间"
+		_result_career.text = "最高守至第 %d 波 · 最多击杀 %d\n本局剩余资源 %d · 再次防守将重新整备" % [maxi(0, int(defense.get("best_wave", 0))), maxi(0, int(defense.get("best_kills", 0))), maxi(0, int(defense.get("scrap", 0)))]
+		_result_primary.text = "重新防守"
+		_result_retry.visible = false
+		_wire_vertical_focus([_result_primary, _result_menu])
+		return
+	_result_score_caption.text = "作战评分"
+	_result_kills_caption.text = "本次击毁"
+	_result_time_caption.text = "作战用时"
+	_result_retry.visible = true
+	_wire_vertical_focus([_result_primary, _result_retry, _result_menu])
 	var won := _mode == "won"
 	_result_kicker.text = "MISSION ACCOMPLISHED" if won else "OPERATION FAILED"
 	_result_kicker.add_theme_color_override(&"font_color", ThemeFactory.GREEN if won else ThemeFactory.RED)
@@ -849,6 +1028,9 @@ func _update_result() -> void:
 
 
 func _result_primary_action() -> void:
+	if _is_endless():
+		retry_requested.emit()
+		return
 	if _mode == "won":
 		if _bool_value("has_next_mission", false):
 			next_requested.emit()
@@ -881,6 +1063,27 @@ func _apply_safe_margins() -> void:
 		container.add_theme_constant_override(&"margin_right", int(horizontal))
 		container.add_theme_constant_override(&"margin_top", int(vertical))
 		container.add_theme_constant_override(&"margin_bottom", int(vertical))
+	_apply_pause_layout()
+	if is_instance_valid(_result_panel):
+		_result_panel.custom_minimum_size = Vector2(minf(760.0, maxf(280.0, viewport_size.x - 48.0)), minf(640.0, maxf(240.0, viewport_size.y - 48.0)))
+
+
+func _apply_pause_layout() -> void:
+	if not is_instance_valid(_pause_panel):
+		return
+	var viewport_size := size if size.x > 0.0 and size.y > 0.0 else get_viewport_rect().size
+	var available := Vector2(maxf(280.0, viewport_size.x - 64.0), maxf(240.0, viewport_size.y - 64.0))
+	_pause_panel.custom_minimum_size = Vector2(minf(1100.0 if _is_endless() else 620.0, available.x), minf(740.0 if _is_endless() else 650.0, available.y))
+	_pause_grid.columns = 2 if _is_endless() and available.x >= 1000.0 else 1
+
+
+func _is_endless() -> bool:
+	return str(_snapshot.get("run_type", "campaign")) == "endless"
+
+
+func _endless_snapshot() -> Dictionary:
+	var defense: Variant = _snapshot.get("endless", {})
+	return defense if defense is Dictionary else {}
 
 
 func _new_layer(layer_name: String) -> Control:
@@ -973,6 +1176,7 @@ func _metric_card(caption: String) -> PanelContainer:
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(name_label)
 	panel.set_meta("value", value)
+	panel.set_meta("caption", name_label)
 	return panel
 
 

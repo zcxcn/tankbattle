@@ -168,6 +168,16 @@ if (-not $SkipTests) {
     Assert-LastExitCode -Action "Godot enemy river crossing navigation tests"
     & $GodotPath --headless --path $projectRoot "res://tests/city_architecture_test.tscn" -- --test
     Assert-LastExitCode -Action "Godot modeled city architecture tests"
+
+    Write-Host "Running endless siege, giant actor, upgrade and menu tests..."
+    & $GodotPath --headless --path $projectRoot "res://tests/endless_progression_test.tscn" -- --test
+    Assert-LastExitCode -Action "Godot endless economy and isolated records"
+    & $GodotPath --headless --path $projectRoot "res://tests/endless_ui_test.tscn" -- --test
+    Assert-LastExitCode -Action "Godot endless workshop controller menus"
+    & $GodotPath --headless --path $projectRoot "res://tests/giant_monster_test.tscn" -- --test
+    Assert-LastExitCode -Action "Godot skinned giant animation and destruction"
+    & $GodotPath --headless --fixed-fps 60 --path $projectRoot "res://tests/endless_mode_test.tscn" -- --test
+    Assert-LastExitCode -Action "Godot actual endless siege integration"
 }
 
 $outputRoot = [System.IO.Path]::GetFullPath((Join-Path $repositoryRoot "outputs/pc-godot"))
@@ -211,6 +221,10 @@ $creditSources = [ordered]@{
     "models/environment/aerial_grass/CREDITS.md" = "assets/models/environment/polyhaven_aerial_grass/CREDITS.md"
     "models/environment/aerial_grass/LICENSE.txt" = "assets/models/environment/polyhaven_aerial_grass/LICENSE.txt"
     "models/ordnance/README.md" = "assets/models/ordnance/README.md"
+    "models/monsters/CREDITS.md" = "assets/models/monsters/horror_creature/CREDITS.md"
+    "models/monsters/LICENSE.txt" = "assets/models/monsters/horror_creature/LICENSE.txt"
+    "models/monsters/provenance.json" = "assets/models/monsters/horror_creature/provenance.json"
+    "models/monsters/Publisher-README.txt" = "assets/models/monsters/horror_creature/Publisher-README.txt"
     "models/challenger2/SOURCE_LICENSE.txt" = "assets/models/realistic/challenger2/SOURCE_LICENSE.txt"
     "models/kf51/SOURCE_LICENSE.txt" = "assets/models/realistic/kf51/SOURCE_LICENSE.txt"
     "models/kv2/SOURCE_LICENSE.txt" = "assets/models/realistic/kv2/SOURCE_LICENSE.txt"
@@ -226,7 +240,7 @@ foreach ($credit in $creditSources.GetEnumerator()) {
     }
 }
 
-$productVersion = "0.4.7"
+$productVersion = "0.4.8"
 $manifestPath = Join-Path $artifactDirectory "build-manifest.json"
 $payloadFiles = @(Get-ChildItem -LiteralPath $artifactDirectory -File -Recurse | Sort-Object FullName)
 $manifestFiles = @(

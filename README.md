@@ -12,7 +12,9 @@
 
 ## Godot PC 原生重制
 
-`pc-godot/` 是用 **Godot 4.7.2、Forward+ 和 Jolt Physics** 制作的 Windows 原生坦克游戏。PC **0.4.7** 提供六关连续战役，每张地图 **288 × 384 米**：工业外围、补给港区、指挥堡垒、钢厂反击、港口封锁和最后壁垒，分别执行肃清、占领或摧毁任务，然后迎战各关首领。普通敌车逐关增加到 **6 / 9 / 12 / 15 / 18 / 22 辆**，装甲、火力和装填能力逐步增强；通关解锁、整备补给和重玩奖励均独立结算。
+`pc-godot/` 是用 **Godot 4.7.2、Forward+ 和 Jolt Physics** 制作的 Windows 原生坦克游戏。PC **0.4.8** 提供六关连续战役，每张地图 **288 × 384 米**：工业外围、补给港区、指挥堡垒、钢厂反击、港口封锁和最后壁垒，分别执行肃清、占领或摧毁任务，然后迎战各关首领。普通敌车逐关增加到 **6 / 9 / 12 / 15 / 18 / 22 辆**，装甲、火力和装填能力逐步增强；通关解锁、整备补给和重玩奖励均独立结算。
+
+**0.4.8 新模式：无尽防守 · 巨兽围城。** 从主菜单进入，在独立的城市大道上守住避难所；巨型恐怖生物持续从三条路线逼近，波次每 65 秒推进，每三波加入巨型精英。怪物具有纹理皮肤、骨骼行走、攻击预备和倒地过程，接近时出现沉重脚步与距离衰减震动。防线或坦克被摧毁即结束本局。击杀获得战利品，按 **Esc / 手柄 Start** 暂停并购买弹头强化、自动装填、基地加固、维修或弹药。四种武器均可升级；地雷伤害与 EMP 踉跄同样作用于巨怪。局内成长重新开局时重置，最高波数、击杀和生存时间独立保存，不消耗或解锁战役进度。模式默认第三人称，**C / Y** 可切回俯视，远程桌面继续使用 **F8**。[无尽模式自检与实际截图](docs/pc-realistic/SELF_CHECK_0.4.8.md)。
 
 0.4.7 把平坦厂区扩展为城市河谷战场：战区加入约 38–70 米的退台办公楼、住宅高层与市政塔楼，配有倒角外壳、玻璃窗、阳台、入口雨棚和屋顶设备，外围还有十栋天际线建筑。28 米宽的河道穿过地图，三座带实体桥面、护栏、桥墩和钢拱的桥连接主干道；河水低于路面，具有流动细浪与岸线泡沫。东南街区替换为可驾驶的起伏山丘，远处增加山岭和草地平原。实拍岩石、现代混凝土立面、草地与泥石 PBR 使用 Poly Haven CC0 资源，完整原始素材约 5.95 MB。雨雪落地高度、积水、屋顶遮挡和桥梁通行均已适配；[地形与城市自检](docs/pc-realistic/SELF_CHECK_0.4.7.md)记录实际物理验证和渲染截图。
 
@@ -102,7 +104,7 @@ $godot = (Resolve-Path .\work\tools\godot-4.7.2\editor\Godot_v4.7.2-stable_win64
 pwsh -NoProfile -File .\scripts\build-pc-godot.ps1 -Configuration Release
 ```
 
-构建脚本固定校验官方 Godot 可执行文件和模板的 SHA-256；其他位置的同版 console 程序可通过 `-GodotPath <路径>` 指定，Windows 模板仍放在 `work/tools/godot-4.7.2/templates/`。Release 成品位于 `outputs/pc-godot/windows-x86_64/`，可分发压缩包为 `outputs/pc-godot/Iron-Embers-Windows-x86_64-0.4.7.zip`。解压后双击 `IronEmbers.exe`，保留同目录 `IronEmbers.pck` 和 `credits/` 即可离线运行。当前 Windows 可执行文件未做代码签名，首次运行可能显示系统信誉提示。
+构建脚本固定校验官方 Godot 可执行文件和模板的 SHA-256；其他位置的同版 console 程序可通过 `-GodotPath <路径>` 指定，Windows 模板仍放在 `work/tools/godot-4.7.2/templates/`。Release 成品位于 `outputs/pc-godot/windows-x86_64/`，可分发压缩包为 `outputs/pc-godot/Iron-Embers-Windows-x86_64-0.4.8.zip`。解压后双击 `IronEmbers.exe`，保留同目录 `IronEmbers.pck` 和 `credits/` 即可离线运行。当前 Windows 可执行文件未做代码签名，首次运行可能显示系统信誉提示。
 
 本次 PC 重制的源码集中在 `pc-godot/`，构建与验收脚本为 `scripts/build-pc-godot.ps1`、`scripts/smoke-pc-godot.ps1`；`mobile/baseline/` 和 `android/` 未改动。
 

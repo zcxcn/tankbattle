@@ -38,6 +38,20 @@ static func collect(game: Node3D) -> Dictionary:
 	result["aim_screen"] = camera.unproject_position(aim) if result["aim_visible"] else Vector2.ZERO
 	var space := player.get_world_3d().direct_space_state
 	result["enemy_markers"] = _visible_enemy_markers(game, player, camera, turret, space)
+	for monster: Node3D in game.get_tree().get_nodes_in_group("monsters"):
+		if not game.is_ancestor_of(monster) or not monster.is_targetable():
+			continue
+		var at := monster.global_position
+		var chest := at + Vector3.UP * float(monster.get_meta("height", 9.0)) * 0.6
+		var visibility := PhysicsRayQueryParameters3D.create(player.global_position + Vector3.UP * 2.4, chest, 1)
+		if not space.intersect_ray(visibility).is_empty():
+			continue
+		result["radar_contacts"].append({"position": Vector2(at.x, at.z), "boss": monster.archetype == "titan", "active": true})
+		var anchor := at + Vector3.UP * (float(monster.get_meta("height", 9.0)) + 1.0)
+		if not camera.is_position_behind(anchor):
+			var screen := camera.unproject_position(anchor)
+			if camera.get_viewport().get_visible_rect().grow(-38.0).has_point(screen):
+				result["enemy_markers"].append({"screen": screen, "health": clampf(monster.hp / maxf(1.0, monster.max_hp), 0, 1), "aiming": 0.0})
 	var hit := _get_reticle(player, barrel, muzzle, turret, space, aim)
 	var impact: Vector3 = hit["position"]
 	var collider: CollisionObject3D = hit.get("collider") as CollisionObject3D

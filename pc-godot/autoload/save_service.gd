@@ -34,6 +34,9 @@ func default_profile() -> Dictionary:
 		"selected_chassis": 1,
 		"selected_weapon": 0,
 		"active_run": {},
+		"endless_best_wave": 0,
+		"endless_best_kills": 0,
+		"endless_best_time": 0.0,
 	}
 
 
@@ -104,6 +107,21 @@ func settle_run(run_id: String, won: bool, score: int, mission: int = 0) -> bool
 		profile["completed_missions"] = completed
 	save_now()
 	return true
+
+
+func record_endless_result(wave: int, kills: int, survival_time: float) -> bool:
+	if wave < 0 or kills < 0 or not is_finite(survival_time) or survival_time < 0.0:
+		return false
+	var best_wave := maxi(int(_bounded_endless_number(profile.get("endless_best_wave", 0), 1000000.0)), mini(wave, 1000000))
+	var best_kills := maxi(int(_bounded_endless_number(profile.get("endless_best_kills", 0), 1000000000.0)), mini(kills, 1000000000))
+	var best_time := maxf(_bounded_endless_number(profile.get("endless_best_time", 0.0), 315360000.0), minf(survival_time, 315360000.0))
+	if best_wave == profile.get("endless_best_wave", 0) and best_kills == profile.get("endless_best_kills", 0) and best_time == profile.get("endless_best_time", 0.0):
+		return false
+	profile["endless_best_wave"] = best_wave
+	profile["endless_best_kills"] = best_kills
+	profile["endless_best_time"] = best_time
+	# Endless records never settle a campaign run or grant career progression.
+	return save_now()
 
 
 func save_now() -> bool:
@@ -181,8 +199,12 @@ func _sanitize(value: Dictionary) -> Dictionary:
 	var completed: Array = []
 	if value.get("completed_missions", []) is Array:
 		for entry: Variant in value["completed_missions"]:
-			if entry is int and entry >= 0 and entry < 18 and entry not in completed:
-				completed.append(entry)
+			# JSON restores numbers as floats, including integer mission IDs.
+			if not (entry is int or entry is float):
+				continue
+			var number := float(entry)
+			if is_finite(number) and number >= 0.0 and number < 18.0 and number == floorf(number) and int(number) not in completed:
+				completed.append(int(number))
 	completed.sort()
 	result["completed_missions"] = completed
 	result["lifetime_kills"] = clampi(int(value.get("lifetime_kills", 0)), 0, 1000000000)
@@ -191,6 +213,9 @@ func _sanitize(value: Dictionary) -> Dictionary:
 	result["tank_level"] = _level_for_kills(int(result["lifetime_kills"]))
 	result["selected_chassis"] = clampi(int(value.get("selected_chassis", 1)), 0, 2)
 	result["selected_weapon"] = clampi(int(value.get("selected_weapon", 0)), 0, 6)
+	result["endless_best_wave"] = int(_bounded_endless_number(value.get("endless_best_wave", 0), 1000000.0))
+	result["endless_best_kills"] = int(_bounded_endless_number(value.get("endless_best_kills", 0), 1000000000.0))
+	result["endless_best_time"] = _bounded_endless_number(value.get("endless_best_time", 0.0), 315360000.0)
 	var active: Variant = value.get("active_run", {})
 	if active is Dictionary and active.get("id", "") is String and not active.get("id", "").is_empty() and active.get("id", "").length() <= 100:
 		result["active_run"] = {
@@ -199,6 +224,13 @@ func _sanitize(value: Dictionary) -> Dictionary:
 			"settled": bool(active.get("settled", false)),
 		}
 	return result
+
+
+func _bounded_endless_number(value: Variant, maximum: float) -> float:
+	if not (value is int or value is float):
+		return 0.0
+	var number := float(value)
+	return clampf(number, 0.0, maximum) if is_finite(number) else 0.0
 
 
 func _level_for_kills(kills: int) -> int:

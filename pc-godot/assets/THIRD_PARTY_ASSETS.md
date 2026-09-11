@@ -159,6 +159,18 @@ original game code. They are not downloaded landmark replicas and are not
 attributed to the above artists. Reproduction and checksum verification:
 `scripts/pc047_import_environment.py`.
 
+## PC 0.4.8 endless horror creature
+
+**3D Horror Game Monster**, published by City Building Game Art / HorrorGameMaker.com,
+is a CC0 1.0 skinned creature from [the original artist upload](https://opengameart.org/content/3d-horror-game-monster).
+The game retains its 3,584-triangle mesh, 70-bone rig, authored Walk animation and
+2K color/normal skin textures. Three gameplay variants use 9, 12 and 16 metre bodies;
+attack poses, accelerated falling and corpse fading are implemented in Godot.
+These variants share one original creature model. Source archive member hashes,
+conversion details and the source dedication are included in
+[monster credits](models/monsters/horror_creature/CREDITS.md) and
+[provenance](models/monsters/horror_creature/provenance.json).
+
 ## Original modeled ordnance
 
 AP shells, HE shells, machine-gun bullets and rockets are original closed GLB

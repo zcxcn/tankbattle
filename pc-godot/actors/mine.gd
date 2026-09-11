@@ -44,10 +44,9 @@ func _physics_process(delta: float) -> void:
 	if lifetime <= 0.0:
 		queue_free()
 		return
-	for node: Node in get_tree().get_nodes_in_group("tanks"):
-		if not node is TankActor:
-			continue
-		var tank := node as TankActor
+	var targets: Array[Node] = get_tree().get_nodes_in_group("tanks")
+	targets.append_array(get_tree().get_nodes_in_group("monsters"))
+	for tank: Node3D in targets:
 		var tank_id := tank.get_instance_id()
 		var previous: Vector3 = _previous_tank_positions.get(tank_id, tank.global_position)
 		_previous_tank_positions[tank_id] = tank.global_position

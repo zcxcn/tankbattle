@@ -917,7 +917,7 @@ func try_fire() -> bool:
 		if weapon.is_empty():
 			return false
 		kind = weapon.id
-		damage = projectile_damage if kind == "cannon" else float(weapon.damage)
+		damage = projectile_damage * float(weapon.get("damage_multiplier", 1.0)) if kind == "cannon" else float(weapon.damage)
 		speed = projectile_speed if kind == "cannon" else float(weapon.speed)
 		splash = float(weapon.splash)
 		reload = float(_loadout.snapshot().reload)
@@ -1012,7 +1012,10 @@ func _launch_weapon(origin: Vector3, muzzle: Vector3, direction: Vector3, damage
 		if collider is TankActor:
 			collider.receive_damage(damage, team, impact_position, kind)
 		elif collider != null and collider.has_method("receive_damage"):
-			collider.call("receive_damage", damage, team, impact_position)
+			if collider is Node and collider.is_in_group("monsters"):
+				collider.call("receive_damage", damage, team, impact_position, kind)
+			else:
+				collider.call("receive_damage", damage, team, impact_position)
 		if splash > 0.0:
 			game.radial_damage(impact_position, splash, damage * 0.55, team, {}, kind)
 		var normal: Vector3 = obstruction.get("normal", Vector3.UP)

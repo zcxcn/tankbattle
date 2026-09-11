@@ -1,0 +1,17 @@
+CC0 1.0 Universal (Public Domain Dedication)
+https://creativecommons.org/publicdomain/zero/1.0/legalcode
+
+Publisher: City Building Game Art / HorrorGameMaker.com
+Asset: 3D Horror Game Monster
+Official publisher upload: https://opengameart.org/content/3d-horror-game-monster
+Publisher's license declaration checked 2026-09-11: CC0.
+Original publication: 2016-10-06.
+
+The publisher describes this as a public-domain 3D character model and makes
+attribution optional. The authored skin mesh, skeleton, walk animation and
+embedded creature textures used here come from that upload's Poses.zip.
+Autodesk Maya helper environment cube maps were excluded from the conversion.
+
+CC0 permits copying, modification and redistribution, including commercial
+use, without asking permission. No endorsement or warranties are implied.
+The authoritative legal text is available at the CC0 URL above.

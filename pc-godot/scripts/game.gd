@@ -13,6 +13,11 @@ const Deployment = preload("res://scripts/battle_deployment.gd")
 const WreckScript = preload("res://actors/tank_wreck.gd")
 const TrackMarksScript = preload("res://scripts/track_marks.gd")
 const WeatherCatalog = preload("res://data/weather_catalog.gd")
+const EndlessArena = preload("res://scenes/missions/endless_arena.gd")
+const EndlessDirector = preload("res://scripts/endless_director.gd")
+
+var run_type := "campaign"
+var endless: Node
 
 var current_weather := "dry"
 
@@ -74,7 +79,7 @@ func _ready() -> void:
 	get_tree().auto_accept_quit = false
 	Input.joy_connection_changed.connect(_on_joy_connection_changed)
 	_smoke_test = "--smoke-test" in OS.get_cmdline_user_args()
-	print("IRON_EMBERS_PC_READY | Godot native | Campaign 0.4.7 | city towers + bridged river + rolling hills")
+	print("IRON_EMBERS_PC_READY | Godot native | Campaign 0.4.8 | endless giant siege + weapon progression")
 	if _smoke_test:
 		call_deferred("start_game")
 
@@ -82,7 +87,7 @@ func _ready() -> void:
 func _build_arena() -> void:
 	if is_instance_valid(arena):
 		arena.free()
-	arena = ArenaScript.new()
+	arena = EndlessArena.new() if run_type == "endless" else ArenaScript.new()
 	arena.name = "GrayIgnitionArena"
 	arena.game = self
 	arena.mission_index = mission_index
@@ -113,6 +118,8 @@ func _create_ui() -> void:
 	ui.name = "GameUI"
 	add_child(ui)
 	_connect_ui_signal("start_requested", start_game)
+	_connect_ui_signal("endless_requested", start_endless)
+	_connect_ui_signal("upgrade_requested", _buy_endless_upgrade)
 	_connect_ui_signal("resume_requested", resume_game)
 	_connect_ui_signal("retry_requested", retry_game)
 	_connect_ui_signal("menu_requested", return_to_menu)
@@ -132,7 +139,9 @@ func _connect_ui_signal(signal_name: StringName, target: Callable) -> void:
 
 func _show_title_tank() -> void:
 	_clear_combat_nodes()
+	run_type = "campaign"
 	mission_index = selected_mission
+	mission_data = MissionCatalog.get_mission(selected_mission)
 	_build_arena()
 	player = _spawn_tank("CommandTank", Vector3(7.0, 0.05, 44.5), TankActor.TEAM_PLAYER, true, false, ["scout", "line", "heavy"][selected_chassis])
 	player.rotation.y = PI - 0.05
@@ -184,6 +193,7 @@ func start_game() -> void:
 	_settle_abandoned_run()
 	AudioService.set_game_state("title")
 	_clear_combat_nodes()
+	run_type = "campaign"
 	mission_index = clampi(selected_mission, 0, MissionCatalog.count() - 1)
 	mission_data = MissionCatalog.get_mission(mission_index)
 	_resolve_weather()
@@ -241,7 +251,53 @@ func start_game() -> void:
 
 
 func retry_game() -> void:
-	start_game()
+	if run_type == "endless":
+		start_endless()
+	else:
+		start_game()
+
+
+func start_endless() -> void:
+	_settle_abandoned_run()
+	AudioService.set_game_state("title")
+	_clear_combat_nodes()
+	run_type = "endless"
+	current_run_id = ""
+	mission_index = 0
+	mission_data = {"name": "无尽防守", "objective_type": "endless", "objective_position": EndlessDirector.BASE_POSITION}
+	_resolve_weather()
+	_build_arena()
+	mission_kills = 0
+	total_run_kills = 0
+	target_kills = 0
+	score = 0
+	play_time = 0.0
+	objective_complete = false
+	objective_progress = 0.0
+	result_delay = 0.0
+	_reported_contacts.clear()
+	pause_reason = "manual"
+	_settings_return_mode = "paused"
+	player = _spawn_tank("PlayerTank", Vector3(0, 0.1, 36), TankActor.TEAM_PLAYER, true, false, ["scout", "line", "heavy"][selected_chassis])
+	if not player.is_third_person():
+		player.toggle_camera()
+	player._camera_pivot.pitch = -0.04
+	player.aim_point = Vector3(0, 5, -50)
+	endless = EndlessDirector.new()
+	endless.game = self
+	add_child(endless)
+	mode = "playing"
+	AudioService.set_game_state(mode)
+	AudioService.radio("mission_start")
+	objective = "无尽防守 · 怪物将在 8 秒后到达"
+	notify("守住身后的城市避难所 · 击杀巨怪赚取战利品\nEsc / Start 升级与整备 · 1–4 切换武器 · C 切换视角", 8.0)
+	sync_pointer_mode()
+
+
+func _buy_endless_upgrade(id: String) -> void:
+	if run_type == "endless" and is_instance_valid(endless):
+		endless.buy_upgrade(id)
+		ui.update_snapshot(get_ui_snapshot())
 
 
 func return_to_menu() -> void:
@@ -287,6 +343,10 @@ func _close_settings() -> void:
 
 
 func _settle_abandoned_run() -> void:
+	if run_type == "endless":
+		if is_instance_valid(endless):
+			endless.settle()
+		return
 	if not current_run_id.is_empty():
 		SaveService.settle_run(current_run_id, false, score, mission_index)
 
@@ -326,8 +386,9 @@ func _process(delta: float) -> void:
 	if mode == "playing":
 		play_time += delta
 		_update_mouse_aim()
-		_update_encounters(delta)
-		_update_contact_reports(delta)
+		if run_type == "campaign":
+			_update_encounters(delta)
+			_update_contact_reports(delta)
 	_update_cleanup(delta)
 	if is_instance_valid(ui) and ui.has_method("update_snapshot"):
 		ui.call("update_snapshot", get_ui_snapshot())
@@ -456,10 +517,25 @@ func emit_emp(source: TankActor, radius: float) -> void:
 			var tank := node as TankActor
 			if tank.team != source.team and tank.is_targetable() and source.global_position.distance_to(tank.global_position) <= radius:
 				tank.apply_emp(2.8 if not tank.is_boss else 1.6)
+	for monster: Node3D in get_tree().get_nodes_in_group("monsters"):
+		if monster.is_targetable() and source.global_position.distance_to(monster.global_position) <= radius:
+			monster.apply_emp(2.0)
 	notify("电磁脉冲释放 · 排除 %d 枚地雷" % removed, 2.0)
 
 
 func radial_damage(at: Vector3, radius: float, damage: float, attacker_team: int, contact_positions: Dictionary = {}, weapon_kind := "blast") -> void:
+	for monster: Node3D in get_tree().get_nodes_in_group("monsters"):
+		if not is_combat_running():
+			break
+		if monster.team == attacker_team or not monster.is_targetable():
+			continue
+		var target: Vector3 = contact_positions.get(monster.get_instance_id(), monster.global_position)
+		# Surface bursts can strike the legs; torso impacts should still splash
+		# adjacent giants without measuring only against a root at ground level.
+		target.y = clampf(at.y, target.y + 0.5, target.y + float(monster.get_meta("height", 9.0)))
+		var distance := at.distance_to(target)
+		if distance <= radius + 1.5 and has_line_of_sight(at + Vector3.UP * 0.2, target):
+			monster.receive_damage(damage * clampf(1.0 - distance / maxf(radius + 1.5, 0.1), 0.35, 1.0), attacker_team, at, "blast")
 	for node: Node in get_tree().get_nodes_in_group("tanks"):
 		if not is_combat_running():
 			break
@@ -536,6 +612,9 @@ func _on_tank_destroyed(tank: TankActor, attacker_team: int) -> void:
 	if mode != "playing":
 		return
 	if tank.is_player:
+		if run_type == "endless" and is_instance_valid(endless):
+			endless.finish("主战坦克失去战斗能力")
+			return
 		mode = "lost"
 		AudioService.set_game_state(mode)
 		result_delay = 2.4
@@ -701,6 +780,8 @@ func get_ui_snapshot() -> Dictionary:
 	var boss_valid := is_instance_valid(boss) and boss.active and not boss.destroyed
 	var snapshot := {
 		"mode": mode,
+		"run_type": run_type,
+		"endless": endless.snapshot() if is_instance_valid(endless) else {"best_wave": SaveService.profile.get("endless_best_wave", 0), "best_kills": SaveService.profile.get("endless_best_kills", 0)},
 		"hp": player.hp if player_valid else 0.0,
 		"max_hp": player.max_hp if player_valid else 240.0,
 		"armor": roundi(player.armor * 100.0) if player_valid else 0,
@@ -758,7 +839,7 @@ func get_ui_snapshot() -> Dictionary:
 	snapshot["vehicle_description"] = VehicleCatalog.player_options()[selected_chassis].description
 	snapshot["camera_mode"] = "第三人称" if player_valid and player.is_third_person() else "俯视"
 	snapshot["weapon_state"] = player.get_weapon_snapshot() if player_valid else {}
-	snapshot["world_bounds"] = Rect2(-144, -192, 288, 384)
+	snapshot["world_bounds"] = arena.get_radar_bounds() if is_instance_valid(arena) else Rect2(-144, -192, 288, 384)
 	var destination: Vector3 = boss.global_position if boss_valid else mission_data.get("objective_position", Vector3.ZERO)
 	snapshot["objective_world"] = Vector2(destination.x, destination.z)
 	snapshot["objective_distance"] = player.global_position.distance_to(destination) if player_valid else 0.0
@@ -841,10 +922,13 @@ func _on_joy_connection_changed(device: int, connected: bool) -> void:
 
 
 func _clear_combat_nodes() -> void:
+	if is_instance_valid(endless):
+		endless.free()
+	endless = null
 	if is_instance_valid(_title_rig):
 		_title_rig.free()
 	_title_rig = null
-	for group in ["tanks", "mines", "projectiles", "combat_effects"]:
+	for group in ["tanks", "monsters", "monster_corpses", "mines", "projectiles", "combat_effects"]:
 		for node: Node in get_tree().get_nodes_in_group(group):
 			if is_instance_valid(node):
 				node.free()

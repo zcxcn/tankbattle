@@ -11,6 +11,8 @@ const WEAPONS := [
 
 var selected := 0
 var _states: Array[Dictionary] = []
+var _endless_damage_level := 0
+var _endless_reload_level := 0
 
 
 func _init() -> void:
@@ -29,6 +31,20 @@ func cycle() -> void:
 	selected = (selected + 1) % WEAPONS.size()
 
 
+func set_endless_upgrades(damage_level: int, reload_level: int) -> void:
+	_endless_damage_level = clampi(damage_level, 0, 8)
+	_endless_reload_level = clampi(reload_level, 0, 6)
+	# A purchase affects future reloads. Keep an already loaded magazine and
+	# every running weapon/breech timer intact, even while changing weapons.
+	for index in _states.size():
+		if float(_states[index].cooldown) <= 0.0:
+			_states[index].reload_max = float(WEAPONS[index].interval) * _reload_multiplier()
+
+
+func _reload_multiplier() -> float:
+	return maxf(0.5, 1.0 - 0.08 * float(_endless_reload_level))
+
+
 func tick(delta: float) -> void:
 	for index in _states.size():
 		var state: Dictionary = _states[index]
@@ -38,7 +54,7 @@ func tick(delta: float) -> void:
 			state.ammo = count
 			state.reserve -= count
 			state.belt_reloading = false
-			state.reload_max = float(WEAPONS[index].interval)
+			state.reload_max = float(WEAPONS[index].interval) * _reload_multiplier()
 
 
 func can_fire() -> bool:
@@ -51,7 +67,7 @@ func fire(interval_override := -1.0) -> Dictionary:
 		return {}
 	var definition: Dictionary = WEAPONS[selected]
 	var state: Dictionary = _states[selected]
-	var interval := interval_override if interval_override > 0.0 else float(definition.interval)
+	var interval := (interval_override if interval_override > 0.0 else float(definition.interval)) * _reload_multiplier()
 	state.cooldown = interval
 	state.reload_max = interval
 	if state.ammo > 0:
@@ -60,12 +76,16 @@ func fire(interval_override := -1.0) -> Dictionary:
 	if selected == 0 or selected == 2:
 		var shared: Dictionary = _states[2 if selected == 0 else 0]
 		shared.cooldown = maxf(float(shared.cooldown), interval)
-		shared.reload_max = maxf(float(shared.reload_max), interval)
+		shared.reload_max = shared.cooldown if _endless_reload_level > 0 else maxf(float(shared.reload_max), interval)
 	if state.ammo == 0 and state.reserve > 0:
 		state.belt_reloading = true
-		state.cooldown = float(definition.get("belt_reload", interval))
+		state.cooldown = float(definition.get("belt_reload", float(definition.interval))) * _reload_multiplier()
 		state.reload_max = state.cooldown
-	return definition.duplicate()
+	var fired := definition.duplicate()
+	fired.damage_multiplier = 1.0 + float(_endless_damage_level) * 0.2
+	fired.damage = float(definition.damage) * float(fired.damage_multiplier)
+	fired.interval = interval
+	return fired
 
 
 func resupply() -> void:
