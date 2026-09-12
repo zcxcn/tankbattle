@@ -16,7 +16,6 @@ import {
   VolumeX,
   Camera,
   Maximize,
-  LoaderCircle,
   Rocket,
   Target,
   Flame,
@@ -35,12 +34,18 @@ import {
   Battle,
   W,
   H,
-  ENEMY_GATES,
+  ENEMY_REGION,
   type Objective,
   type Input,
   type BattleResult,
 } from '@/lib/engine';
-import type { Renderer3D, CameraMode } from '@/lib/three/renderer3d';
+import type {
+  Renderer3D,
+  CameraMode,
+  RendererProgress,
+} from '@/lib/three/renderer3d';
+import { battlefieldFor, OPERATIONS } from '@/lib/battlefields';
+import { preloadRenderer } from '@/lib/three/renderer-loader';
 import {
   FramePacer,
   AdaptiveResolution,
@@ -104,6 +109,12 @@ export default function BattleGame({
   onRadioActive,
   onAudioChange,
 }: Props) {
+  const field = battlefieldFor(mission, save.battlefield);
+  const operation = OPERATIONS.find(
+    (operation) => operation.id === save.operation,
+  );
+  const scenario =
+    save.battlefield !== 'campaign' || save.operation !== 'campaign';
   const canvas = useRef<HTMLCanvasElement>(null),
     engine = useRef<Battle | null>(null),
     renderer = useRef<Renderer3D | null>(null),
@@ -133,6 +144,10 @@ export default function BattleGame({
   const pointerScreen = useRef<{ x: number; y: number } | null>(null);
   const errorRef = useRef('');
   const clearInput = useRef<() => void>(() => {});
+  const [loadProgress, setLoadProgress] = useState<RendererProgress>({
+    progress: 0,
+    label: '装载 3D 引擎',
+  });
   const [loading, setLoading] = useState(true),
     [loadError, setLoadError] = useState(''),
     [cameraMode, setCameraMode] = useState<CameraMode>('assault');
@@ -181,7 +196,8 @@ export default function BattleGame({
       ammo: WEAPONS.map((_, i) => (i === 0 ? Infinity : 0)),
       supplies: [] as { x: number; y: number; weapon: number }[],
       reload: 0,
-      objective: MISSIONS[mission].objective as string,
+      objective:
+        operation?.description ?? (MISSIONS[mission].objective as string),
       objectives: [] as Objective[],
       convoy: null as { x: number; y: number } | null,
       route: [] as { x: number; y: number }[],
@@ -219,7 +235,12 @@ export default function BattleGame({
     }
   }, [save.sound]);
   useEffect(() => {
-    const b = new Battle(mission, endless, save, 2049, runId);
+    const seed =
+      Array.from(runId).reduce(
+        (value, letter) => Math.imul(value ^ letter.charCodeAt(0), 16777619),
+        2166136261,
+      ) >>> 0;
+    const b = new Battle(mission, endless, save, seed, runId);
     b.onProgress = (kills) => progressCallback.current(b.runId, kills);
     engine.current = b;
     const mobile = isMobileDevice();
@@ -233,8 +254,8 @@ export default function BattleGame({
         radioCallback.current?.(active),
       );
     a.enabled = save.sound;
-    a.unlock();
-    a.prepareRadio();
+    // Start audio fetch/decode after graphics; the first combat input unlocks
+    // a suspended browser context and procedural sounds remain available.
     sound.current = a;
     b.onSound = (event, weapon) => a.play(event, weapon);
     let disposed = false,
@@ -419,6 +440,8 @@ export default function BattleGame({
       clear();
       setPaused(false);
       setLoadError(errorRef.current);
+      cancelAnimationFrame(frame);
+      r?.dispose();
     };
     canvas.current?.addEventListener('webglcontextlost', contextLost);
     const oldOverflow = document.body.style.overflow;
@@ -609,43 +632,45 @@ export default function BattleGame({
                 y: b.base.y,
                 label: b.type === 'escort' ? '护送车' : '信标',
               }
-            : b.objectives.find(
-                  (o) =>
-                    !o.done &&
-                    (o.kind !== 'exit' ||
-                      b.objectives
-                        .filter((v) => v.kind === 'intel')
-                        .every((v) => v.done)),
-                )
-              ? {
-                  ...b.objectives
-                    .filter(
-                      (o) =>
-                        !o.done &&
-                        (o.kind !== 'exit' ||
-                          b.objectives
-                            .filter((v) => v.kind === 'intel')
-                            .every((v) => v.done)),
-                    )
-                    .sort(
-                      (a, c) =>
-                        Math.hypot(a.x - b.player.x, a.y - b.player.y) -
-                        Math.hypot(c.x - b.player.x, c.y - b.player.y),
-                    )[0],
-                  label: '任务目标',
-                }
-              : b.enemies.length
+            : b.type === 'breakthrough' && b.objectives.some((o) => !o.done)
+              ? { ...b.objectives.find((o) => !o.done)!, label: '下一路标' }
+              : b.objectives.find(
+                    (o) =>
+                      !o.done &&
+                      (o.kind !== 'exit' ||
+                        b.objectives
+                          .filter((v) => v.kind === 'intel')
+                          .every((v) => v.done)),
+                  )
                 ? {
-                    ...b.enemies
-                      .slice()
+                    ...b.objectives
+                      .filter(
+                        (o) =>
+                          !o.done &&
+                          (o.kind !== 'exit' ||
+                            b.objectives
+                              .filter((v) => v.kind === 'intel')
+                              .every((v) => v.done)),
+                      )
                       .sort(
                         (a, c) =>
                           Math.hypot(a.x - b.player.x, a.y - b.player.y) -
                           Math.hypot(c.x - b.player.x, c.y - b.player.y),
                       )[0],
-                    label: '敌军',
+                    label: '任务目标',
                   }
-                : null,
+                : b.enemies.length
+                  ? {
+                      ...b.enemies
+                        .slice()
+                        .sort(
+                          (a, c) =>
+                            Math.hypot(a.x - b.player.x, a.y - b.player.y) -
+                            Math.hypot(c.x - b.player.x, c.y - b.player.y),
+                        )[0],
+                      label: '敌军',
+                    }
+                  : null,
           base: b.base.hp,
           notice: b.noticeTime > 0 ? b.notice : '',
           boss: b.boss?.hp ?? 0,
@@ -669,11 +694,27 @@ export default function BattleGame({
         clear();
       }
     };
-    void import('@/lib/three/renderer3d')
+    void preloadRenderer()
       .then(async ({ Renderer3D }) => {
         if (disposed || !surface) return;
         try {
-          r = new Renderer3D(surface, b, { quality: save.quality, mobile });
+          setLoadProgress({ progress: 8, label: '3D 引擎已装载' });
+          // The deployment overlay must paint before WebGL allocates resources.
+          await new Promise<void>((resolve) =>
+            requestAnimationFrame(() => setTimeout(resolve, 0)),
+          );
+          if (disposed || errorRef.current) return;
+          r = new Renderer3D(surface, b, {
+            quality: save.quality,
+            mobile,
+            onProgress: ({ progress, label }) => {
+              if (!disposed && !errorRef.current)
+                setLoadProgress({
+                  progress: Math.min(99, Math.floor(8 + progress * 0.92)),
+                  label,
+                });
+            },
+          });
           renderer.current = r;
           resize = new ResizeObserver(() => {
             r?.resize();
@@ -681,17 +722,27 @@ export default function BattleGame({
           });
           resize.observe(surface);
           r.resize();
-          previous = performance.now();
-          frame = requestAnimationFrame(loop);
           await r.ready;
-          if (disposed) return;
+          if (disposed || errorRef.current) return;
+          // Publish readiness only after a complete frame, then start simulation.
+          r.draw(b, controls.current.aim);
           initialized = true;
           previous = performance.now();
           fixed.reset();
+          setLoadProgress({ progress: 100, label: '战场已就绪' });
           setLoading(false);
+          frame = requestAnimationFrame(loop);
+          if (save.sound) {
+            a.unlock();
+            a.prepareRadio();
+            if (b.paused) a.suspend();
+          }
         } catch (error) {
-          if (!disposed) {
+          if (!disposed && !errorRef.current) {
             setLoading(false);
+            errorRef.current =
+              '3D 战场未能初始化。请检查连接或降低画质后重试。';
+            resize?.disconnect();
             setLoadError(
               error instanceof Error
                 ? '3D 战场未能初始化。请开启浏览器硬件加速，或尝试降低画质后重新进入。'
@@ -707,7 +758,8 @@ export default function BattleGame({
       .catch(() => {
         if (!disposed) {
           setLoading(false);
-          setLoadError('3D 引擎加载失败，请检查连接后重新进入。');
+          errorRef.current = '3D 引擎加载失败，请检查连接后重新进入。';
+          setLoadError(errorRef.current);
         }
       });
     return () => {
@@ -847,7 +899,9 @@ export default function BattleGame({
           <span>
             {endless
               ? '无尽战场 / ENDLESS'
-              : `CHAPTER ${String(mission + 1).padStart(2, '0')} / ${MISSIONS[mission].name}`}
+              : scenario
+                ? `${field.name} / ${operation?.title ?? MISSIONS[mission].name}`
+                : `CHAPTER ${String(mission + 1).padStart(2, '0')} / ${MISSIONS[mission].name}`}
           </span>
           <strong>{hud.objective}</strong>
         </div>
@@ -959,20 +1013,39 @@ export default function BattleGame({
           <div
             className="engine-loading"
             role="status"
-            data-gamepad-menu={loadError ? 'error' : undefined}
+            data-gamepad-menu={loadError ? 'error' : 'loading'}
           >
-            {loadError ? (
-              <Shield size={35} />
-            ) : (
-              <LoaderCircle size={35} className="loading-spinner" />
-            )}
+            {loadError ? <Shield size={35} /> : <Shield size={35} />}
             <strong>{loadError ? '战场连接中断' : '正在部署 3D 战场'}</strong>
-            <p>{loadError || '装载装甲、光照与地形资源'}</p>
-            {loadError && (
-              <button className="outline-button" onClick={onExit}>
-                返回指挥中心
-              </button>
+            <p>{loadError || loadProgress.label}</p>
+            {!loadError && (
+              <div className="engine-load-meter">
+                <div className="engine-load-status" aria-hidden="true">
+                  <span>部署进度</span>
+                  <b>{loadProgress.progress}%</b>
+                </div>
+                <progress
+                  className="engine-load-track"
+                  aria-label="战场部署进度"
+                  value={loadProgress.progress}
+                  max={100}
+                  aria-valuenow={loadProgress.progress}
+                  aria-valuetext={`${loadProgress.progress}% · ${loadProgress.label}`}
+                >
+                  {loadProgress.progress}%
+                </progress>
+              </div>
             )}
+            <div className="engine-load-actions">
+              {loadError && (
+                <button className="gold-button" onClick={onRetry}>
+                  重新部署
+                </button>
+              )}
+              <button className="outline-button" onClick={onExit}>
+                {loadError ? '返回指挥中心' : '取消部署'}
+              </button>
+            </div>
           </div>
         )}
         <canvas
@@ -1090,23 +1163,30 @@ export default function BattleGame({
                   width={w.w}
                   height={w.h}
                   fill={
-                    w.kind === 'boundary'
-                      ? '#e4b766'
-                      : w.steel
-                        ? '#89917d'
-                        : '#52604b'
+                    w.kind === 'water'
+                      ? '#458da5'
+                      : w.kind === 'hill'
+                        ? '#a5a28b'
+                        : w.kind === 'boundary'
+                          ? '#e4b766'
+                          : w.steel
+                            ? '#89917d'
+                            : '#52604b'
                   }
                 />
               ))}
-            {ENEMY_GATES.map((gate, i) => (
-              <g key={'entry-' + i}>
-                <path
-                  d={`M${gate.x - 55} 45 L${gate.x + 55} 45 L${gate.x} 130 Z`}
-                  fill="#ff7557"
-                />
-                <title>北侧敌军增援口 {i + 1}</title>
-              </g>
-            ))}
+            <rect
+              x={ENEMY_REGION.x}
+              y={ENEMY_REGION.y}
+              width={ENEMY_REGION.w}
+              height={ENEMY_REGION.h}
+              fill="#ff755714"
+              stroke="#ff7557"
+              strokeWidth="6"
+              strokeDasharray="24 18"
+            >
+              <title>敌军增援区域 · 随机部署</title>
+            </rect>
             {hud.supplies.map((s, i) => (
               <rect
                 key={'ammo-' + i}
@@ -1457,7 +1537,7 @@ export default function BattleGame({
             ? '左杆移动 · 右杆瞄准 · RT 开火 · X 换武器 · LB 冲刺 · RB 脉冲 · LT 支援'
             : 'WASD 移动 · 鼠标开火 · 1–7 / R 换武器 · 空格冲刺 · E 脉冲 · Q 支援'}
         </span>
-        <span>北侧红色入口为敌军增援方向</span>
+        <span>敌军在北侧红色区域分散增援</span>
       </footer>
       <Dialog open={paused} onOpenChange={(v) => pause(v)}>
         <DialogContent className="game-dialog pause-dialog">

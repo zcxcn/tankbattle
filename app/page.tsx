@@ -5,9 +5,7 @@ import { isMobileDevice, deviceState } from '@/lib/performance';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Crosshair,
-  ArrowUpRight,
   ArrowRight,
-  ChevronRight,
   Shield,
   Radio,
   Volume2,
@@ -54,6 +52,9 @@ import {
 } from '@/lib/campaign';
 import type { BattleResult } from '@/lib/engine';
 import BattleGame from '@/components/game/battle-game';
+import DeploymentMenu from '@/components/game/deployment-menu';
+import { preloadRenderer } from '@/lib/three/renderer-loader';
+import type { BattlefieldId, OperationId } from '@/lib/battlefields';
 import {
   progression,
   killsForLevel,
@@ -76,6 +77,8 @@ const upgradeIcons = [Shield, Target, RotateCcw, Wind, Zap, Heart];
 
 export default function Home() {
   const [tab, setTab] = useState('campaign');
+  const [garageSection, setGarageSection] = useState('tank');
+  const [archiveSection, setArchiveSection] = useState('story');
   const [save, setSaveState] = useState<Save>(defaultSave),
     [ready, setReady] = useState(false),
     [storageOk, setStorageOk] = useState(true),
@@ -85,6 +88,7 @@ export default function Home() {
       mission: number;
       endless: boolean;
       id: string;
+      scenario?: { battlefield: BattlefieldId; operation: OperationId };
     } | null>(null),
     [result, setResult] = useState<(BattleResult & { reward: number }) | null>(
       null,
@@ -231,13 +235,24 @@ export default function Home() {
     window.addEventListener('tank-native-back', back);
     return () => window.removeEventListener('tank-native-back', back);
   }, [run, result]);
-  const m = MISSIONS[selected],
-    tank = CHASSIS[save.chassis],
+  const tank = CHASSIS[save.chassis],
     stats = loadoutStats(save),
     career = progression(save.kills),
     preview = progression(killsForLevel(previewLevel ?? career.level)),
     growth = growthBonus(save.kills);
-  function start(endless = false, mission = selected) {
+  function warmRenderer() {
+    void preloadRenderer().catch(() => {});
+  }
+  useEffect(() => {
+    if (!ready) return;
+    const timer = window.setTimeout(warmRenderer, 500);
+    return () => window.clearTimeout(timer);
+  }, [ready]);
+  function start(
+    endless = false,
+    mission = selected,
+    scenario?: { battlefield: BattlefieldId; operation: OperationId },
+  ) {
     setMusicScene('patrol');
     setMusicPaused(false);
     music.current?.unlock();
@@ -245,7 +260,7 @@ export default function Home() {
     setResult(null);
     const id = crypto.randomUUID();
     setSave((s) => beginRun(s, id));
-    setRun({ mission, endless, id });
+    setRun({ mission, endless, id, scenario });
   }
   function exit() {
     setMusicScene('menu');
@@ -354,7 +369,7 @@ export default function Home() {
 
   return (
     <main className="command-app dark">
-      <header className="topbar">
+      <header className="topbar" inert={!!run}>
         <a className="brand" href={assetUrl('/')} aria-label="钢铁余烬首页">
           <span className="brand-mark">
             <Crosshair size={24} />
@@ -416,7 +431,7 @@ export default function Home() {
           <span className="profile">C</span>
         </div>
       </header>
-      <div className="command-body">
+      <div className="command-body" inert={!!run}>
         <div className="page-heading">
           <div>
             <div className="eyebrow">
@@ -458,217 +473,45 @@ export default function Home() {
           </div>
         </div>
         {tab === 'campaign' && (
-          <>
-            <CareerProgress
-              kills={save.kills}
-              onOpen={() => {
-                setPreviewLevel(null);
-                setTab('garage');
-              }}
-            />
-            <section className="mission-layout">
-              <div className="keyart">
-                <img
-                  src={battlefieldCover}
-                  alt="工业废墟中披着磨损装甲、驶过破碎路面的主战坦克"
-                  fetchPriority="high"
-                />
-                <div className="keyart-shade" />
-                <div className="art-topline">
-                  <span>
-                    <i />
-                    尘湾战区 · 2049
-                  </span>
-                  <span>33° 42′ N / 117° 09′ E</span>
-                </div>
-                <div className="hero-title">
-                  <div className="chapter-kicker">
-                    <span />
-                    THE 3D ARMORED WARFARE EXPERIENCE
-                  </div>
-                  <h2>
-                    IRON
-                    <br />
-                    EMBERS<span>钢 铁 余 烬</span>
-                  </h2>
-                  <p>
-                    当世界化为灰烬，
-                    <br />
-                    你是最后一道防线。
-                  </p>
-                </div>
-                <div className="art-bottom">
-                  <span className="tank-emblem">
-                    <Shield size={27} />
-                  </span>
-                  <div>
-                    <small>当前部署 / MAIN BATTLE TANK</small>
-                    <strong>
-                      {tank.model}「{tank.name}」<span>{tank.role}</span>
-                    </strong>
-                  </div>
-                  <span className="art-badge">
-                    READY TO DEPLOY <i />
-                  </span>
-                </div>
-              </div>
-              <aside className="briefing">
-                <div className="briefing-top">
-                  <span>
-                    <Radio size={14} />
-                    任务简报
-                  </span>
-                  <span className="live-tag">待命中</span>
-                </div>
-                <div className="mission-number">
-                  {String(selected + 1).padStart(2, '0')}{' '}
-                  <span>/ {MISSIONS.length}</span>
-                  <small>
-                    CHAPTER {String(selected + 1).padStart(2, '0')} · ACT{' '}
-                    {Math.floor(selected / 6) + 1}
-                  </small>
-                </div>
-                <h2>{m.name}</h2>
-                <div className="mission-location">
-                  第 {selected + 1} 章 · {m.location}
-                </div>
-                <p className="briefing-copy">
-                  {m.brief}
-                  <span>“{m.quote}”</span>
-                </p>
-                <div className="objective">
-                  <Target size={18} />
-                  <div>
-                    <small>主要目标</small>
-                    <strong>{m.objective} · 击毁本关 Boss</strong>
-                  </div>
-                </div>
-                <div className="mission-meta">
-                  <span>
-                    任务类型<b>{m.tag}行动</b>
-                  </span>
-                  <span>
-                    战备奖励
-                    <b className="orange">
-                      {save.completed.includes(selected)
-                        ? '已领取 · 可重玩'
-                        : '+ 2 升级点'}
-                    </b>
-                  </span>
-                </div>
-                <div className="briefing-loadout">
-                  {WEAPONS[save.weapon].name} · {SUPPORTS[save.support].name}
-                  <button onClick={() => setTab('garage')}>更换装备 →</button>
-                </div>
-                <div className="difficulty">
-                  <span>作战难度</span>
-                  <div>
-                    {['新兵', '老兵', '王牌'].map((d, i) => (
-                      <button
-                        key={d}
-                        className={save.difficulty === i ? 'selected' : ''}
-                        aria-pressed={save.difficulty === i}
-                        onClick={() =>
-                          setSave((s) => ({ ...s, difficulty: i }))
-                        }
-                      >
-                        {d}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <button
-                  className="deploy-button"
-                  onClick={() => start(false)}
-                  disabled={!ready}
-                >
-                  <Swords size={19} />
-                  开始行动
-                  <ArrowRight size={21} />
-                </button>
-                <button
-                  className="training-button"
-                  onClick={() => start(true)}
-                  disabled={!ready}
-                >
-                  <Crosshair size={15} />
-                  进入无尽战场
-                  <ArrowUpRight size={15} />
-                </button>
-                <div className="save-note">
-                  <i />
-                  {storageOk
-                    ? '进度自动保存在此设备'
-                    : '存档不可用，本次进度仅临时保留'}
-                </div>
-              </aside>
-            </section>
-            <section className="chapter-section">
-              <div className="section-heading">
-                <h2>
-                  <span />
-                  战役路线<small>THE ROAD TO DAWN</small>
-                </h2>
-                <span>
-                  三幕战役 · 18 次行动
-                  <ChevronRight size={14} />
-                </span>
-              </div>
-              <div className="campaign-acts">
-                <span>Ⅰ 尘湾之夜 · 01—06</span>
-                <span>Ⅱ 失联信号 · 07—12</span>
-                <span>Ⅲ 回家之路 · 13—18</span>
-              </div>
-              <div className="chapter-grid">
-                {chapters.map((name, i) => (
-                  <button
-                    key={name}
-                    onClick={() => setSelected(i)}
-                    disabled={i > 0 && !save.completed.includes(i - 1)}
-                    aria-label={`第 ${i + 1} 章 ${name}${i > 0 && !save.completed.includes(i - 1) ? '，需完成前一章' : ''}`}
-                    className={
-                      'chapter-card ' +
-                      (i === selected
-                        ? 'active'
-                        : i > 0 && !save.completed.includes(i - 1)
-                          ? 'locked'
-                          : '')
-                    }
-                  >
-                    <div className={'chapter-image scene-' + (i % 6)}>
-                      <img src={battlefieldCover} alt="" loading="lazy" />
-                      <span className="chapter-index">
-                        {String(i + 1).padStart(2, '0')}
-                      </span>
-                      {save.completed.includes(i) ? (
-                        <Check size={14} />
-                      ) : i === selected ? (
-                        <span className="current-label">当前任务</span>
-                      ) : i > 0 && !save.completed.includes(i - 1) ? (
-                        <Lock size={14} />
-                      ) : null}
-                    </div>
-                    <div className="chapter-card-info">
-                      <strong>{name}</strong>
-                      <small>
-                        {MISSIONS[i].tag} · {MISSIONS[i].location}
-                      </small>
-                      {i === selected ? (
-                        <ArrowUpRight size={16} />
-                      ) : save.completed.includes(i) ? (
-                        <Check size={12} />
-                      ) : (
-                        <Lock size={12} />
-                      )}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </section>
-          </>
+          <DeploymentMenu
+            save={save}
+            ready={ready}
+            storageOk={storageOk}
+            selected={selected}
+            onSelect={setSelected}
+            onDifficulty={(difficulty) =>
+              setSave((s) => ({ ...s, difficulty }))
+            }
+            onLaunch={(scenario, endless) =>
+              start(endless ?? false, selected, scenario)
+            }
+            onGarage={() => {
+              setGarageSection('tank');
+              setTab('garage');
+            }}
+            onWarmup={warmRenderer}
+          />
         )}
         {tab === 'garage' && (
-          <section className="garage-layout">
+          <section className="garage-layout" data-section={garageSection}>
+            <nav className="garage-nav" aria-label="车库分类">
+              {(
+                [
+                  ['tank', '底盘'],
+                  ['loadout', '装备'],
+                  ['growth', '成长'],
+                  ['upgrades', '升级'],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  aria-pressed={garageSection === value}
+                  onClick={() => setGarageSection(value)}
+                >
+                  {label}
+                </button>
+              ))}
+            </nav>
             <div className="garage-showcase">
               <img src={battlefieldCover} alt="当前装甲底盘展示" />
               <HangarScene
@@ -947,70 +790,112 @@ export default function Home() {
           </section>
         )}
         {tab === 'archive' && (
-          <section className="archive-layout">
-            <div className="archive-intro">
-              <Radio size={28} />
-              <span>TRANSMISSION 001 / 2049.10.23</span>
-              <h2>
-                这里是尘湾。
-                <br />
-                还有人听得到吗？
-              </h2>
-              <p>
-                停战的第七年，一支自称“军团”的机械部队越过北方边境。尘湾的防线一夜崩塌，地下电台成为这座城市最后的声音。
-              </p>
-              <p>
-                你是修理厂的试车员。你的座驾是一辆没有编号的旧坦克。黎雁是电台那头的人。你们没有援军，只有一条通往黎明的路。
-              </p>
-              <div className="archive-stats">
-                <div>
-                  <strong>{save.kills}</strong>
-                  <small>累计击毁</small>
-                </div>
-                <div>
-                  <strong>{save.best.toLocaleString()}</strong>
-                  <small>最高作战评分</small>
-                </div>
-                <div>
-                  <strong>
-                    {save.completed.length} / {MISSIONS.length}
-                  </strong>
-                  <small>完成章节</small>
-                </div>
-              </div>
-            </div>
-            <div className="transmissions">
-              {MISSIONS.map((chapter, i) => (
-                <article
-                  className={save.completed.includes(i) ? 'received' : ''}
-                  key={chapter.name}
-                >
-                  <span className="transmission-index">
-                    {String(i + 1).padStart(2, '0')}
-                  </span>
-                  <div>
-                    <h3>
-                      {chapter.name}
-                      <small>
-                        {save.completed.includes(i) ? '已收录' : '信号待解锁'}
-                      </small>
-                    </h3>
-                    <p>
-                      {save.completed.includes(i) ? chapter.end : chapter.brief}
-                    </p>
-                    {save.completed.includes(i) && (
-                      <blockquote>“{chapter.quote}”</blockquote>
-                    )}
+          <div className="field-archive">
+            <nav className="garage-nav" aria-label="情报分类">
+              <button
+                aria-pressed={archiveSection === 'story'}
+                onClick={() => setArchiveSection('story')}
+              >
+                战役档案
+              </button>
+              <button
+                aria-pressed={archiveSection === 'enemies'}
+                onClick={() => setArchiveSection('enemies')}
+              >
+                敌军识别
+              </button>
+            </nav>
+            {archiveSection === 'story' && (
+              <section className="archive-layout">
+                <div className="archive-intro">
+                  <Radio size={28} />
+                  <span>TRANSMISSION 001 / 2049.10.23</span>
+                  <h2>
+                    这里是尘湾。
+                    <br />
+                    还有人听得到吗？
+                  </h2>
+                  <p>
+                    停战的第七年，一支自称“军团”的机械部队越过北方边境。尘湾的防线一夜崩塌，地下电台成为这座城市最后的声音。
+                  </p>
+                  <p>
+                    你是修理厂的试车员。你的座驾是一辆没有编号的旧坦克。黎雁是电台那头的人。你们没有援军，只有一条通往黎明的路。
+                  </p>
+                  <div className="archive-stats">
+                    <div>
+                      <strong>{save.kills}</strong>
+                      <small>累计击毁</small>
+                    </div>
+                    <div>
+                      <strong>{save.best.toLocaleString()}</strong>
+                      <small>最高作战评分</small>
+                    </div>
+                    <div>
+                      <strong>
+                        {save.completed.length} / {MISSIONS.length}
+                      </strong>
+                      <small>完成章节</small>
+                    </div>
                   </div>
-                  {save.completed.includes(i) ? (
-                    <Check size={16} />
-                  ) : (
-                    <Lock size={16} />
-                  )}
-                </article>
-              ))}
-            </div>
-          </section>
+                </div>
+                <div className="transmissions">
+                  {MISSIONS.map((chapter, i) => (
+                    <article
+                      className={save.completed.includes(i) ? 'received' : ''}
+                      key={chapter.name}
+                    >
+                      <span className="transmission-index">
+                        {String(i + 1).padStart(2, '0')}
+                      </span>
+                      <div>
+                        <h3>
+                          {chapter.name}
+                          <small>
+                            {save.completed.includes(i)
+                              ? '已收录'
+                              : '信号待解锁'}
+                          </small>
+                        </h3>
+                        <p>
+                          {save.completed.includes(i)
+                            ? chapter.end
+                            : chapter.brief}
+                        </p>
+                        {save.completed.includes(i) && (
+                          <blockquote>“{chapter.quote}”</blockquote>
+                        )}
+                      </div>
+                      {save.completed.includes(i) ? (
+                        <Check size={16} />
+                      ) : (
+                        <Lock size={16} />
+                      )}
+                    </article>
+                  ))}
+                </div>
+              </section>
+            )}
+            {archiveSection === 'enemies' && (
+              <section className="enemy-codex">
+                <div className="section-heading">
+                  <h2>
+                    <span />
+                    敌军识别手册
+                  </h2>
+                  <span>9 类单位 · 优先识别支援与远程威胁</span>
+                </div>
+                <div className="enemy-grid">
+                  {ENEMIES.map((e, i) => (
+                    <article key={e.name}>
+                      <span>{String(i + 1).padStart(2, '0')}</span>
+                      <h3>{e.name}</h3>
+                      <p>{e.desc}</p>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            )}
+          </div>
         )}
         <footer className="control-footer">
           <div>
@@ -1043,26 +928,6 @@ export default function Home() {
           </button>
         </footer>
       </div>
-      {tab === 'archive' && (
-        <section className="enemy-codex">
-          <div className="section-heading">
-            <h2>
-              <span />
-              敌军识别手册
-            </h2>
-            <span>9 类单位 · 优先识别支援与远程威胁</span>
-          </div>
-          <div className="enemy-grid">
-            {ENEMIES.map((e, i) => (
-              <article key={e.name}>
-                <span>{String(i + 1).padStart(2, '0')}</span>
-                <h3>{e.name}</h3>
-                <p>{e.desc}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-      )}
       <div className="statusbar">
         <span>
           <i /> 本地作战系统已连接
@@ -1285,12 +1150,16 @@ export default function Home() {
           key={run.id}
           mission={run.mission}
           endless={run.endless}
-          save={save}
+          save={{
+            ...save,
+            battlefield: run.scenario?.battlefield ?? 'campaign',
+            operation: run.scenario?.operation ?? 'campaign',
+          }}
           runId={run.id}
           onProgress={recordProgress}
           onFinish={finish}
           onExit={exit}
-          onRetry={() => start(run.endless, run.mission)}
+          onRetry={() => start(run.endless, run.mission, run.scenario)}
           onMusicScene={setMusicScene}
           onMusicPause={setMusicPaused}
           onRadioActive={setRadioActive}
@@ -1315,7 +1184,7 @@ export default function Home() {
           </span>
           <DialogTitle>
             {result?.won
-              ? result.mission === MISSIONS.length - 1
+              ? !result.scenario && result.mission === MISSIONS.length - 1
                 ? '黎明，终于到来'
                 : '行动成功'
               : result?.endless
@@ -1324,7 +1193,9 @@ export default function Home() {
           </DialogTitle>
           <DialogDescription>
             {result?.won
-              ? MISSIONS[result.mission].end
+              ? result.scenario
+                ? '区域行动完成，战绩与坦克成长已保存。重新部署，挑战不同地图与玩法。'
+                : MISSIONS[result.mission].end
               : result?.endless
                 ? '这一次的记录已经保存。整装待发，下一次走得更远。'
                 : '检查装甲配置，利用掩体躲避炮弹。尘湾还在等你，指挥官。'}
@@ -1369,7 +1240,9 @@ export default function Home() {
               获得 {result.reward} 点战备升级奖励
             </p>
           )}
-          {result?.won && result.mission < MISSIONS.length - 1 ? (
+          {result?.won &&
+          !result.scenario &&
+          result.mission < MISSIONS.length - 1 ? (
             <button
               className="deploy-button"
               onClick={() => {
@@ -1387,7 +1260,8 @@ export default function Home() {
             <button
               className="deploy-button"
               onClick={() => {
-                if (result) start(result.endless, result.mission);
+                if (result)
+                  start(result.endless, result.mission, run?.scenario);
               }}
             >
               <RotateCcw size={18} />
@@ -1398,7 +1272,11 @@ export default function Home() {
           <button
             className="text-button"
             onClick={() => {
-              if (result?.won && result.mission < MISSIONS.length - 1)
+              if (
+                result?.won &&
+                !result.scenario &&
+                result.mission < MISSIONS.length - 1
+              )
                 setSelected(result.mission + 1);
               exit();
             }}

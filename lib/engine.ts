@@ -1,8 +1,14 @@
+import {
+  battlefieldFor,
+  type Battlefield,
+  type TerrainFeature,
+  type OperationId,
+} from './battlefields';
 import { StreetNavigation } from './navigation';
 import {
   ARENA_MARGIN,
   boundaryWalls,
-  cityLayout,
+  battlefieldLayout,
   enemyEntrances,
   type Road,
   type Structure,
@@ -20,6 +26,12 @@ export const W = 3840,
   H = 2400;
 export const ENEMY_GATES = enemyEntrances(W);
 export const ENEMY_SPAWN_DISTANCE = 700;
+export const ENEMY_REGION = {
+  x: W * 0.08,
+  y: H * 0.15,
+  w: W * 0.84,
+  h: H * 0.3,
+};
 export type Vec = { x: number; y: number };
 export type Tank = Vec & {
   id: number;
@@ -130,7 +142,7 @@ export type Input = {
 };
 export type Objective = Vec & {
   id: number;
-  kind: 'capture' | 'intel' | 'facility' | 'exit';
+  kind: 'capture' | 'intel' | 'facility' | 'exit' | 'checkpoint';
   progress: number;
   hp: number;
   maxHp: number;
@@ -138,6 +150,7 @@ export type Objective = Vec & {
   contested: boolean;
 };
 export type BattleResult = {
+  scenario: boolean;
   runId: string;
   startingKills: number;
   totalKills: number;
@@ -214,6 +227,8 @@ export class Battle {
   mission: number;
   endless: boolean;
   save: Save;
+  readonly battlefield: Battlefield;
+  terrain: TerrainFeature[] = [];
   weapon: number;
   ammo = WEAPONS.map((_, i) => (i === 0 ? Infinity : 0));
   private weaponReadyAt = WEAPONS.map(() => 0);
@@ -286,6 +301,7 @@ export class Battle {
     this.startingKills = save.kills;
     this.level = progression(save.kills).level;
     this.save = save;
+    this.battlefield = battlefieldFor(this.mission, save.battlefield);
     this.weapon = 0;
     this.random = seeded(seed);
     const stats = loadoutStats(save, save.kills, 0);
@@ -346,25 +362,50 @@ export class Battle {
     this.onSound?.('levelup');
   }
   get isDefend() {
-    return !this.endless && MISSIONS[this.mission].type === 'defend';
+    return this.type === 'defend';
   }
   get isBoss() {
-    return !this.endless && MISSIONS[this.mission].type === 'boss';
+    return this.type === 'boss';
   }
   get target() {
-    return MISSIONS[this.mission].count;
+    return this.scenario
+      ? 18 + this.save.difficulty * 3
+      : MISSIONS[this.mission].count;
   }
   get boss() {
     return this.enemies.find((e) => e.kind === 3 && e.hp > 0);
   }
-  get type() {
-    return this.endless ? 'endless' : MISSIONS[this.mission].type;
+  get scenario() {
+    return (
+      (this.save.battlefield ?? 'campaign') !== 'campaign' ||
+      (this.save.operation ?? 'campaign') !== 'campaign'
+    );
+  }
+  get type(): OperationId | 'boss' | 'endless' {
+    if (this.endless) return 'endless';
+    return this.save.operation && this.save.operation !== 'campaign'
+      ? this.save.operation
+      : (MISSIONS[this.mission].type as OperationId | 'boss');
+  }
+  get operationDuration() {
+    return this.type === 'survival'
+      ? 100
+      : this.scenario
+        ? 60
+        : MISSIONS[this.mission].duration || 60;
   }
   get protectsBase() {
     return this.isDefend || this.type === 'escort';
   }
   get fieldMission() {
-    return ['capture', 'escort', 'extract', 'sabotage'].includes(this.type);
+    return [
+      'capture',
+      'escort',
+      'extract',
+      'sabotage',
+      'breakthrough',
+      'survival',
+    ].includes(this.type);
   }
   get objectiveText() {
     return (
@@ -381,6 +422,10 @@ export class Battle {
       (o) => o.kind !== 'exit' && o.done,
     ).length;
     if (this.endless) return `第 ${this.wave} 波 · 已击毁 ${this.kills} 辆`;
+    if (this.type === 'survival')
+      return `生存 ${Math.max(0, Math.ceil(this.operationDuration - this.elapsed))} 秒 · 第 ${this.wave} 波 · 已击毁 ${this.kills} 辆`;
+    if (this.type === 'breakthrough')
+      return `突破路标 ${done}/3 · ${done < 3 ? '依次抵达金色路标' : '抵达北侧绿色撤离点'}`;
     if (this.type === 'capture') {
       const active = this.objectives.find(
         (o) => !o.done && distance(o, this.player) < 115,
@@ -395,7 +440,7 @@ export class Battle {
         : '情报齐备 · 返回南侧绿色撤离点';
     if (this.type === 'sabotage') return `设施 ${done}/3 · 炮击金色储能塔`;
     if (this.isDefend)
-      return `守护信标 ${Math.max(0, Math.ceil(MISSIONS[this.mission].duration - this.elapsed))} 秒 · 完整度 ${Math.ceil((this.base.hp / this.base.maxHp) * 100)}%`;
+      return `守护信标 ${Math.max(0, Math.ceil(this.operationDuration - this.elapsed))} 秒 · 完整度 ${Math.ceil((this.base.hp / this.base.maxHp) * 100)}%`;
     if (this.isBoss) return `击毁「${bossName(this.mission)}」· 注意增援`;
     return `清除敌军 ${Math.min(this.target, this.spawned - this.enemies.filter((e) => e.hp > 0 && e.kind !== 3).length)}/${this.target}`;
   }
@@ -412,6 +457,23 @@ export class Battle {
         { x: W / 2, y: 180 },
       ];
       Object.assign(this.base, this.route[0], { hp: 560, maxHp: 560 });
+    }
+    if (type === 'breakthrough') {
+      this.objectives = [
+        { x: W * 0.5, y: H * 0.72 },
+        { x: W * 0.78, y: H * 0.4 },
+        { x: W * 0.5, y: H * 0.18 },
+        { x: W * 0.5, y: 140 },
+      ].map((point, id) => ({
+        ...point,
+        id,
+        kind: id === 3 ? 'exit' : 'checkpoint',
+        progress: 0,
+        hp: 1,
+        maxHp: 1,
+        done: false,
+        contested: false,
+      }));
     }
     if (['capture', 'extract', 'sabotage'].includes(type)) {
       this.objectives = [
@@ -462,6 +524,17 @@ export class Battle {
           this.onSound?.('pickup');
         }
       }
+      if (
+        o.kind === 'checkpoint' &&
+        distance(p, o) < 100 &&
+        this.objectives
+          .filter((previous) => previous.id < o.id)
+          .every((previous) => previous.done)
+      ) {
+        o.done = true;
+        this.score += 300;
+        this.onSound?.('pickup');
+      }
       if (o.kind === 'intel' && distance(p, o) < 65) {
         o.done = true;
         this.score += 250;
@@ -470,7 +543,7 @@ export class Battle {
       if (
         o.kind === 'exit' &&
         this.objectives
-          .filter((v) => v.kind === 'intel')
+          .filter((v) => v.kind === 'intel' || v.kind === 'checkpoint')
           .every((v) => v.done) &&
         distance(p, o) < 100
       )
@@ -520,7 +593,10 @@ export class Battle {
             e.hp > 0 &&
             e.spawn <= 0 &&
             distance(e, p) < 950 &&
-            !this.walls.some((w) => w.hp > 0 && segmentRect(p, e, w) !== null),
+            !this.walls.some(
+              (w) =>
+                w.hp > 0 && w.kind !== 'water' && segmentRect(p, e, w) !== null,
+            ),
         )
         .sort((a, b) => distance(a, p) - distance(b, p))
         .slice(0, Math.min(3, this.ammo[6]));
@@ -556,7 +632,7 @@ export class Battle {
     this.onSound?.('pickup');
   }
   createArena() {
-    const city = cityLayout(this.mission, W, H);
+    const city = battlefieldLayout(this.battlefield, this.mission, W, H);
     this.roads = city.roads;
     this.walls = city.structures;
     // Keep deployments, objectives and the convoy corridor reachable.
@@ -586,6 +662,20 @@ export class Battle {
             }) !== null,
         ),
     );
+    // Terrain visuals are derived from the surviving collision footprints.
+    this.terrain = [
+      ...city.decorations,
+      ...this.walls
+        .filter((wall) => wall.kind === 'water' || wall.kind === 'hill')
+        .map((wall) => ({
+          x: wall.x,
+          y: wall.y,
+          w: wall.w,
+          h: wall.h,
+          height: wall.height ?? 1,
+          kind: wall.kind as 'water' | 'hill',
+        })),
+    ];
     // Perimeter collision is permanent, including beside the protected south base.
     this.walls.push(...boundaryWalls(W, H));
   }
@@ -623,27 +713,25 @@ export class Battle {
     let x = 0,
       y = 0,
       valid = false;
-    const first = k === 3 ? 1 : Math.floor(this.random() * ENEMY_GATES.length);
-    const offsets = [
-      [0, 0],
-      [-14, 65],
-      [14, 130],
-      [0, 195],
-    ];
-    for (let i = 0; i < ENEMY_GATES.length * offsets.length; i++) {
-      const gate =
-        ENEMY_GATES[
-          (first + Math.floor(i / offsets.length)) % ENEMY_GATES.length
-        ];
-      const offset = offsets[i % offsets.length];
-      x = gate.x + offset[0];
-      y = gate.y + offset[1];
+    // Random safe points throughout the opposing region, never a fixed gate.
+    // Stratified fallback cells keep retries useful even with an unlucky RNG.
+    const start = Math.floor(this.random() * 96);
+    for (let i = 0; i < 192; i++) {
+      if (i < 96) {
+        x = ENEMY_REGION.x + this.random() * ENEMY_REGION.w;
+        y = ENEMY_REGION.y + this.random() * ENEMY_REGION.h;
+      } else {
+        const cell = (start + i - 96) % 96;
+        x = ENEMY_REGION.x + (((cell % 16) + 0.5) / 16) * ENEMY_REGION.w;
+        y =
+          ENEMY_REGION.y + ((Math.floor(cell / 16) + 0.5) / 6) * ENEMY_REGION.h;
+      }
       if (
         this.canOccupy(x, y, data[4]) &&
         distance({ x, y }, this.player) >= ENEMY_SPAWN_DISTANCE &&
         (!this.protectsBase || distance({ x, y }, this.base) > data[4] + 40) &&
         this.enemies.every(
-          (e) => distance({ x, y }, e) > e.radius + data[4] + 10,
+          (e) => e.hp <= 0 || distance({ x, y }, e) > e.radius + data[4] + 10,
         )
       ) {
         valid = true;
@@ -909,7 +997,10 @@ export class Battle {
             d >
             0.65 &&
           !this.walls.some(
-            (w) => w.hp > 0 && segmentRect(origin, e, w) !== null,
+            (w) =>
+              w.hp > 0 &&
+              w.kind !== 'water' &&
+              segmentRect(origin, e, w) !== null,
           )
         );
       })
@@ -1073,7 +1164,10 @@ export class Battle {
             segmentCircle(previous.get(t.id) ?? t, t, mine, t.radius + 18) !==
               null &&
             !this.walls.some(
-              (w) => w.hp > 0 && segmentRect(mine, t, w) !== null,
+              (w) =>
+                w.hp > 0 &&
+                w.kind !== 'water' &&
+                segmentRect(mine, t, w) !== null,
             ),
         );
       if (!triggered) {
@@ -1086,7 +1180,10 @@ export class Battle {
       this.onSound?.('explosion');
       const exposed = (t: Vec) =>
         distance(t, mine) < 125 &&
-        !this.walls.some((w) => w.hp > 0 && segmentRect(mine, t, w) !== null);
+        !this.walls.some(
+          (w) =>
+            w.hp > 0 && w.kind !== 'water' && segmentRect(mine, t, w) !== null,
+        );
       if (mine.enemy) {
         if (exposed(this.player)) this.playerHit(mine.damage);
         if (this.protectsBase && exposed(this.base))
@@ -1209,7 +1306,10 @@ export class Battle {
           (e) =>
             e.hp > 0 &&
             e.spawn <= 0 &&
-            !this.walls.some((w) => w.hp > 0 && segmentRect(p, e, w) !== null),
+            !this.walls.some(
+              (w) =>
+                w.hp > 0 && w.kind !== 'water' && segmentRect(p, e, w) !== null,
+            ),
         )
         .sort((a, b) => distance(a, p) - distance(b, p))[0];
       p.turret = nearest
@@ -1225,7 +1325,7 @@ export class Battle {
     const alive = this.enemies.filter((e) => e.hp > 0 && e.kind !== 3);
     const limit = this.isBoss
       ? 3
-      : this.endless
+      : this.endless || this.type === 'survival'
         ? Math.min(9, 3 + Math.floor(this.elapsed / 30))
         : Math.min(6, 3 + Math.floor(this.mission / 2));
     if (this.spawnTimer <= 0 && alive.length < limit) {
@@ -1237,7 +1337,7 @@ export class Battle {
         this.spawnTimer = !spawned
           ? 0.6
           : this.isDefend
-            ? MISSIONS[this.mission].duration / this.target
+            ? this.operationDuration / this.target
             : 2.8;
       }
     }
@@ -1405,7 +1505,12 @@ export class Battle {
         dist < (e.kind === 5 ? 1000 : 730) &&
         Math.abs(difference) < 0.14 &&
         e.cooldown <= 0 &&
-        !this.walls.some((w) => w.hp > 0 && segmentRect(e, target, w) !== null)
+        !this.walls.some(
+          (w) =>
+            w.hp > 0 &&
+            w.kind !== 'water' &&
+            segmentRect(e, target, w) !== null,
+        )
       ) {
         if (e.kind === 3) {
           e.attackWindup = 0.9 - this.bossThreshold * 0.15;
@@ -1475,7 +1580,7 @@ export class Battle {
       let hit: Wall | Tank | Objective | typeof this.base | null = null;
       let hitType = '';
       for (const w of this.walls) {
-        if (w.hp <= 0) continue;
+        if (w.hp <= 0 || w.kind === 'water') continue;
         const t = segmentRect(from, to, w);
         if (t !== null && t < nearest) {
           nearest = t;
@@ -1563,7 +1668,10 @@ export class Battle {
           const exposed = (v: Vec) =>
             distance(b, v) < radius &&
             !this.walls.some(
-              (w) => w.hp > 0 && segmentRect(origin, v, w) !== null,
+              (w) =>
+                w.hp > 0 &&
+                w.kind !== 'water' &&
+                segmentRect(origin, v, w) !== null,
             );
           if (!b.enemy) {
             for (const e of this.enemies)
@@ -1650,12 +1758,18 @@ export class Battle {
       if (
         (this.fieldMission &&
           this.type !== 'escort' &&
+          this.type !== 'survival' &&
           this.objectives.every((o) => o.done)) ||
         (this.type === 'escort' && this.routeIndex >= this.route.length)
       )
         this.finish(true);
+      else if (
+        this.type === 'survival' &&
+        this.elapsed >= this.operationDuration
+      )
+        this.finish(true);
       else if (this.isBoss && !this.boss) this.finish(true);
-      else if (this.isDefend && this.elapsed >= MISSIONS[this.mission].duration)
+      else if (this.isDefend && this.elapsed >= this.operationDuration)
         this.finish(true);
       else if (
         this.type === 'assault' &&
@@ -1668,6 +1782,7 @@ export class Battle {
   finish(won: boolean) {
     if (this.result) return;
     this.result = {
+      scenario: this.scenario,
       runId: this.runId,
       startingKills: this.startingKills,
       totalKills: this.startingKills + this.kills,

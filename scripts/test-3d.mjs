@@ -13,6 +13,7 @@ await fs.mkdir(path.join(root, 'three'), { recursive: true });
 for (const name of [
   'asset-url',
   'campaign',
+  'battlefields',
   'terrain',
   'navigation',
   'performance',
@@ -24,6 +25,7 @@ for (const name of [
   'three/materials',
   'three/tank-model',
   'three/world',
+  'three/battlefield-scenery',
   'three/nature',
   'three/explosions',
   'three/muzzle',

@@ -43,47 +43,50 @@ import { ProjectileEffects } from './projectiles';
 import { MuzzleEffects, recoilDistance } from './muzzle';
 import {
   createWorld,
+  createWorldAsync,
   heading,
   simulationPosition,
   worldPosition,
   type World,
 } from './world';
 export type CameraMode = 'assault' | 'tactical';
+export type RendererProgress = { progress: number; label: string };
 export type RendererOptions = {
   quality?: Quality;
   headlessEngine?: AbstractEngine;
   assets?: boolean;
   mobile?: boolean;
+  onProgress?: (state: RendererProgress) => void;
 };
 export class Renderer3D {
   canvas: HTMLCanvasElement;
   engine: AbstractEngine;
   scene: Scene;
   camera: UniversalCamera;
-  world: World;
-  materials: Materials;
+  world!: World;
+  materials!: Materials;
   models = new Map<number, TankModel>();
-  quality: Quality;
+  quality!: Quality;
   mode: CameraMode = 'assault';
   disposed = false;
   ready: Promise<void>;
   private pipeline: DefaultRenderingPipeline | null = null;
   private contactShadows = new Map<number, Mesh>();
-  readonly projectiles: ProjectileEffects;
-  readonly muzzles: MuzzleEffects;
+  readonly projectiles!: ProjectileEffects;
+  readonly muzzles!: MuzzleEffects;
   private weaponMount: ReturnType<typeof createWeaponMount> | null = null;
   private sparkPool: Mesh[] = [];
   private trackPool: Mesh[] = [];
-  readonly explosions: ExplosionEffects;
+  readonly explosions!: ExplosionEffects;
   private pickupPool: TransformNode[] = [];
   private minePool: TransformNode[] = [];
   private supplyColors: Material[] = [];
   private supplyLabels: Material[] = [];
   private healthBars = new Map<number, { root: TransformNode; fill: Mesh }>();
-  private flashLight: PointLight;
-  private cursor: Mesh;
-  private emp: Mesh;
-  private playerRing: Mesh;
+  private flashLight!: PointLight;
+  private cursor!: Mesh;
+  private emp!: Mesh;
+  private playerRing!: Mesh;
   private base: TransformNode | null = null;
   private objectiveViews = new Map<
     number,
@@ -101,11 +104,20 @@ export class Renderer3D {
   private resolutionMode: Resolution;
   private budgetScale = 1;
   private renderOnlyRandom = 37;
+  private resizeGeneration = 0;
   constructor(
     canvas: HTMLCanvasElement,
     b: Battle,
     options: RendererOptions = {},
   ) {
+    const startedAt = performance.now();
+    const timings: Record<string, number> = {};
+    const progress = (value: number, label: string) =>
+      options.onProgress?.({ progress: value, label });
+    const completed = (stage: string) => {
+      timings[stage] = Math.round(performance.now() - startedAt);
+    };
+    progress(0, '连接图形设备');
     this.canvas = canvas;
     this.mobile = options.mobile ?? isMobileDevice();
     this.quality = options.quality ?? 'balanced';
@@ -155,6 +167,8 @@ export class Renderer3D {
     this.camera.fov = 0.86;
     this.camera.inputs.clear();
     scene.activeCamera = this.camera;
+    completed('device');
+    progress(6, '图形设备已连接 · 装载材质');
     this.materials = createMaterials(
       scene,
       options.assets !== false,
@@ -211,14 +225,6 @@ export class Renderer3D {
         this.supplyLabels.push(label);
       },
     );
-    this.world = createWorld(
-      scene,
-      b,
-      this.materials,
-      this.quality,
-      headless,
-      options.assets !== false,
-    );
     this.explosions = new ExplosionEffects(
       scene,
       this.materials,
@@ -227,247 +233,390 @@ export class Renderer3D {
     );
     this.projectiles = new ProjectileEffects(scene, this.quality, this.mobile);
     this.muzzles = new MuzzleEffects(scene, this.mobile);
-    scene.imageProcessingConfiguration.toneMappingEnabled = true;
-    scene.imageProcessingConfiguration.toneMappingType =
-      ImageProcessingConfiguration.TONEMAPPING_ACES;
-    scene.imageProcessingConfiguration.exposure = 1;
-    scene.imageProcessingConfiguration.contrast = 1.04;
-    if (!headless && this.quality !== 'performance' && !this.mobile) {
-      const pipe = (this.pipeline = new DefaultRenderingPipeline(
-        'cinematic-image-pipeline',
-        true,
-        scene,
-        [this.camera],
-      ));
-      pipe.fxaaEnabled = true;
-      pipe.samples = this.quality === 'cinematic' ? 4 : 1;
-      pipe.bloomEnabled = true;
-      pipe.bloomThreshold = 1.35;
-      pipe.bloomWeight = 0.1;
-      pipe.bloomKernel = 40;
-      pipe.imageProcessingEnabled = true;
+    completed('materials');
+    progress(12, '材质已登记 · 构建战场');
+    const finish = () => {
       scene.imageProcessingConfiguration.toneMappingEnabled = true;
       scene.imageProcessingConfiguration.toneMappingType =
         ImageProcessingConfiguration.TONEMAPPING_ACES;
       scene.imageProcessingConfiguration.exposure = 1;
       scene.imageProcessingConfiguration.contrast = 1.04;
-      pipe.sharpenEnabled = this.quality === 'cinematic';
-      if (pipe.sharpenEnabled) {
-        pipe.sharpen.edgeAmount = 0.16;
-        pipe.sharpen.colorAmount = 1;
+      if (!headless && this.quality !== 'performance' && !this.mobile) {
+        const pipe = (this.pipeline = new DefaultRenderingPipeline(
+          'cinematic-image-pipeline',
+          true,
+          scene,
+          [this.camera],
+        ));
+        pipe.fxaaEnabled = true;
+        pipe.samples = this.quality === 'cinematic' ? 4 : 1;
+        pipe.bloomEnabled = true;
+        pipe.bloomThreshold = 1.35;
+        pipe.bloomWeight = 0.1;
+        pipe.bloomKernel = 40;
+        pipe.imageProcessingEnabled = true;
+        scene.imageProcessingConfiguration.toneMappingEnabled = true;
+        scene.imageProcessingConfiguration.toneMappingType =
+          ImageProcessingConfiguration.TONEMAPPING_ACES;
+        scene.imageProcessingConfiguration.exposure = 1;
+        scene.imageProcessingConfiguration.contrast = 1.04;
+        pipe.sharpenEnabled = this.quality === 'cinematic';
+        if (pipe.sharpenEnabled) {
+          pipe.sharpen.edgeAmount = 0.16;
+          pipe.sharpen.colorAmount = 1;
+        }
+        scene.imageProcessingConfiguration.vignetteEnabled = true;
+        scene.imageProcessingConfiguration.vignetteWeight = 0.85;
+        scene.imageProcessingConfiguration.vignetteStretch = 0.25;
       }
-      scene.imageProcessingConfiguration.vignetteEnabled = true;
-      scene.imageProcessingConfiguration.vignetteWeight = 0.85;
-      scene.imageProcessingConfiguration.vignetteStretch = 0.25;
-    }
-    this.flashLight = new PointLight(
-      'pooled-muzzle-light',
-      Vector3.Zero(),
-      scene,
-    );
-    this.flashLight.intensity = 0;
-    this.flashLight.range = 18;
-    this.flashLight.diffuse = new Color3(1, 0.57, 0.23);
-    this.cursor = MeshBuilder.CreateTorus(
-      'ground-target-reticle',
-      { diameter: 2.2, thickness: 0.085, tessellation: 40 },
-      scene,
-    );
-    this.cursor.material = this.materials.white;
-    this.cursor.isPickable = false;
-    this.cursor.setEnabled(false);
-    this.emp = MeshBuilder.CreateTorus(
-      'emp-shock-front',
-      { diameter: 2, thickness: 0.07, tessellation: 64 },
-      scene,
-    );
-    this.emp.material = this.materials.blue;
-    this.emp.isPickable = false;
-    this.emp.setEnabled(false);
-    this.playerRing = MeshBuilder.CreateTorus(
-      'friendly-marker',
-      { diameter: 5.2, thickness: 0.026, tessellation: 48 },
-      scene,
-    );
-    this.playerRing.material = this.materials.blue;
-    this.playerRing.isPickable = false;
-    this.playerRing.visibility = 0.6;
-    if (b.protectsBase) {
-      this.base = new TransformNode('evacuation-beacon', scene);
-      this.base.position.copyFrom(worldPosition(b.base.x, b.base.y));
-      box(
-        scene,
-        'beacon-plinth',
-        [4, 0.5, 4],
-        [0, 0.25, 0],
-        this.materials.steel,
-        this.base,
-      );
-      box(
-        scene,
-        'beacon-battery',
-        [2.7, 1.2, 2.7],
-        [0, 0.9, 0],
-        this.materials.armor,
-        this.base,
-      );
-      box(
-        scene,
-        'beacon-spire',
-        [0.2, 3.5, 0.2],
-        [0, 2.5, 0],
-        this.materials.steel,
-        this.base,
-      );
-      const ring = MeshBuilder.CreateTorus(
-        'beacon-ring',
-        { diameter: 3, thickness: 0.1, tessellation: 32 },
+      this.flashLight = new PointLight(
+        'pooled-muzzle-light',
+        Vector3.Zero(),
         scene,
       );
-      ring.parent = this.base;
-      ring.position.y = 2.3;
-      ring.material = this.materials.blue;
-      const beam = MeshBuilder.CreateCylinder(
-        'beacon-light-column',
-        {
-          height: 15,
-          diameterTop: 0.08,
-          diameterBottom: 1.2,
-          tessellation: 16,
-        },
+      this.flashLight.intensity = 0;
+      this.flashLight.range = 18;
+      this.flashLight.diffuse = new Color3(1, 0.57, 0.23);
+      this.cursor = MeshBuilder.CreateTorus(
+        'ground-target-reticle',
+        { diameter: 2.2, thickness: 0.085, tessellation: 40 },
         scene,
       );
-      beam.parent = this.base;
-      beam.position.y = 8;
-      beam.material = this.materials.blue;
-      beam.visibility = 0.1;
-    }
-    if (b.type === 'escort' && this.base) {
-      for (const child of this.base.getChildMeshes()) child.dispose();
-      const m = this.materials,
-        root = this.base;
-      box(
+      this.cursor.material = this.materials.white;
+      this.cursor.isPickable = false;
+      this.cursor.setEnabled(false);
+      this.emp = MeshBuilder.CreateTorus(
+        'emp-shock-front',
+        { diameter: 2, thickness: 0.07, tessellation: 64 },
         scene,
-        'convoy-armored-bed',
-        [4.4, 1.5, 7],
-        [0, 1.6, 0],
-        m.armor,
-        root,
       );
-      box(scene, 'convoy-cabin', [4.1, 2.2, 2.4], [0, 2.2, 2.4], m.heavy, root);
-      box(
+      this.emp.material = this.materials.blue;
+      this.emp.isPickable = false;
+      this.emp.setEnabled(false);
+      this.playerRing = MeshBuilder.CreateTorus(
+        'friendly-marker',
+        { diameter: 5.2, thickness: 0.026, tessellation: 48 },
         scene,
-        'convoy-windshield',
-        [3.5, 0.7, 0.12],
-        [0, 2.65, 3.64],
-        m.glass,
-        root,
       );
-      box(
-        scene,
-        'medical-cross-h',
-        [2, 0.12, 0.45],
-        [0, 2.42, -0.8],
-        m.blue,
-        root,
-      );
-      box(
-        scene,
-        'medical-cross-v',
-        [0.45, 0.12, 2],
-        [0, 2.43, -0.8],
-        m.blue,
-        root,
-      );
-      for (const side of [-1, 1])
-        for (const z of [-2, 0, 2])
-          box(
-            scene,
-            'convoy-wheel',
-            [0.8, 1.3, 1.3],
-            [side * 2.2, 0.8, z],
-            m.rubber,
-            root,
-          );
-      for (const x of [-1.6, 1.6])
+      this.playerRing.material = this.materials.blue;
+      this.playerRing.isPickable = false;
+      this.playerRing.visibility = 0.6;
+      if (b.protectsBase) {
+        this.base = new TransformNode('evacuation-beacon', scene);
+        this.base.position.copyFrom(worldPosition(b.base.x, b.base.y));
         box(
           scene,
-          'convoy-headlight',
-          [0.5, 0.4, 0.15],
-          [x, 1.7, 3.7],
-          m.lamp,
+          'beacon-plinth',
+          [4, 0.5, 4],
+          [0, 0.25, 0],
+          this.materials.steel,
+          this.base,
+        );
+        box(
+          scene,
+          'beacon-battery',
+          [2.7, 1.2, 2.7],
+          [0, 0.9, 0],
+          this.materials.armor,
+          this.base,
+        );
+        box(
+          scene,
+          'beacon-spire',
+          [0.2, 3.5, 0.2],
+          [0, 2.5, 0],
+          this.materials.steel,
+          this.base,
+        );
+        const ring = MeshBuilder.CreateTorus(
+          'beacon-ring',
+          { diameter: 3, thickness: 0.1, tessellation: 32 },
+          scene,
+        );
+        ring.parent = this.base;
+        ring.position.y = 2.3;
+        ring.material = this.materials.blue;
+        const beam = MeshBuilder.CreateCylinder(
+          'beacon-light-column',
+          {
+            height: 15,
+            diameterTop: 0.08,
+            diameterBottom: 1.2,
+            tessellation: 16,
+          },
+          scene,
+        );
+        beam.parent = this.base;
+        beam.position.y = 8;
+        beam.material = this.materials.blue;
+        beam.visibility = 0.1;
+      }
+      if (b.type === 'escort' && this.base) {
+        for (const child of this.base.getChildMeshes()) child.dispose();
+        const m = this.materials,
+          root = this.base;
+        box(
+          scene,
+          'convoy-armored-bed',
+          [4.4, 1.5, 7],
+          [0, 1.6, 0],
+          m.armor,
           root,
         );
-    }
-    for (const o of b.objectives) {
-      const root = new TransformNode('objective-' + o.id, scene),
-        m = this.materials;
-      root.position.copyFrom(worldPosition(o.x, o.y));
-      const ring = MeshBuilder.CreateTorus(
-        'objective-zone',
-        {
-          diameter: o.kind === 'capture' ? 23 : o.kind === 'exit' ? 20 : 9,
-          thickness: 0.12,
-          tessellation: 48,
-        },
-        scene,
-      );
-      ring.parent = root;
-      ring.position.y = 0.13;
-      ring.material = m.ember;
-      ring.isPickable = false;
-      const body = box(
-        scene,
-        'objective-' + o.kind,
-        o.kind === 'facility'
-          ? [5, 5, 5]
-          : o.kind === 'intel'
-            ? [2, 1.4, 2]
-            : [0.25, 7, 0.25],
-        [0, o.kind === 'facility' ? 2.5 : o.kind === 'intel' ? 0.8 : 3.5, 0],
-        m.heavy,
-        root,
-      );
-      if (o.kind === 'facility')
-        for (const x of [-2, 2])
+        box(
+          scene,
+          'convoy-cabin',
+          [4.1, 2.2, 2.4],
+          [0, 2.2, 2.4],
+          m.heavy,
+          root,
+        );
+        box(
+          scene,
+          'convoy-windshield',
+          [3.5, 0.7, 0.12],
+          [0, 2.65, 3.64],
+          m.glass,
+          root,
+        );
+        box(
+          scene,
+          'medical-cross-h',
+          [2, 0.12, 0.45],
+          [0, 2.42, -0.8],
+          m.blue,
+          root,
+        );
+        box(
+          scene,
+          'medical-cross-v',
+          [0.45, 0.12, 2],
+          [0, 2.43, -0.8],
+          m.blue,
+          root,
+        );
+        for (const side of [-1, 1])
+          for (const z of [-2, 0, 2])
+            box(
+              scene,
+              'convoy-wheel',
+              [0.8, 1.3, 1.3],
+              [side * 2.2, 0.8, z],
+              m.rubber,
+              root,
+            );
+        for (const x of [-1.6, 1.6])
           box(
             scene,
-            'reactor-light',
-            [0.18, 4, 5.1],
-            [x, 2.5, 0],
-            m.ember,
+            'convoy-headlight',
+            [0.5, 0.4, 0.15],
+            [x, 1.7, 3.7],
+            m.lamp,
             root,
           );
-      if (o.kind === 'capture')
-        box(scene, 'radio-flag', [3, 1.5, 0.15], [1.5, 6, 0], m.ember, root);
-      const bar = box(
+      }
+      for (const o of b.objectives) {
+        const root = new TransformNode('objective-' + o.id, scene),
+          m = this.materials;
+        root.position.copyFrom(worldPosition(o.x, o.y));
+        const ring = MeshBuilder.CreateTorus(
+          'objective-zone',
+          {
+            diameter: o.kind === 'capture' ? 23 : o.kind === 'exit' ? 20 : 9,
+            thickness: 0.12,
+            tessellation: 48,
+          },
+          scene,
+        );
+        ring.parent = root;
+        ring.position.y = 0.13;
+        ring.material = m.ember;
+        ring.isPickable = false;
+        const body = box(
+          scene,
+          'objective-' + o.kind,
+          o.kind === 'facility'
+            ? [5, 5, 5]
+            : o.kind === 'intel'
+              ? [2, 1.4, 2]
+              : [0.25, 7, 0.25],
+          [0, o.kind === 'facility' ? 2.5 : o.kind === 'intel' ? 0.8 : 3.5, 0],
+          m.heavy,
+          root,
+        );
+        if (o.kind === 'facility')
+          for (const x of [-2, 2])
+            box(
+              scene,
+              'reactor-light',
+              [0.18, 4, 5.1],
+              [x, 2.5, 0],
+              m.ember,
+              root,
+            );
+        if (o.kind === 'capture')
+          box(scene, 'radio-flag', [3, 1.5, 0.15], [1.5, 6, 0], m.ember, root);
+        const bar = box(
+          scene,
+          'objective-progress',
+          [4, 0.18, 0.12],
+          [0, 7.8, 0],
+          m.ember,
+          root,
+        );
+        body.isPickable = o.kind === 'facility';
+        body.metadata = { objectiveId: o.id };
+        bar.isPickable = false;
+        this.objectiveViews.set(o.id, { root, ring, body, bar });
+      }
+      for (const [i, point] of b.route.entries()) {
+        const ring = MeshBuilder.CreateTorus(
+          'convoy-waypoint-' + i,
+          { diameter: 8, thickness: 0.12, tessellation: 24 },
+          scene,
+        );
+        ring.position.copyFrom(worldPosition(point.x, point.y, 0.12));
+        ring.material = this.materials.blue;
+        ring.isPickable = false;
+      }
+      this.syncTank(b.player, b);
+      for (const e of b.enemies) this.syncTank(e, b);
+      this.updateCamera(b, 0, true);
+      this.scene.render();
+      completed('units');
+      progress(80, '装甲与任务目标已部署');
+    };
+    if (options.onProgress && !headless) {
+      this.ready = (async () => {
+        this.world = await createWorldAsync(
+          scene,
+          b,
+          this.materials,
+          this.quality,
+          headless,
+          options.assets !== false,
+          (done, total, label) =>
+            progress(12 + (done / Math.max(1, total)) * 58, label),
+          () => this.disposed,
+        );
+        completed('world');
+        if (this.disposed)
+          throw new DOMException('Deployment cancelled', 'AbortError');
+        // Give the completed world stage a paint before building vehicle pools.
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        if (this.disposed)
+          throw new DOMException('Deployment cancelled', 'AbortError');
+        finish();
+        await this.prepareFirstFrame(progress, b);
+        completed('ready');
+        console.info(
+          '[battle-load]',
+          JSON.stringify({
+            mission: b.mission,
+            ...timings,
+            meshes: scene.meshes.length,
+            textures: scene.textures.length,
+          }),
+        );
+      })();
+    } else {
+      this.world = createWorld(
         scene,
-        'objective-progress',
-        [4, 0.18, 0.12],
-        [0, 7.8, 0],
-        m.ember,
-        root,
+        b,
+        this.materials,
+        this.quality,
+        headless,
+        options.assets !== false,
       );
-      body.isPickable = o.kind === 'facility';
-      body.metadata = { objectiveId: o.id };
-      bar.isPickable = false;
-      this.objectiveViews.set(o.id, { root, ring, body, bar });
+      finish();
+      this.ready = headless ? Promise.resolve() : this.scene.whenReadyAsync();
     }
-    for (const [i, point] of b.route.entries()) {
-      const ring = MeshBuilder.CreateTorus(
-        'convoy-waypoint-' + i,
-        { diameter: 8, thickness: 0.12, tessellation: 24 },
-        scene,
-      );
-      ring.position.copyFrom(worldPosition(point.x, point.y, 0.12));
-      ring.material = this.materials.blue;
-      ring.isPickable = false;
+  }
+  private async prepareFirstFrame(
+    report: (progress: number, label: string) => void,
+    battle?: Battle,
+  ): Promise<void> {
+    // Scene.whenReadyAsync compiles even disabled rubble and distant effect
+    // variants. Prepare what the opening camera and its local shadow pass draw.
+    const generation = this.resizeGeneration;
+    if (battle) {
+      this.updateCamera(battle, 0, true);
+      this.scene.updateTransformMatrix(true);
     }
-    this.syncTank(b.player, b);
-    for (const e of b.enemies) this.syncTank(e, b);
-    this.updateCamera(b, 0, true);
-    this.scene.render();
-    this.ready = headless ? Promise.resolve() : this.scene.whenReadyAsync();
+    const required = new Set(
+      this.scene.meshes.filter((mesh) => {
+        if (!mesh.isEnabled() || !mesh.isVisible || mesh.visibility <= 0)
+          return false;
+        mesh.computeWorldMatrix(true);
+        return mesh.alwaysSelectAsActiveMesh || this.camera.isInFrustum(mesh);
+      }),
+    );
+    const shadowMap = this.world.shadow?.getShadowMap();
+    const casters = shadowMap?.renderList ?? [];
+    const localCasters =
+      shadowMap?.getCustomRenderList?.(0, casters, casters.length) ?? casters;
+    for (const mesh of localCasters)
+      if (mesh.isEnabled() && mesh.isVisible) required.add(mesh);
+    const meshes = [...required];
+    const textures = new Set(
+      meshes.flatMap((mesh) => mesh.material?.getActiveTextures() ?? []),
+    );
+    if (this.scene.environmentTexture)
+      textures.add(this.scene.environmentTexture);
+    const assets = [...textures].filter((texture) => !texture.isRenderTarget);
+    let previousCheck = performance.now(),
+      activeWait = 0;
+    let lastProgress = 80;
+    const publish = (value: number, label: string) => {
+      lastProgress = Math.max(lastProgress, value);
+      report(lastProgress, label);
+    };
+    while (true) {
+      if (this.disposed)
+        throw new DOMException('Deployment cancelled', 'AbortError');
+      const now = performance.now();
+      const hidden = typeof document !== 'undefined' && document.hidden;
+      if (!hidden)
+        activeWait += Math.min(1000, Math.max(0, now - previousCheck));
+      previousCheck = now;
+      if (hidden) {
+        await new Promise<void>((resolve) => setTimeout(resolve, 128));
+        continue;
+      }
+      if (battle && generation !== this.resizeGeneration)
+        return this.prepareFirstFrame(publish, battle);
+      const failed = assets.find((texture) => texture.loadingError);
+      if (failed)
+        throw new Error('Required texture could not load: ' + failed.name);
+      if (activeWait > 45_000)
+        throw new Error('First-frame assets or shaders did not become ready');
+      const loaded = assets.filter((texture) => texture.isReady()).length;
+      if (loaded < assets.length) {
+        publish(
+          80 + (loaded / Math.max(1, assets.length)) * 12,
+          `装载首屏材质 ${loaded} / ${assets.length}`,
+        );
+      } else {
+        this.scene.incrementRenderId();
+        // Check every required mesh so independent shaders compile in parallel.
+        let ready = 0;
+        for (const mesh of meshes) if (mesh.isReady(true)) ready++;
+        const cameraReady = this.camera.isReady(true);
+        if (cameraReady) ready++;
+        publish(
+          92 + (ready / (meshes.length + 1)) * 7,
+          `准备首屏光照 ${ready} / ${meshes.length + 1}`,
+        );
+        if (ready === meshes.length + 1) {
+          this.scene.render();
+          publish(100, '战场已就绪');
+          return;
+        }
+        // Postprocess readiness can require its render targets to be initialized.
+        this.scene.render();
+      }
+      await new Promise<void>((resolve) => setTimeout(resolve, 32));
+    }
   }
   get fps() {
     return Math.round(this.engine.getFps());
@@ -477,6 +626,7 @@ export class Renderer3D {
   }
   resize() {
     if (this.disposed) return;
+    this.resizeGeneration++;
     if (this.mobile) this.setBudget(this.budgetScale, this.effectScale);
     this.engine.resize();
   }
@@ -587,7 +737,7 @@ export class Renderer3D {
       this.engine.setHardwareScalingLevel(next);
       this.engine.resize();
     }
-    if (this.world.shadow) this.world.sun.shadowEnabled = effects > 0.6;
+    if (this.world?.shadow) this.world.sun.shadowEnabled = effects > 0.6;
   }
   private syncTank(t: Tank, b: Battle) {
     let model = this.models.get(t.id);
@@ -928,12 +1078,7 @@ export class Renderer3D {
         v.body.position.y = 0.8 + Math.sin(b.elapsed * 2) * 0.2;
       }
     }
-    for (const [wall, view] of this.world.walls) {
-      if (view.solid.isEnabled() !== wall.hp > 0) {
-        view.solid.setEnabled(wall.hp > 0);
-        view.rubble.setEnabled(wall.hp <= 0);
-      }
-    }
+    this.world.updateDamage();
     this.muzzleTimer = Math.max(0, this.muzzleTimer - dt);
     if (this.muzzleTimer === 0) this.flashLight.intensity = 0;
     this.projectiles.update(b, this.effectScale);
@@ -1101,8 +1246,8 @@ export class Renderer3D {
   dispose() {
     if (this.disposed) return;
     this.disposed = true;
-    this.projectiles.dispose();
-    this.muzzles.dispose();
+    this.projectiles?.dispose();
+    this.muzzles?.dispose();
     this.scene.dispose();
     this.engine.dispose();
     this.models.clear();

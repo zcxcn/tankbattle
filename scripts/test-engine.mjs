@@ -7,6 +7,7 @@ import ts from 'typescript';
 const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'iron-embers-test-'));
 for (const name of [
   'campaign',
+  'battlefields',
   'terrain',
   'navigation',
   'performance',
@@ -36,7 +37,7 @@ const {
   Battle,
   W,
   H,
-  ENEMY_GATES,
+  ENEMY_REGION,
   ENEMY_SPAWN_DISTANCE,
   segmentCircle,
   segmentRect,
@@ -107,8 +108,16 @@ test('all 18 mission starts and enemy spawn safety across 360 seeds', () => {
           Math.hypot(e.x - b.player.x, e.y - b.player.y) >=
             ENEMY_SPAWN_DISTANCE,
         );
-        assert(e.y >= 110 && e.y <= 305);
-        assert(ENEMY_GATES.some((gate) => Math.abs(gate.x - e.x) <= 14));
+        assert(e.y >= ENEMY_REGION.y && e.y <= ENEMY_REGION.y + ENEMY_REGION.h);
+        assert(e.x >= ENEMY_REGION.x && e.x <= ENEMY_REGION.x + ENEMY_REGION.w);
+        assert(
+          b.enemies.every(
+            (other) =>
+              other === e ||
+              Math.hypot(other.x - e.x, other.y - e.y) >
+                other.radius + e.radius + 10,
+          ),
+        );
       }
     }
 });
@@ -1113,7 +1122,10 @@ test('living cover has real collision and is removed by the same destruction rul
   for (let mission = 0; mission < 18; mission++) {
     const b = make(mission),
       trees = b.walls.filter((w) => w.kind === 'tree');
-    assert(trees.length >= 8, `mission ${mission + 1} needs visible trees`);
+    assert(
+      trees.length >= (b.battlefield.id === 'desert' ? 1 : 8),
+      `mission ${mission + 1} needs biome-appropriate vegetation`,
+    );
     for (const tree of trees) {
       const x = tree.x + tree.w / 2,
         y = tree.y + tree.h / 2;
@@ -1230,7 +1242,7 @@ test('guided rockets lock only visible forward targets and retain their launch p
   b.shoot(b.player, false);
   assert.equal(b.bullets[0].homing, undefined);
 });
-test('north entries keep distance, wait when blocked and preserve pending boss reinforcements', () => {
+test('opposing region keeps distance, waits when blocked and preserves pending boss reinforcements', () => {
   const b = quiet(0);
   b.walls = [];
   b.player.x = 1280;
@@ -1244,15 +1256,14 @@ test('north entries keep distance, wait when blocked and preserve pending boss r
         700,
     );
   }
-  const blockers = ENEMY_GATES.map((gate) => ({
-    x: gate.x - 70,
-    y: 40,
-    w: 140,
-    h: 330,
-    hp: Infinity,
-    maxHp: Infinity,
-    steel: true,
-  }));
+  const blockers = [
+    {
+      ...ENEMY_REGION,
+      hp: Infinity,
+      maxHp: Infinity,
+      steel: true,
+    },
+  ];
   b.enemies = [];
   b.spawned = 0;
   b.walls = blockers;
@@ -1275,19 +1286,17 @@ test('north entries keep distance, wait when blocked and preserve pending boss r
   stepFor(boss, 0.8);
   assert.equal(boss.enemies.length, 3);
 });
-test('four permanent perimeter walls stop dashes and every projectile while entries stay traversable', () => {
+test('four permanent perimeter walls stop dashes and every projectile while deployments stay reachable', () => {
   for (let mission = 0; mission < 18; mission++) {
     const b = make(mission),
       walls = b.walls.filter((w) => w.kind === 'boundary');
     assert.equal(walls.length, 4);
     assert(walls.every((w) => w.steel && w.hp === Infinity));
-    for (const gate of ENEMY_GATES) {
-      assert(b.canOccupy(gate.x, gate.y, 46));
-      // Sabotage facilities occupy junctions: enemies must be able to route
-      // around them, rather than requiring a straight path through the target.
+    for (const enemy of b.enemies) {
+      assert(b.canOccupy(enemy.x, enemy.y, enemy.radius));
       assert(
-        b.navigation.guide(gate, b.player, 46, 0),
-        `mission ${mission}: entrance ${gate.x} must reach the battlefield`,
+        b.navigation.guide(enemy, b.player, enemy.radius, 0),
+        `mission ${mission}: deployment must reach the battlefield`,
       );
     }
   }
@@ -1567,6 +1576,194 @@ test('music switching on gamepad View uses a release edge and saves validate the
   assert(!reader.sample([], 5).music);
   assert.equal(parseSave(JSON.stringify({ musicTrack: 2 })).musicTrack, 2);
   assert.equal(parseSave(JSON.stringify({ musicTrack: 9 })).musicTrack, 0);
+});
+const { BATTLEFIELDS, OPERATIONS } = await import(
+  pathToFileURL(path.join(tmp, 'battlefields.mjs'))
+);
+test('six maps have distinct geometry and every operation has navigable deployment and objectives', () => {
+  const layouts = new Set();
+  for (const field of BATTLEFIELDS) {
+    for (const operation of OPERATIONS) {
+      const b = new Battle(
+        0,
+        false,
+        { ...config(), battlefield: field.id, operation: operation.id },
+        44,
+      );
+      assert.equal(b.battlefield.id, field.id);
+      assert.equal(b.type, operation.id);
+      assert(b.scenario);
+      assert(b.canOccupy(b.player.x, b.player.y, 46));
+      for (const objective of b.objectives) {
+        const approach = {
+          x: objective.x + (objective.kind === 'facility' ? 90 : 0),
+          y: objective.y,
+        };
+        assert(
+          b.canOccupy(approach.x, approach.y, 26),
+          `${field.id}/${operation.id} occupied objective`,
+        );
+        assert(
+          b.navigation.guide(b.player, approach, 26, 0),
+          `${field.id}/${operation.id} unreachable objective`,
+        );
+      }
+      for (let i = 1; i < b.route.length; i++)
+        for (let n = 0; n <= 20; n++) {
+          const a = b.route[i - 1],
+            z = b.route[i],
+            t = n / 20;
+          assert(
+            b.canOccupy(a.x + (z.x - a.x) * t, a.y + (z.y - a.y) * t, 46),
+            `${field.id} blocked convoy`,
+          );
+        }
+      for (const e of b.enemies)
+        assert(
+          b.navigation.guide(e, b.player, e.radius, 0),
+          `${field.id} trapped enemy`,
+        );
+      for (const feature of b.terrain.filter(
+        (feature) => feature.kind === 'water' || feature.kind === 'hill',
+      )) {
+        assert(
+          b.walls.some(
+            (wall) =>
+              wall.kind === feature.kind &&
+              wall.x === feature.x &&
+              wall.y === feature.y &&
+              wall.w === feature.w &&
+              wall.h === feature.h,
+          ),
+        );
+        assert(
+          !b.canOccupy(feature.x + feature.w / 2, feature.y + feature.h / 2, 1),
+        );
+      }
+      for (const bridge of b.terrain.filter(
+        (feature) => feature.kind === 'bridge',
+      ))
+        assert(
+          b.canOccupy(bridge.x + bridge.w / 2, bridge.y + bridge.h / 2, 26),
+          `${field.id} blocked bridge`,
+        );
+      if (operation.id === 'assault')
+        layouts.add(JSON.stringify({ roads: b.roads, walls: b.walls }));
+    }
+  }
+  assert.equal(layouts.size, 6);
+});
+test('spawn sampling spreads across both dimensions of the opposing region', () => {
+  const xs = new Set(),
+    ys = new Set();
+  for (let seed = 0; seed < 100; seed++) {
+    const b = new Battle(0, false, config(), seed);
+    for (const e of b.enemies) {
+      xs.add(Math.floor(((e.x - ENEMY_REGION.x) / ENEMY_REGION.w) * 5));
+      ys.add(Math.floor(((e.y - ENEMY_REGION.y) / ENEMY_REGION.h) * 3));
+    }
+  }
+  assert.equal(xs.size, 5);
+  assert.equal(ys.size, 3);
+});
+test('real buildings take swept shell damage, collapse once, and open movement and navigation', () => {
+  const b = make();
+  b.enemies = [];
+  b.spawnTimer = 999;
+  const building = b.walls.find((wall) => wall.kind === 'warehouse');
+  assert(Number.isFinite(building.hp));
+  assert(building.hp > 0);
+  b.walls = [building];
+  const center = {
+    x: building.x + building.w / 2,
+    y: building.y + building.h / 2,
+  };
+  assert(!b.canOccupy(center.x, center.y, 20));
+  b.navigation.guide(
+    { x: building.x - 60, y: center.y },
+    { x: building.x + building.w + 60, y: center.y },
+    20,
+    1,
+  );
+  b.bullets = [
+    {
+      x: building.x - 30,
+      y: center.y,
+      vx: 3000,
+      vy: 0,
+      damage: building.hp + 1,
+      enemy: false,
+      life: 1,
+    },
+  ];
+  b.step(0.05, idle);
+  assert(building.hp <= 0);
+  assert(b.canOccupy(center.x, center.y, 20));
+  assert.equal(
+    b.explosions.filter((effect) => effect.kind === 'masonry').length,
+    1,
+  );
+  assert(b.navigation.guide(center, b.player, 20, 0));
+});
+test('breakthrough requires ordered checkpoints and survival requires elapsed time', () => {
+  const b = new Battle(0, false, { ...config(), operation: 'breakthrough' });
+  b.enemies = [];
+  b.spawnTimer = 999;
+  b.bossDefeated = true;
+  b.player.x = b.objectives[2].x;
+  b.player.y = b.objectives[2].y;
+  b.updateObjectives(1);
+  assert(!b.objectives[2].done);
+  for (const objective of b.objectives) {
+    b.player.x = objective.x;
+    b.player.y = objective.y;
+    b.updateObjectives(1);
+  }
+  b.step(0, idle);
+  assert(b.result?.won);
+  const survival = new Battle(0, false, { ...config(), operation: 'survival' });
+  survival.enemies = [];
+  survival.spawnTimer = 999;
+  survival.bossDefeated = true;
+  survival.step(0, idle);
+  assert.equal(survival.result, null);
+  assert(!survival.protectsBase);
+  survival.elapsed = survival.operationDuration;
+  survival.step(0, idle);
+  assert(survival.result?.won);
+});
+test('scenario options migrate safely and quick victories retain kills without unlocking chapters', () => {
+  assert.equal(parseSave('{}').battlefield, 'campaign');
+  assert.equal(parseSave('{}').operation, 'campaign');
+  assert.equal(
+    parseSave('{"battlefield":"invalid","operation":"invalid"}').battlefield,
+    'campaign',
+  );
+  assert.equal(
+    parseSave('{"battlefield":"wetlands","operation":"survival"}').operation,
+    'survival',
+  );
+  for (const selection of [
+    { battlefield: 'desert' },
+    { operation: 'survival' },
+  ]) {
+    const save = beginRun({ ...config(), ...selection }, 'scenario');
+    const b = new Battle(0, false, save, 12, 'scenario');
+    b.kills = 3;
+    b.finish(true);
+    const settled = settleRun(save, b.result);
+    assert(settled.accepted);
+    assert.equal(settled.save.kills, 3);
+    assert.equal(settled.reward, 0);
+    assert.deepEqual(settled.save.completed, []);
+  }
+});
+test('quick objectives have stable targets even after selecting a boss chapter', () => {
+  for (const mission of [0, 5, 11, 17]) {
+    const b = new Battle(mission, false, { ...config(), operation: 'defend' });
+    assert.equal(b.operationDuration, 60);
+    assert(b.target >= 18);
+  }
 });
 console.log(`\n${passed} gameplay checks passed.`);
 await fs.rm(tmp, { recursive: true, force: true });

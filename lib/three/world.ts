@@ -23,6 +23,10 @@ import { Battle, W, H, ENEMY_GATES, seeded, type Wall } from '../engine';
 import { type Materials, type Quality, pbr, emissive } from './materials';
 import { buildLivingCover, createNature, natureMaterials } from './nature';
 import { applySurface } from './surface-textures';
+import {
+  battlefieldPalette,
+  createBattlefieldScenery,
+} from './battlefield-scenery';
 export const UNIT = 0.1;
 export const worldPosition = (x: number, y: number, height = 0) =>
   new Vector3((x - W / 2) * UNIT, height, (y - H / 2) * UNIT);
@@ -39,6 +43,7 @@ export type World = {
   staticMeshes: Mesh[];
   nature: ReturnType<typeof createNature>;
   updateShadow(target: Vector3): void;
+  updateDamage(): void;
 };
 const skyVertex = `precision highp float;attribute vec3 position;uniform mat4 worldViewProjection;varying vec3 vPosition;void main(){vPosition=position;gl_Position=worldViewProjection*vec4(position,1.);}`;
 const skyFragment = `precision highp float;varying vec3 vPosition;uniform vec3 horizon;uniform vec3 zenith;uniform vec3 sunDirection;
@@ -187,7 +192,7 @@ function mergeStatic(parent: TransformNode, chunks = false) {
   }
   const result: Mesh[] = [];
   for (const list of groups.values()) {
-    const vertexAlpha = list.some(mesh => mesh.hasVertexAlpha);
+    const vertexAlpha = list.some((mesh) => mesh.hasVertexAlpha);
     const mesh =
       list.length > 1
         ? Mesh.MergeMeshes(list, true, true, undefined, false, false)
@@ -374,29 +379,36 @@ function localSunShadows(
     sun.orthoTop = halfY;
   };
 }
-export function createWorld(
+function* worldSteps(
   scene: Scene,
   b: Battle,
   m: Materials,
   quality: Quality = 'balanced',
   headless = false,
   assets = !headless,
-): World {
+): Generator<{ completed: number; total: number; label: string }, World, void> {
+  let completed = 0;
+  const total = b.roads.length + b.walls.length + 2;
+  const progress = (label: string) => ({
+    completed: ++completed,
+    total,
+    label,
+  });
   const rand = seeded(379 + b.mission),
     staticRoot = new TransformNode('industrial-district', scene),
     wallViews = new Map<
       Wall,
       { solid: TransformNode; rubble: TransformNode }
     >();
-  const naturalMaterials = natureMaterials(scene, assets, quality);
-  const themes = [
-    ['#a5aaa5', '#485b68', '#fff0d3'],
-    ['#96a6ae', '#364c60', '#d3e5f1'],
-    ['#aea59b', '#53606a', '#ffe8c5'],
-    ['#a0aaa5', '#425864', '#eaf0df'],
-    ['#a2a1ac', '#454b60', '#f5ddc9'],
-    ['#b6a397', '#535767', '#ffe0b4'],
-  ][b.mission % 6];
+  const naturalMaterials = natureMaterials(
+    scene,
+    assets,
+    quality,
+    b.battlefield.biome,
+  );
+  const palette = battlefieldPalette(b.battlefield.biome),
+    rural = !['city', 'railway'].includes(b.battlefield.biome);
+  const themes = [palette.horizon, palette.zenith, palette.sun];
   scene.clearColor = Color4.FromHexString(themes[1] + 'ff');
   scene.fogMode = Scene.FOGMODE_EXP2;
   scene.fogDensity = 0.0035;
@@ -478,17 +490,17 @@ export function createWorld(
     { width: W * UNIT + 140, height: H * UNIT + 140, subdivisions: 1 },
     scene,
   );
-  ground.material = m.ground;
+  ground.material = rural ? naturalMaterials.soil : m.ground;
   ground.receiveShadows = true;
   ground.isPickable = true;
   const groundUV = ground.getVerticesData('uv')!;
   for (let i = 0; i < groundUV.length; i += 2) {
-    groundUV[i] *= (W * UNIT + 140) / 100;
-    groundUV[i + 1] *= (H * UNIT + 140) / 100;
+    groundUV[i] *= (W * UNIT + 140) / (rural ? 10 : 100);
+    groundUV[i + 1] *= (H * UNIT + 140) / (rural ? 10 : 100);
   }
   // This material is shared with the 60 m hangar. Resize UVs, not its textures.
   ground.setVerticesData('uv', groundUV);
-  const asphalt = pbr(scene, 'wet-road', '#d2d7d5', 0.02, 0.9),
+  const asphalt = pbr(scene, 'wet-road', palette.road, 0.02, 0.9),
     puddle = pbr(scene, 'shallow-puddles', '#303b40', 0.12, 0.18),
     windowMat = pbr(scene, 'abandoned-windows', '#243b44', 0.04, 0.2),
     windowDust = pbr(scene, 'dusty-window-glass', '#415456', 0.02, 0.46),
@@ -506,7 +518,7 @@ export function createWorld(
   contactShade.transparencyMode = StandardMaterial.MATERIAL_ALPHABLEND;
   contactShade.backFaceCulling = true;
   if (assets) {
-    applySurface(asphalt, scene, 'asphalt', {
+    applySurface(asphalt, scene, rural ? 'soil' : 'asphalt', {
       repeat: 1,
       mobile: quality === 'performance',
     });
@@ -570,13 +582,14 @@ export function createWorld(
       5,
     );
   };
+  yield progress('地表与光照');
   // A connected street network, intersections, crosswalks and loading aprons.
   for (const road of b.roads) {
     stamp('street-asphalt', road.x, road.y, road.w, road.h, asphalt);
     const vertical = road.h > road.w;
     const length = vertical ? road.h : road.w;
     // Flush shoulders and drains convey scale without creating unseen obstacles.
-    for (const side of [0, 1]) {
+    for (const side of rural ? [] : [0, 1]) {
       stamp(
         'concrete-road-gutter',
         road.x + (vertical ? side * (road.w - 3) : 0),
@@ -610,7 +623,7 @@ export function createWorld(
           );
       }
     }
-    for (let t = 24; t < length; t += 58) {
+    for (let t = 24; !rural && t < length; t += 58) {
       const x = vertical ? road.x + road.w / 2 : road.x + t;
       const y = vertical ? road.y + t : road.y + road.h / 2;
       if (
@@ -636,7 +649,11 @@ export function createWorld(
     }
     // Cast-iron inspection covers and the cut concrete surrounding them remain
     // flush: their readable circular scale never invents a gameplay obstacle.
-    for (let t = 160; t < length; t += 430) {
+    for (
+      let t = 160;
+      !rural && t < length;
+      t += quality === 'performance' ? 860 : 430
+    ) {
       const at = worldPosition(
         road.x + (vertical ? road.w * 0.36 : t),
         road.y + (vertical ? t : road.h * 0.36),
@@ -682,8 +699,9 @@ export function createWorld(
           staticRoot,
         );
     }
+    yield progress('道路网络');
   }
-  for (const vertical of b.roads.filter((r) => r.h > r.w)) {
+  for (const vertical of b.roads.filter((r) => !rural && r.h > r.w)) {
     for (const horizontal of b.roads.filter((r) => r.w > r.h)) {
       for (const side of [-1, 1]) {
         for (let i = 0; i < 8; i++)
@@ -811,7 +829,7 @@ export function createWorld(
     }
   }
   // The industrial skyline is outside the playable perimeter, never invisible cover.
-  for (let i = 0; i < 13; i++) {
+  for (let i = 0; !rural && i < 13; i++) {
     const x = -140 + i * 23,
       z = (-H * UNIT) / 2 - 20;
     const height = 9 + rand() * 14;
@@ -861,6 +879,139 @@ export function createWorld(
       staticRoot,
     );
   }
+  const damageViews = new Map<
+    Wall,
+    { nodes: TransformNode[]; stage: number }
+  >();
+  const registerWall = (
+    wall: Wall,
+    solid: TransformNode,
+    rubble: TransformNode,
+  ) => {
+    wallViews.set(wall, { solid, rubble });
+    if (
+      !Number.isFinite(wall.maxHp) ||
+      wall.maxHp <= 0 ||
+      wall.kind === 'tree' ||
+      wall.kind === 'hedge'
+    )
+      return;
+    const width = wall.w * UNIT,
+      depth = wall.h * UNIT,
+      height = wall.height ?? 1.65,
+      random = seeded(Math.floor(wall.x * 31 + wall.y * 17)),
+      nodes: TransformNode[] = [];
+    for (let stage = 0; stage < 2; stage++) {
+      const node = new TransformNode('damage-stage-' + (stage + 1), scene);
+      node.position.copyFrom(solid.position);
+      node.metadata = { damageStage: stage + 1 };
+      // Every stage is built once. Scorch and fractured edges sit just outside
+      // each true facade; no visual hole appears while the building collides.
+      for (const acrossX of [true, false])
+        for (const side of [-1, 1]) {
+          const span = acrossX ? width : depth,
+            edge = (acrossX ? depth : width) / 2 + 0.05;
+          for (
+            let mark = 0;
+            mark < (quality === 'performance' ? 2 : 4);
+            mark++
+          ) {
+            const at = (random() - 0.5) * span * 0.78,
+              y = height * (0.18 + random() * 0.64),
+              reach = Math.min(span * 0.25, 0.7 + random() * (stage + 1));
+            const scar = box(
+              scene,
+              'shell-scorched-facade',
+              acrossX
+                ? [reach, reach * 0.65, 0.018]
+                : [0.018, reach * 0.65, reach],
+              acrossX ? [at, y, side * edge] : [side * edge, y, at],
+              m.rubber,
+              node,
+            );
+            if (acrossX) scar.rotation.z = (random() - 0.5) * 0.5;
+            else scar.rotation.x = (random() - 0.5) * 0.5;
+            for (let branch = 0; branch < 2; branch++) {
+              const crack = box(
+                scene,
+                'fresh-impact-fracture',
+                acrossX
+                  ? [0.045, reach * 1.9, 0.026]
+                  : [0.026, reach * 1.9, 0.045],
+                acrossX
+                  ? [at + branch * 0.15, y, side * (edge + 0.02)]
+                  : [side * (edge + 0.02), y, at + branch * 0.15],
+                m.rubber,
+                node,
+              );
+              if (acrossX) crack.rotation.z = (branch ? 1 : -1) * 0.48;
+              else crack.rotation.x = (branch ? 1 : -1) * 0.48;
+            }
+          }
+        }
+      mergeStatic(node);
+      node.setEnabled(false);
+      nodes.push(node);
+    }
+    if (
+      wall.kind === 'office' ||
+      wall.kind === 'warehouse' ||
+      wall.kind === 'container'
+    ) {
+      // Low rubble permits travel through a destroyed footprint. The slab and
+      // torn beams preserve the scale of a collapsed building without leaving
+      // tall walls that would imply collision after the engine releases it.
+      surfaceBox(
+        scene,
+        'collapsed-building-foundation',
+        [width * 0.97, 0.08, depth * 0.97],
+        [0, 0.04, 0],
+        grime,
+        rubble,
+      );
+      const count = Math.min(
+        quality === 'performance' ? 14 : 28,
+        Math.ceil((width + depth) * 0.7),
+      );
+      for (let piece = 0; piece < count; piece++) {
+        const chunk = box(
+          scene,
+          'collapsed-building-debris',
+          [
+            0.45 + random() * 1.1,
+            0.13 + random() * 0.24,
+            0.35 + random() * 0.8,
+          ],
+          [
+            (random() - 0.5) * width * 0.93,
+            0.13,
+            (random() - 0.5) * depth * 0.93,
+          ],
+          piece % 4 === 0 ? m.steel : grime,
+          rubble,
+        );
+        chunk.rotation.set(random() * 0.2, random() * Math.PI, random() * 0.2);
+      }
+      mergeStatic(rubble);
+    }
+    damageViews.set(wall, { nodes, stage: -1 });
+  };
+  const updateDamage = () => {
+    for (const [wall, view] of wallViews) {
+      const intact = wall.hp > 0;
+      if (view.solid.isEnabled() !== intact) view.solid.setEnabled(intact);
+      if (view.rubble.isEnabled() === intact) view.rubble.setEnabled(!intact);
+      const damage = damageViews.get(wall);
+      if (!damage) continue;
+      const ratio = wall.hp / wall.maxHp,
+        stage = !intact ? 0 : ratio <= 0.35 ? 2 : ratio <= 0.75 ? 1 : 0;
+      if (stage === damage.stage) continue;
+      damage.stage = stage;
+      view.solid.metadata = { ...view.solid.metadata, damageStage: stage };
+      for (let index = 0; index < damage.nodes.length; index++)
+        damage.nodes[index].setEnabled(stage > index);
+    }
+  };
   for (const w of b.walls) {
     const solid = new TransformNode('cover-' + wallViews.size, scene),
       rubble = new TransformNode('destroyed-cover-' + wallViews.size, scene);
@@ -870,6 +1021,13 @@ export function createWorld(
     solid.position.copyFrom(center);
     rubble.position.copyFrom(center);
     const height = w.height ?? (w.steel ? 2.5 : 1.65);
+    if (w.kind === 'hill' || w.kind === 'water') {
+      solid.metadata = { terrain: w.kind };
+      rubble.setEnabled(false);
+      registerWall(w, solid, rubble);
+      yield progress('山地与水域');
+      continue;
+    }
     if (w.kind === 'boundary') {
       const horizontal = width > depth,
         length = horizontal ? width : depth;
@@ -937,7 +1095,8 @@ export function createWorld(
         if (mesh.receiveShadows) shadow?.addShadowCaster(mesh);
       }
       rubble.setEnabled(false);
-      wallViews.set(w, { solid, rubble });
+      registerWall(w, solid, rubble);
+      yield progress('建筑与掩体');
       continue;
     }
     if (w.kind === 'tree' || w.kind === 'hedge') {
@@ -949,11 +1108,13 @@ export function createWorld(
         naturalMaterials,
         quality,
         wallViews.size + b.mission,
+        b.battlefield.biome,
       );
       for (const mesh of mergeStatic(solid)) shadow?.addShadowCaster(mesh);
       mergeStatic(rubble);
       rubble.setEnabled(false);
-      wallViews.set(w, { solid, rubble });
+      registerWall(w, solid, rubble);
+      yield progress('建筑与掩体');
       continue;
     }
     if (w.kind === 'warehouse' || w.kind === 'office') {
@@ -1015,7 +1176,14 @@ export function createWorld(
           if (office) {
             const bays = Math.max(
                 1,
-                Math.floor(span / (architecture === 1 ? 2.7 : 2.15)),
+                Math.floor(
+                  span /
+                    (quality === 'performance'
+                      ? 3.9
+                      : architecture === 1
+                        ? 2.7
+                        : 2.15),
+                ),
               ),
               pitch = span / bays,
               floors = Math.max(1, Math.floor(height / 2.45)),
@@ -1922,26 +2090,30 @@ export function createWorld(
       }
       for (const mesh of mergeStatic(solid)) shadow?.addShadowCaster(mesh);
       rubble.setEnabled(false);
-      wallViews.set(w, { solid, rubble });
+      registerWall(w, solid, rubble);
+      yield progress('建筑与掩体');
       continue;
     }
     const wallStyle = (wallViews.size + b.mission) % 3;
-    const wallMaterial = w.steel
-      ? m.steel
-      : wallStyle === 0
-        ? m.brick
-        : wallStyle === 1
-          ? m.concrete
-          : naturalMaterials.stone;
+    const wallMaterial =
+      w.steel || w.kind === 'container'
+        ? m.steel
+        : wallStyle === 0
+          ? m.brick
+          : wallStyle === 1
+            ? m.concrete
+            : naturalMaterials.stone;
     box(
       scene,
-      w.steel ? 'reinforced-container' : 'brick-barricade',
+      w.steel || w.kind === 'container'
+        ? 'reinforced-container'
+        : 'brick-barricade',
       [width, height, depth],
       [0, height / 2, 0],
       wallMaterial,
       solid,
     );
-    if (w.steel) {
+    if (w.steel || w.kind === 'container') {
       for (let x = -width / 2 + 0.3; x < width / 2; x += 0.5) {
         box(
           scene,
@@ -2049,7 +2221,8 @@ export function createWorld(
       shadow?.addShadowCaster(mesh);
     }
     rubble.setEnabled(false);
-    wallViews.set(w, { solid, rubble });
+    registerWall(w, solid, rubble);
+    yield progress('建筑与掩体');
   }
   // These are marked mustering areas inside a continuous, colliding perimeter.
   for (const gate of ENEMY_GATES) {
@@ -2086,7 +2259,15 @@ export function createWorld(
   }
   const staticMeshes = mergeStatic(staticRoot, true);
   const nature = createNature(scene, b, naturalMaterials, quality);
-  staticMeshes.push(...nature.meshes);
+  const scenery = createBattlefieldScenery(scene, b, m, quality, assets),
+    updateNature = nature.update.bind(nature);
+  nature.update = (time: number) => {
+    updateNature(time);
+    scenery.update(time);
+  };
+  staticMeshes.push(...nature.meshes, ...scenery.meshes);
+  updateDamage();
+  yield progress('植被与河道');
   for (const material of [
     asphalt,
     puddle,
@@ -2113,5 +2294,50 @@ export function createWorld(
     staticMeshes,
     nature,
     updateShadow,
+    updateDamage,
   };
+}
+
+/** Synchronous construction remains available to deterministic headless tests. */
+export function createWorld(
+  scene: Scene,
+  b: Battle,
+  materials: Materials,
+  quality: Quality = 'balanced',
+  headless = false,
+  assets = !headless,
+): World {
+  const steps = worldSteps(scene, b, materials, quality, headless, assets);
+  let next = steps.next();
+  while (!next.done) next = steps.next();
+  return next.value;
+}
+
+/** Yield between completed batches so loading progress can actually paint. */
+export async function createWorldAsync(
+  scene: Scene,
+  b: Battle,
+  materials: Materials,
+  quality: Quality = 'balanced',
+  headless = false,
+  assets = !headless,
+  onProgress?: (completed: number, total: number, label: string) => void,
+  cancelled?: () => boolean,
+): Promise<World> {
+  const steps = worldSteps(scene, b, materials, quality, headless, assets);
+  let deadline = Date.now() + 8;
+  onProgress?.(0, b.roads.length + b.walls.length + 2, '正在准备战场');
+  for (;;) {
+    if (cancelled?.()) {
+      steps.return(undefined as never);
+      throw new DOMException('Battlefield loading cancelled', 'AbortError');
+    }
+    const next = steps.next();
+    if (next.done) return next.value;
+    onProgress?.(next.value.completed, next.value.total, next.value.label);
+    if (Date.now() >= deadline) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      deadline = Date.now() + 8;
+    }
+  }
 }

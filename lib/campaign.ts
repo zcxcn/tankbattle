@@ -1,3 +1,9 @@
+import {
+  BATTLEFIELDS,
+  OPERATIONS,
+  type BattlefieldChoice,
+  type OperationChoice,
+} from './battlefields';
 import { growthBonus } from './progression';
 export const MISSIONS = [
   {
@@ -485,6 +491,8 @@ export function loadoutStats(
   };
 }
 export type Save = {
+  battlefield: BattlefieldChoice;
+  operation: OperationChoice;
   activeRun: { id: string; creditedKills: number; settled: boolean } | null;
   weapon: number;
   support: number;
@@ -507,6 +515,8 @@ export type Save = {
   mobileConfigured: boolean;
 };
 export const defaultSave: Save = {
+  battlefield: 'campaign',
+  operation: 'campaign',
   activeRun: null,
   weapon: 0,
   support: 0,
@@ -543,6 +553,12 @@ export function parseSave(raw: string | null): Save {
         ? v
         : fallback;
     return {
+      battlefield: BATTLEFIELDS.some((field) => field.id === d.battlefield)
+        ? d.battlefield
+        : 'campaign',
+      operation: OPERATIONS.some((operation) => operation.id === d.operation)
+        ? d.operation
+        : 'campaign',
       activeRun:
         d.activeRun &&
         typeof d.activeRun.id === 'string' &&
@@ -632,6 +648,7 @@ export function settleRun(
     won: boolean;
     endless: boolean;
     score: number;
+    scenario?: boolean;
   },
 ) {
   if (
@@ -644,6 +661,7 @@ export function settleRun(
   const reward =
     result.won &&
     !result.endless &&
+    !result.scenario &&
     !credited.completed.includes(result.mission)
       ? 2
       : 0;

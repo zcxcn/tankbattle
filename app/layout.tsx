@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import '../web/mobile.css';
+import '../web/command.css';
 export const metadata: Metadata = {
   title: '钢铁余烬 · IRON EMBERS | 3D 坦克大战',
   description:

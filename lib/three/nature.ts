@@ -12,17 +12,20 @@ import { Battle, H, W, seeded, type Wall } from '../engine';
 import { pbr, type Quality } from './materials';
 import { box } from './tank-model';
 import { applySurface } from './surface-textures';
+import { battlefieldPalette } from './battlefield-scenery';
 
 export function natureMaterials(
   scene: Scene,
   assets: boolean,
   quality: Quality,
+  biome = 'city',
 ) {
+  const palette = battlefieldPalette(biome);
   const bark = pbr(scene, 'split-tree-bark', '#b5aa96', 0, 0.97);
-  const leaves = pbr(scene, 'sunlit-olive-foliage', '#899071', 0, 0.94);
+  const leaves = pbr(scene, 'sunlit-olive-foliage', palette.foliage, 0, 0.94);
   const pine = pbr(scene, 'pine-needle-clusters', '#67785d', 0, 0.96);
-  const stone = pbr(scene, 'weathered-ridge-stone', '#acafa6', 0, 0.94);
-  const soil = pbr(scene, 'overgrown-verge-soil', '#b9b99e', 0, 0.98);
+  const stone = pbr(scene, 'weathered-ridge-stone', palette.stone, 0, 0.94);
+  const soil = pbr(scene, 'overgrown-verge-soil', palette.soil, 0, 0.98);
   leaves.backFaceCulling = false;
   pine.backFaceCulling = false;
   if (assets) {
@@ -210,6 +213,114 @@ function woodyLimb(
   return mesh;
 }
 
+function buildPalmCover(
+  scene: Scene,
+  wall: Wall,
+  solid: TransformNode,
+  rubble: TransformNode,
+  materials: NatureMaterials,
+  low: boolean,
+  seed: number,
+) {
+  const width = wall.w * 0.1,
+    height = wall.height ?? 7,
+    bend = width * 0.24;
+  woodyLimb(
+    scene,
+    'palm-ringed-trunk',
+    [
+      new Vector3(0, 0, 0),
+      new Vector3(bend * 0.2, height * 0.3, 0),
+      new Vector3(bend, height * 0.7, bend * 0.2),
+      new Vector3(bend * 1.3, height, bend * 0.4),
+    ],
+    [width * 0.42, width * 0.29, width * 0.22, width * 0.18],
+    solid,
+    materials.bark,
+    low,
+    seed,
+  );
+  const positions: number[] = [],
+    indices: number[] = [],
+    colors: number[] = [],
+    uv: number[] = [],
+    normals: number[] = [],
+    count = low ? 7 : 10;
+  for (let frond = 0; frond < count; frond++) {
+    const angle = frond * 2.399 + seed,
+      dx = Math.cos(angle),
+      dz = Math.sin(angle),
+      reach = 2.8 + Math.sin(frond * 7) * 0.55;
+    for (let leaf = 1; leaf < (low ? 6 : 9); leaf++) {
+      const t = leaf / (low ? 6 : 9),
+        along = t * reach,
+        y = height + Math.sin(t * Math.PI) * 0.52 - t * t * 1.25,
+        spread = Math.sin(t * Math.PI) * 0.58,
+        x = bend * 1.3 + dx * along,
+        z = bend * 0.4 + dz * along;
+      for (const side of [-1, 1]) {
+        const start = positions.length / 3;
+        positions.push(
+          x,
+          y,
+          z,
+          x - dx * 0.12 - dz * spread * side,
+          y - 0.11,
+          z - dz * 0.12 + dx * spread * side,
+          x + dx * 0.38 - dz * spread * side * 0.35,
+          y - 0.14,
+          z + dz * 0.38 + dx * spread * side * 0.35,
+          x + dx * 0.3,
+          y + 0.04,
+          z + dz * 0.3,
+        );
+        indices.push(
+          start,
+          start + 1,
+          start + 3,
+          start + 1,
+          start + 2,
+          start + 3,
+        );
+        for (let v = 0; v < 4; v++) {
+          const shade = 0.79 + t * 0.2 + (v === 3 ? 0.08 : 0);
+          colors.push(shade * 0.9, shade, shade * 0.82, 1);
+        }
+        uv.push(0, 0, 0, 1, 1, 1, 1, 0);
+      }
+    }
+  }
+  VertexData.ComputeNormals(positions, indices, normals);
+  const mesh = new Mesh('arched-palm-fronds', scene),
+    data = new VertexData();
+  data.positions = positions;
+  data.indices = indices;
+  data.normals = normals;
+  data.colors = colors;
+  data.uvs = uv;
+  data.applyToMesh(mesh);
+  mesh.material = materials.leaves;
+  mesh.parent = solid;
+  mesh.isPickable = false;
+  box(
+    scene,
+    'shattered-palm-stump',
+    [width * 0.62, 0.48, width * 0.62],
+    [0, 0.24, 0],
+    materials.bark,
+    rubble,
+  );
+  for (let piece = 0; piece < 3; piece++)
+    box(
+      scene,
+      'fallen-palm-frond',
+      [0.17, 0.08, 1.4],
+      [(piece - 1) * 0.55, 0.08, 0],
+      materials.leaves,
+      rubble,
+    ).rotation.y = piece * 2.4;
+}
+
 export function buildLivingCover(
   scene: Scene,
   wall: Wall,
@@ -218,6 +329,7 @@ export function buildLivingCover(
   materials: NatureMaterials,
   quality: Quality,
   index: number,
+  biome = 'city',
 ) {
   const rand = seeded(index * 193 + Math.floor(wall.x * 3 + wall.y));
   const low = quality === 'performance',
@@ -255,8 +367,13 @@ export function buildLivingCover(
       ).rotation.y = rand() * 6;
     return;
   }
+  if (biome === 'tropical' || (biome === 'wetlands' && index % 3 === 0)) {
+    buildPalmCover(scene, wall, solid, rubble, materials, low, index);
+    return;
+  }
   const height = wall.height ?? 7,
-    evergreen = index % 3 === 0,
+    evergreen =
+      biome === 'highlands' || (biome !== 'desert' && index % 3 === 0),
     lean = (rand() - 0.5) * width * 0.35;
   woodyLimb(
     scene,
@@ -524,6 +641,7 @@ export function createNature(
   quality: Quality,
 ) {
   const low = quality === 'performance',
+    desert = b.battlefield.biome === 'desert',
     rand = seeded(1777 + b.mission * 61);
   const meshes: Mesh[] = [],
     mountains: { x: number; z: number; width: number; depth: number }[] = [];
@@ -543,7 +661,11 @@ export function createNature(
       mountains.push({ x, z, width, depth });
       const data = geometry(),
         segments = low ? 10 : quality === 'cinematic' ? 28 : 24,
-        peak = 16 + rand() * 20;
+        peak = desert
+          ? 9 + rand() * 12
+          : b.battlefield.biome === 'highlands'
+            ? 27 + rand() * 24
+            : 16 + rand() * 20;
       for (let row = 0; row <= segments; row++)
         for (let col = 0; col <= segments; col++) {
           const u = col / segments,
@@ -611,6 +733,13 @@ export function createNature(
   const chunks = new Map<string, { grass: Geometry; soil: Geometry }>(),
     stones = geometry();
   const excluded = (x: number, y: number) =>
+    b.terrain.some(
+      (feature) =>
+        x > feature.x - 12 &&
+        x < feature.x + feature.w + 12 &&
+        y > feature.y - 12 &&
+        y < feature.y + feature.h + 12,
+    ) ||
     b.roads.some(
       (r) =>
         x > r.x - 12 &&
@@ -625,7 +754,15 @@ export function createNature(
     [b.player, b.base, ...b.objectives, ...b.route].some(
       (p) => Math.hypot(x - p.x, y - p.y) < 75,
     );
-  const step = low ? 68 : quality === 'cinematic' ? 32 : 43;
+  const step = desert
+    ? low
+      ? 110
+      : 82
+    : low
+      ? 68
+      : quality === 'cinematic'
+        ? 32
+        : 43;
   let tufts = 0;
   for (let y = 20; y < H - 20; y += step)
     for (let x = 20; x < W - 20; x += step) {
@@ -782,6 +919,12 @@ export function createNature(
       }
     }
   for (const [key, chunk] of chunks) {
+    if (desert)
+      for (let i = 0; i < chunk.grass.colors.length; i += 4) {
+        chunk.grass.colors[i] = Math.min(0.72, chunk.grass.colors[i] * 1.55);
+        chunk.grass.colors[i + 1] *= 1.16;
+        chunk.grass.colors[i + 2] *= 1.22;
+      }
     const soil = geometryMesh(scene, 'natural-verge-' + key, chunk.soil);
     soil.material = materials.soil;
     const grass = geometryMesh(scene, 'grass-cluster-' + key, chunk.grass);

@@ -8,6 +8,7 @@ const root = path.resolve('outputs/test-web-upgrade');
 await fs.mkdir(root, { recursive: true });
 for (const name of [
   'campaign',
+  'battlefields',
   'terrain',
   'navigation',
   'performance',

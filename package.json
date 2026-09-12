@@ -11,7 +11,7 @@
     "start": "wrangler dev --config dist/server/wrangler.json",
     "lint": "oxlint",
     "format": "oxfmt",
-    "test": "node scripts/test-engine.mjs && node scripts/test-web-upgrade.mjs && node scripts/test-battle-hud.mjs && npm run test:touch && node scripts/test-3d.mjs && node scripts/test-surface-materials.mjs && node scripts/test-music.mjs && npm run test:audio && node scripts/verify-android-baseline.mjs",
+    "test": "node scripts/test-engine.mjs && node scripts/test-web-upgrade.mjs && node scripts/test-battlefields.mjs && node scripts/test-loading.mjs && node scripts/test-battle-hud.mjs && npm run test:touch && node scripts/test-3d.mjs && node scripts/test-surface-materials.mjs && node scripts/test-music.mjs && npm run test:audio && node scripts/verify-android-baseline.mjs",
     "test:audio": "node scripts/test-track-audio.mjs && node scripts/test-tactical-radio.mjs && node scripts/test-radio-audio.mjs && node scripts/test-combat-audio.mjs && node scripts/verify-radio-assets.mjs && node scripts/verify-combat-assets.mjs",
     "test:web-upgrade": "node scripts/test-web-upgrade.mjs",
     "test:touch": "node scripts/test-touch-controls.mjs",

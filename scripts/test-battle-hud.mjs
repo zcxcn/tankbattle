@@ -9,6 +9,7 @@ const root = path.resolve('outputs/test-battle-hud');
 await fs.mkdir(root, { recursive: true });
 for (const name of [
   'campaign',
+  'battlefields',
   'terrain',
   'navigation',
   'progression',
