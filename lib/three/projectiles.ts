@@ -65,10 +65,11 @@ class Batch {
     yaw = 0,
     roll = 0,
     alpha = 1,
+    pitch = 0,
   ) {
     if (this.count >= this.capacity) return;
     this.scale.set(x, y, z);
-    Quaternion.RotationYawPitchRollToRef(yaw, 0, roll, this.rotation);
+    Quaternion.RotationYawPitchRollToRef(yaw, pitch, roll, this.rotation);
     Matrix.ComposeToRef(this.scale, this.rotation, position, this.matrix);
     this.matrix.copyToArray(this.matrices, this.count * 16);
     this.colors[this.count * 4 + 3] = alpha;
@@ -332,6 +333,11 @@ export class ProjectileEffects {
         weapon === 5 ? 1.45 : 1,
         yaw,
         weapon === 4 ? age * 9 : weapon === 5 ? age * 3 : 0,
+        1,
+        -Math.atan2(
+          bullet.verticalVelocity ?? 0,
+          Math.hypot(bullet.vx, bullet.vy),
+        ),
       );
       this.bodyCount++;
       if (weapon === 3) this.core.add(position, 1, 1, 2.4, yaw);

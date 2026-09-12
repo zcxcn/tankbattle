@@ -528,7 +528,10 @@ test('all 7 weapons produce distinct functional fire modes', () => {
   assert(outcomes[1].rate < outcomes[0].rate / 3);
   assert.equal(outcomes[2].count, 5);
   assert.equal(outcomes[3].pierce, 2);
-  assert(outcomes[3].speed > outcomes[0].speed * 2);
+  assert(
+    outcomes[3].speed > outcomes[0].speed,
+    'railgun remains faster than the upgraded cannon',
+  );
   assert(outcomes[4].splash >= 100);
   assert(outcomes[5].slow > 0);
 });
@@ -983,9 +986,70 @@ test('every escort segment clears buildings for a full-size convoy', () => {
     }
   }
 });
-const { FramePacer, AdaptiveResolution, renderPolicy } = await import(
-  pathToFileURL(path.join(tmp, 'performance.mjs'))
-);
+const { FramePacer, AdaptiveResolution, renderPolicy, resolutionScale } =
+  await import(pathToFileURL(path.join(tmp, 'performance.mjs')));
+test('phone resolution uses high-DPR pixels within a bounded budget in both orientations', () => {
+  assert.equal(resolutionScale(390, 778, 3), 0.5);
+  assert.equal(resolutionScale(778, 390, 3), 0.5);
+  assert.equal(resolutionScale(390, 778, 1), 1);
+  for (const [w, h] of [
+    [320, 502],
+    [360, 574],
+    [390, 778],
+    [430, 866],
+    [568, 254],
+    [844, 324],
+    [1366, 1024],
+  ]) {
+    const sharp = resolutionScale(w, h, 3, 'sharp');
+    const ultra = resolutionScale(w, h, 3, 'ultra');
+    assert((w * h) / sharp ** 2 <= 2_000_000 + 1e-6);
+    assert((w * h) / ultra ** 2 <= 3_200_000 + 1e-6);
+    assert(Math.max(w, h) / sharp <= 2400 + 1e-6);
+    assert(ultra < sharp);
+    assert.equal(resolutionScale(h, w, 3, 'sharp'), sharp);
+  }
+  const cool = { thermal: 0, powerSave: false, background: false };
+  assert.equal(renderPolicy(30, true, cool, 1).scale, 1);
+  assert(renderPolicy(30, true, cool, 1).effects < 1);
+  assert(renderPolicy(30, true, cool, 2).scale > 1);
+  assert.equal(parseSave(JSON.stringify({ kills: 12 })).resolution, 'sharp');
+  assert.equal(
+    parseSave(JSON.stringify({ resolution: 'ultra' })).resolution,
+    'ultra',
+  );
+  assert.equal(
+    parseSave(JSON.stringify({ resolution: 'invalid' })).resolution,
+    'sharp',
+  );
+});
+test('cannon rounds leave the actual muzzle faster, retain range, and fall gently without hit-triggered shots', () => {
+  const b = make();
+  b.walls = [];
+  b.enemies = [];
+  b.spawnTimer = 999;
+  b.player.x = W / 2;
+  b.player.y = H / 2;
+  b.player.turret = 0;
+  b.shoot(b.player, false);
+  const shot = b.player.lastShot,
+    round = b.bullets[0];
+  assert(shot);
+  assert.equal(shot.x, round.x);
+  assert.equal(shot.height, round.height);
+  assert.equal(Math.hypot(round.vx, round.vy), 1240);
+  assert.equal(Math.hypot(round.vx, round.vy) * round.life, 620 * 3.5);
+  const startHeight = round.height;
+  for (let i = 0; i < 30; i++) b.step(1 / 60, idle);
+  assert.equal(b.bullets[0], round);
+  assert(Math.abs(round.height - (startHeight - 0.5)) < 1e-6);
+  assert(Math.abs(round.verticalVelocity + 2) < 1e-6);
+  b.playerHit(5);
+  assert.equal(b.player.lastShot, shot, 'damage cannot create a firing event');
+  b.paused = true;
+  b.shoot(b.player, false);
+  assert.equal(b.player.lastShot, shot, 'pause cannot create a firing event');
+});
 test('30/45/60 pacing stays accurate on 60/90/120Hz displays without catch-up bursts', () => {
   for (const hz of [60, 90, 120])
     for (const fps of [30, 45, 60]) {

@@ -1,5 +1,10 @@
 import { assetUrl } from '../asset-url';
-import { FramePacer, isMobileDevice, deviceState } from '../performance';
+import {
+  FramePacer,
+  isMobileDevice,
+  deviceState,
+  resolutionScale,
+} from '../performance';
 import {
   Engine,
   Scene,
@@ -45,7 +50,15 @@ export class Hangar {
       { powerPreference: 'low-power', preserveDrawingBuffer: false },
       false,
     );
-    this.engine.setHardwareScalingLevel(this.mobile ? 1.2 : 1);
+    this.engine.setHardwareScalingLevel(
+      this.mobile
+        ? resolutionScale(
+            canvas.clientWidth,
+            canvas.clientHeight,
+            window.devicePixelRatio,
+          )
+        : 1,
+    );
     const scene = (this.scene = new Scene(this.engine));
     scene.useRightHandedSystem = true;
     scene.clearColor = new Color4(0.055, 0.069, 0.058, 1);
@@ -272,6 +285,15 @@ export class Hangar {
   }
   resize() {
     if (!this.disposed) {
+      const canvas = this.engine.getRenderingCanvas();
+      if (this.mobile && canvas)
+        this.engine.setHardwareScalingLevel(
+          resolutionScale(
+            canvas.clientWidth,
+            canvas.clientHeight,
+            window.devicePixelRatio,
+          ),
+        );
       this.engine.resize();
       this.dirty = true;
     }

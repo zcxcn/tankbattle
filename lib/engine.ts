@@ -34,6 +34,14 @@ export type Tank = Vec & {
   cooldown: number;
   kind: number;
   flash: number;
+  lastShot?: {
+    at: number;
+    x: number;
+    y: number;
+    angle: number;
+    height: number;
+    weapon: number;
+  };
   stun: number;
   turn: number;
   decision: number;
@@ -64,6 +72,7 @@ export type Wall = {
 export const muzzleDistance = (radius: number) => radius + 12;
 export const muzzleHeight = (radius: number) => radius * 1.06;
 export type Bullet = Vec & {
+  verticalVelocity?: number;
   weapon?: number;
   height?: number;
   splash?: number;
@@ -804,7 +813,7 @@ export class Battle {
     }
     const rocketTarget =
       !enemy && index === 6 ? this.rocketTarget(t, t.turret) : undefined;
-    const speed = enemy
+    const baseSpeed = enemy
       ? index === 3
         ? 760
         : index === 1
@@ -813,6 +822,16 @@ export class Battle {
             ? 270
             : 330
       : (620 + this.save.upgrades[4] * 90) * weapon.speed;
+    const velocityFactor = index === 0 ? (enemy ? 1.5 : 2) : 1;
+    const speed = baseSpeed * velocityFactor;
+    t.lastShot = {
+      at: this.elapsed,
+      x: t.x + Math.cos(t.turret) * muzzleDistance(t.radius),
+      y: t.y + Math.sin(t.turret) * muzzleDistance(t.radius),
+      angle: t.turret,
+      height: muzzleHeight(t.radius),
+      weapon: index,
+    };
     const angles: readonly number[] =
       enemy && t.kind === 3
         ? this.mission >= 12
@@ -833,7 +852,8 @@ export class Battle {
         weapon: index,
         enemy,
         height: muzzleHeight(t.radius),
-        life: index === 2 ? 0.85 : index === 6 ? 5 : 3.5,
+        life: (index === 2 ? 0.85 : index === 6 ? 5 : 3.5) / velocityFactor,
+        verticalVelocity: index === 0 ? 0 : undefined,
         splash: enemy
           ? index === 4
             ? 85
@@ -854,13 +874,14 @@ export class Battle {
       (!enemy && this.rapid > 0 ? 0.5 : 1);
     t.flash = 0.14;
     if (!enemy) this.weaponReadyAt[index] = this.elapsed + t.cooldown;
-    this.burst(
-      t.x + Math.cos(t.turret) * (t.radius + 16),
-      t.y + Math.sin(t.turret) * (t.radius + 16),
-      index === 1 ? 3 : 6,
-      60,
-      weapon.color,
-    );
+    if (index !== 0)
+      this.burst(
+        t.x + Math.cos(t.turret) * (t.radius + 16),
+        t.y + Math.sin(t.turret) * (t.radius + 16),
+        index === 1 ? 3 : 6,
+        60,
+        weapon.color,
+      );
     this.onSound?.(enemy ? 'enemyfire' : 'fire', index);
     if (!enemy) {
       this.shake = Math.max(
@@ -1420,6 +1441,14 @@ export class Battle {
     for (const b of this.bullets) {
       if (b.life <= 0) continue;
       b.life -= dt;
+      if (b.verticalVelocity !== undefined) {
+        // A shallow short-range drop; swept horizontal collision remains authoritative.
+        b.height = Math.max(
+          3,
+          (b.height ?? 18.5) + b.verticalVelocity * dt - 2 * dt * dt,
+        );
+        b.verticalVelocity -= 4 * dt;
+      }
       if (!b.enemy && b.weapon === 6) {
         const heading = Math.atan2(b.vy, b.vx);
         let target = this.enemies.find(

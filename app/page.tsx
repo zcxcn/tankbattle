@@ -1174,7 +1174,7 @@ export default function Home() {
               <div className="quality-setting">
                 <strong>画面质量</strong>
                 <p>
-                  手机建议使用省电画质。标准增加阴影；电影适合电脑。温控只调整画面，不改变战斗速度。
+                  省电减少场景细节，标准增加阴影，电影增强光影。清晰度单独设置，不随省电画质降低。
                 </p>
                 <div className="quality-options">
                   {(
@@ -1189,6 +1189,33 @@ export default function Home() {
                       className={save.quality === value ? 'selected' : ''}
                       aria-pressed={save.quality === value}
                       onClick={() => setSave((s) => ({ ...s, quality: value }))}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <small>下次进入战场时生效</small>
+              </div>
+              <div className="quality-setting">
+                <strong>手机清晰度</strong>
+                <p>
+                  默认高清。超清适合高性能手机；自适应更省电。持续掉帧或过热时会适度降低负载。
+                </p>
+                <div className="quality-options">
+                  {(
+                    [
+                      ['adaptive', '自适应'],
+                      ['sharp', '高清'],
+                      ['ultra', '超清'],
+                    ] as const
+                  ).map(([value, label]) => (
+                    <button
+                      key={value}
+                      className={save.resolution === value ? 'selected' : ''}
+                      aria-pressed={save.resolution === value}
+                      onClick={() =>
+                        setSave((s) => ({ ...s, resolution: value }))
+                      }
                     >
                       {label}
                     </button>

@@ -26,6 +26,7 @@ for (const name of [
   'three/world',
   'three/nature',
   'three/explosions',
+  'three/muzzle',
   'three/weapon-mount',
   'three/projectiles',
   'three/renderer3d',
@@ -62,6 +63,9 @@ const { Renderer3D } = await import(
 );
 const { ProjectileEffects } = await import(
   pathToFileURL(path.join(root, 'three/projectiles.js'))
+);
+const { MuzzleEffects, recoilDistance } = await import(
+  pathToFileURL(path.join(root, 'three/muzzle.js'))
 );
 const { Scene } = await import('@babylonjs/core/scene.js');
 const { worldPosition, simulationPosition } = await import(
@@ -1375,6 +1379,110 @@ await test('mine models show team markers, are reused after EMP and never mutate
   );
   view.dispose();
   assert(view.scene.isDisposed);
+});
+await test('falling cannon rounds point along their actual three-dimensional velocity', () => {
+  const f = projectileFixture();
+  for (const angle of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
+    const round = {
+      ...visualBullet(0),
+      vx: Math.cos(angle) * 1240,
+      vy: Math.sin(angle) * 1240,
+      verticalVelocity: -4,
+    };
+    f.fx.update({ elapsed: 0.2, bullets: [round] });
+    const matrix = Matrix.FromArray(f.fx.bodies[0].matrices);
+    const forward = Vector3.TransformNormal(
+      new Vector3(0, 0, 1),
+      matrix,
+    ).normalize();
+    const velocity = new Vector3(
+      round.vx,
+      round.verticalVelocity,
+      round.vy,
+    ).normalize();
+    assert(Vector3.Distance(forward, velocity) < 1e-6);
+  }
+  f.dispose();
+});
+await test('cannon muzzle smoke stays at the firing location, freezes on pause, expires, and never fires from damage', () => {
+  const e = new NullEngine();
+  const scene = new Scene(e);
+  const fx = new MuzzleEffects(scene, true);
+  const b = {
+    elapsed: 1,
+    player: { x: 1000, y: 800, flash: 0.09 },
+    enemies: [],
+  };
+  fx.update(b);
+  assert.equal(fx.stats.visible, 0);
+  b.player.lastShot = {
+    at: 1,
+    x: 1032,
+    y: 800,
+    angle: 0,
+    height: 21.2,
+    weapon: 0,
+  };
+  fx.update(b);
+  assert.equal(fx.stats.active, 1);
+  assert.equal(fx.stats.visible, 2);
+  b.elapsed = 1.15;
+  fx.update(b);
+  assert(
+    fx.pool
+      .filter((m) => m.isEnabled())
+      .every((m) => m.metadata.mode === 1 || m.metadata.mode === 5),
+  );
+  const snapshot = () =>
+    JSON.stringify(
+      fx.pool.map((m) => [
+        m.position.asArray(),
+        m.scaling.asArray(),
+        m.metadata,
+        m.isEnabled(),
+      ]),
+    );
+  const frozen = snapshot();
+  b.player.x += 500;
+  b.player.y += 500;
+  fx.update(b);
+  assert.equal(
+    snapshot(),
+    frozen,
+    'smoke cannot follow a moving tank or advance while paused',
+  );
+  assert.equal(fx.stats.active, 1, 'same shot cannot be replayed each render');
+  b.elapsed = 1.8;
+  fx.update(b);
+  assert.equal(fx.stats.visible, 0);
+  assert.equal(fx.stats.active, 0);
+  for (let volley = 0; volley < 100; volley++) {
+    b.elapsed += 0.01;
+    b.enemies = Array.from({ length: 30 }, (_, i) => ({
+      lastShot: { ...b.player.lastShot, x: 1000 + i, at: b.elapsed },
+    }));
+    fx.update(b);
+    assert(
+      fx.stats.active <= 8 && fx.stats.visible <= 24 && fx.stats.pooled <= 24,
+    );
+  }
+  assert.equal(scene.lights.length, 0);
+  fx.update(b, 0);
+  assert.equal(fx.stats.visible, 0);
+  b.elapsed = 0;
+  b.player.lastShot = undefined;
+  b.enemies = [];
+  fx.update(b);
+  assert.equal(fx.stats.active, 0);
+  assert.equal(recoilDistance(0, Infinity), 0);
+  assert.equal(recoilDistance(0, 0), 0);
+  assert(recoilDistance(0, 0.025) > 0.45);
+  assert(recoilDistance(0, 0.08) > recoilDistance(0, 0.2));
+  assert.equal(recoilDistance(0, 0.34), 0);
+  fx.dispose();
+  assert.equal(scene.meshes.length, 0);
+  scene.dispose();
+  e.dispose();
 });
 await test('renderer teardown releases all scene resources and is idempotent', () => {
   r.dispose();

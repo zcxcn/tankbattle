@@ -10,12 +10,12 @@ import { type Battle, type Explosion, seeded } from '../engine';
 import { type Materials, type Quality } from './materials';
 import { worldPosition } from './world';
 
-const vertex = `precision highp float;
+export const blastVertex = `precision highp float;
 attribute vec3 position; attribute vec2 uv;
 uniform mat4 worldViewProjection; uniform mat4 world;
 varying vec2 vUV; varying vec3 vWorld;
 void main(){vUV=uv;vWorld=(world*vec4(position,1.)).xyz;gl_Position=worldViewProjection*vec4(position,1.);}`;
-const fragment = `precision highp float;
+export const blastFragment = `precision highp float;
 varying vec2 vUV;varying vec3 vWorld;
 uniform vec4 puff;uniform float weapon;uniform vec3 fogColor;uniform vec3 eye;uniform float fogDensity;
 float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
@@ -87,7 +87,7 @@ export class ExplosionEffects {
     this.material = new ShaderMaterial(
       'turbulent-explosion-volume',
       scene,
-      { vertexSource: vertex, fragmentSource: fragment },
+      { vertexSource: blastVertex, fragmentSource: blastFragment },
       {
         attributes: ['position', 'uv'],
         uniforms: [

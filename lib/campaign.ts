@@ -503,6 +503,7 @@ export type Save = {
   shake: boolean;
   quality: 'cinematic' | 'balanced' | 'performance';
   fps: 30 | 45 | 60;
+  resolution: 'adaptive' | 'sharp' | 'ultra';
   mobileConfigured: boolean;
 };
 export const defaultSave: Save = {
@@ -524,6 +525,7 @@ export const defaultSave: Save = {
   shake: true,
   quality: 'balanced',
   fps: 60,
+  resolution: 'sharp',
   mobileConfigured: false,
 };
 export const SAVE_KEY = 'iron-embers-save-v1';
@@ -582,6 +584,9 @@ export function parseSave(raw: string | null): Save {
       musicTrack: int(d.musicTrack, 0, 2, 0),
       shake: typeof d.shake === 'boolean' ? d.shake : true,
       fps: [30, 45, 60].includes(d.fps) ? d.fps : 60,
+      resolution: ['adaptive', 'sharp', 'ultra'].includes(d.resolution)
+        ? d.resolution
+        : 'sharp',
       mobileConfigured: d.mobileConfigured === true,
       quality: ['cinematic', 'balanced', 'performance'].includes(d.quality)
         ? d.quality

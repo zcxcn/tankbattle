@@ -122,7 +122,7 @@ try {
   assert.equal(scene.textures.length, count, 'reuse albedo with no normal map');
   applySurface(roadAgain, scene, 'asphalt', { repeat: 3, mobile: true });
   assert.notEqual(roadAgain.albedoTexture, road.albedoTexture);
-  assert.equal(roadAgain.albedoTexture.anisotropicFilteringLevel, 2);
+  assert.equal(roadAgain.albedoTexture.anisotropicFilteringLevel, 8);
   assert.equal(road.albedoTexture.anisotropicFilteringLevel, 8);
   console.log(
     'PASS generated material bindings, scanned industrial surfaces and tiling cache',

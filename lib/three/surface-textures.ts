@@ -91,7 +91,7 @@ export function applySurface(
       texture.gammaSpace = gammaSpace;
       texture.uScale = texture.vScale = tiling;
       texture.wrapU = texture.wrapV = Texture.WRAP_ADDRESSMODE;
-      texture.anisotropicFilteringLevel = mobile ? 2 : 8;
+      texture.anisotropicFilteringLevel = 8;
       return texture;
     };
     textures = {

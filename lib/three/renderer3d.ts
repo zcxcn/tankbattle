@@ -1,5 +1,9 @@
 import { WEAPONS } from '../campaign';
-import { isMobileDevice } from '../performance';
+import {
+  isMobileDevice,
+  resolutionScale,
+  type Resolution,
+} from '../performance';
 import {
   Engine,
   Scene,
@@ -36,6 +40,7 @@ import { buildTank, box, type TankModel } from './tank-model';
 import { ExplosionEffects } from './explosions';
 import { createWeaponMount } from './weapon-mount';
 import { ProjectileEffects } from './projectiles';
+import { MuzzleEffects, recoilDistance } from './muzzle';
 import {
   createWorld,
   heading,
@@ -65,6 +70,7 @@ export class Renderer3D {
   private pipeline: DefaultRenderingPipeline | null = null;
   private contactShadows = new Map<number, Mesh>();
   readonly projectiles: ProjectileEffects;
+  readonly muzzles: MuzzleEffects;
   private weaponMount: ReturnType<typeof createWeaponMount> | null = null;
   private sparkPool: Mesh[] = [];
   private trackPool: Mesh[] = [];
@@ -92,6 +98,8 @@ export class Renderer3D {
   private mobile: boolean;
   private effectScale = 1;
   private resolutionScale = 1;
+  private resolutionMode: Resolution;
+  private budgetScale = 1;
   private renderOnlyRandom = 37;
   constructor(
     canvas: HTMLCanvasElement,
@@ -101,30 +109,38 @@ export class Renderer3D {
     this.canvas = canvas;
     this.mobile = options.mobile ?? isMobileDevice();
     this.quality = options.quality ?? 'balanced';
+    this.resolutionMode = b.save.resolution ?? 'sharp';
     this.engine =
       options.headlessEngine ??
       new Engine(
         canvas,
-        !this.mobile && this.quality !== 'performance',
+        this.mobile || this.quality !== 'performance',
         {
           stencil: false,
           preserveDrawingBuffer: false,
-          powerPreference: this.mobile ? 'low-power' : 'high-performance',
+          powerPreference:
+            this.mobile && this.resolutionMode === 'adaptive'
+              ? 'low-power'
+              : 'high-performance',
           adaptToDeviceRatio: false,
         },
         false,
       );
     const headless = !!options.headlessEngine;
     if (!headless) {
-      this.engine.setHardwareScalingLevel(
-        this.quality === 'cinematic'
+      this.resolutionScale = this.mobile
+        ? resolutionScale(
+            canvas.clientWidth,
+            canvas.clientHeight,
+            window.devicePixelRatio,
+            this.resolutionMode,
+          )
+        : this.quality === 'cinematic'
           ? 1 / Math.min(window.devicePixelRatio || 1, 1.6)
           : this.quality === 'performance'
-            ? this.mobile
-              ? 1.15
-              : 1.5
-            : 1,
-      );
+            ? 1.5
+            : 1;
+      this.engine.setHardwareScalingLevel(this.resolutionScale);
     }
     const scene = (this.scene = new Scene(this.engine));
     scene.useRightHandedSystem = true;
@@ -210,6 +226,7 @@ export class Renderer3D {
       this.mobile,
     );
     this.projectiles = new ProjectileEffects(scene, this.quality, this.mobile);
+    this.muzzles = new MuzzleEffects(scene, this.mobile);
     scene.imageProcessingConfiguration.toneMappingEnabled = true;
     scene.imageProcessingConfiguration.toneMappingType =
       ImageProcessingConfiguration.TONEMAPPING_ACES;
@@ -459,7 +476,9 @@ export class Renderer3D {
     return this.scene.meshes.length;
   }
   resize() {
-    if (!this.disposed) this.engine.resize();
+    if (this.disposed) return;
+    if (this.mobile) this.setBudget(this.budgetScale, this.effectScale);
+    this.engine.resize();
   }
   toggleCamera() {
     this.mode = this.mode === 'assault' ? 'tactical' : 'assault';
@@ -552,14 +571,17 @@ export class Renderer3D {
   }
   setBudget(scale: number, effects: number) {
     this.effectScale = effects;
+    this.budgetScale = scale;
     // Only resize on policy transitions; never reallocate render targets each frame.
-    const pixelCap =
-      Math.max(this.canvas.clientWidth || 1, this.canvas.clientHeight || 1) /
-      1100;
-    const next = Math.max(
-      scale,
-      this.mobile ? pixelCap : this.quality === 'performance' ? 1.5 : 1,
-    );
+    const next = this.mobile
+      ? resolutionScale(
+          this.canvas.clientWidth,
+          this.canvas.clientHeight,
+          typeof window === 'undefined' ? 1 : window.devicePixelRatio,
+          this.resolutionMode,
+          scale,
+        )
+      : this.resolutionScale;
     if (Math.abs(next - this.resolutionScale) > 0.04) {
       this.resolutionScale = next;
       this.engine.setHardwareScalingLevel(next);
@@ -720,13 +742,10 @@ export class Renderer3D {
     model.turret.rotation.y = heading(t.turret);
     model.barrel.scaling.z =
       (muzzleDistance(t.radius) * 0.1) / (4.06 * (t.radius / 20));
-    model.barrel.position.z = -Math.max(0, t.flash) * 1.1;
-    model.flash.setEnabled(t.flash > 0.055);
-    model.flash.scaling.set(
-      0.6 + t.flash * 3,
-      0.4 + t.flash * 2,
-      1.2 + t.flash * 6,
-    );
+    const shotAge = t.lastShot ? b.elapsed - t.lastShot.at : Infinity;
+    model.barrel.position.z = -recoilDistance(t.lastShot?.weapon ?? 0, shotAge);
+    // Retain the shared muzzle anchor; the firing effects use transparent volumes.
+    model.flash.setEnabled(false);
     model.shield.setEnabled(
       t.id === 0
         ? b.shield > 0.3
@@ -741,7 +760,7 @@ export class Renderer3D {
       health.fill.position.x = -(1 - t.hp / t.maxHp) * 1.8;
       health.root.setEnabled(t.spawn <= 0);
     }
-    if (t.flash > 0.08) {
+    if (shotAge >= 0 && shotAge < 0.045) {
       this.flashLight.position.copyFrom(
         worldPosition(
           t.x + Math.cos(t.turret) * muzzleDistance(t.radius),
@@ -918,6 +937,7 @@ export class Renderer3D {
     this.muzzleTimer = Math.max(0, this.muzzleTimer - dt);
     if (this.muzzleTimer === 0) this.flashLight.intensity = 0;
     this.projectiles.update(b, this.effectScale);
+    this.muzzles.update(b, this.effectScale);
     let sparks = 0;
     const limit =
       this.quality === 'performance'
@@ -1082,6 +1102,7 @@ export class Renderer3D {
     if (this.disposed) return;
     this.disposed = true;
     this.projectiles.dispose();
+    this.muzzles.dispose();
     this.scene.dispose();
     this.engine.dispose();
     this.models.clear();
