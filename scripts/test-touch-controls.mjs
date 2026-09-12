@@ -15,7 +15,30 @@ const ast = ts.createSourceFile(
 );
 const handlers = new Map();
 const mobileExpressions = new Map();
+const autoFireHandlers = new Map();
 function visit(node) {
+  if (
+    ts.isJsxOpeningElement(node) &&
+    node.tagName.getText(ast) === 'button' &&
+    node.attributes.properties.some(
+      (p) =>
+        ts.isJsxAttribute(p) &&
+        p.name.getText(ast) === 'aria-label' &&
+        p.initializer?.text === '按住自动瞄准开火',
+    )
+  ) {
+    for (const prop of node.attributes.properties)
+      if (
+        ts.isJsxAttribute(prop) &&
+        prop.initializer &&
+        ts.isJsxExpression(prop.initializer) &&
+        prop.initializer.expression
+      )
+        autoFireHandlers.set(
+          prop.name.getText(ast),
+          prop.initializer.expression.getText(ast),
+        );
+  }
   if (
     ts.isVariableDeclaration(node) &&
     node.initializer &&
@@ -107,6 +130,7 @@ const context = vm.createContext({
   sound: ref({ unlock() {} }),
   mouseFire: ref(false),
   firingPointer: ref(null),
+  pointerScreen: ref({ x: 120, y: 350 }),
   controls: ref({ aim: null }),
   keys: new Set(),
   pad: null,
@@ -239,4 +263,61 @@ assert.equal(
 );
 console.log(
   'PASS: touch dead zone, normalized speed, simultaneous thumbs, capture ownership, release/cancel, pause/resize reset, inactive input and auto fire',
+);
+const fireHandlers = {};
+for (const name of [
+  'onPointerDown',
+  'onPointerUp',
+  'onPointerCancel',
+  'onLostPointerCapture',
+]) {
+  assert(autoFireHandlers.has(name), `${name} auto-aim handler exists`);
+  fireHandlers[name] = vm.runInContext(
+    ts.transpileModule(`(${autoFireHandlers.get(name)})`, {
+      compilerOptions: { target: ts.ScriptTarget.ES2022 },
+    }).outputText,
+    context,
+  );
+}
+for (const release of [
+  'onPointerUp',
+  'onPointerCancel',
+  'onLostPointerCapture',
+]) {
+  context.clear();
+  context.stickStart(event(81, move, 85));
+  fireHandlers.onPointerDown(event(82, aim));
+  assert.equal(context.mouseFire.current, true);
+  assert.equal(
+    context.pointerScreen.current,
+    null,
+    'auto aim clears stale mouse coordinates',
+  );
+  assert.equal(context.controls.current.aim, null);
+  fireHandlers.onPointerDown(event(83, aim));
+  assert.equal(
+    context.firingPointer.current,
+    82,
+    'a second pointer cannot steal auto fire',
+  );
+  fireHandlers[release](event(83, aim));
+  assert.equal(context.mouseFire.current, true);
+  fireHandlers[release](event(82, aim));
+  assert.equal(context.mouseFire.current, false);
+  assert.equal(
+    context.touch.current.x,
+    1,
+    'releasing auto fire preserves movement',
+  );
+}
+for (const state of ['paused', 'loading', 'loadError']) {
+  context.clear();
+  context[state] = state === 'loadError' ? 'failed' : true;
+  fireHandlers.onPointerDown(event(91, aim));
+  assert.equal(context.mouseFire.current, false);
+  assert.equal(context.firingPointer.current, null);
+  context[state] = state === 'loadError' ? '' : false;
+}
+console.log(
+  'PASS: actual auto-aim button respects pointer ownership, preserves movement, and releases on up/cancel/lost capture',
 );

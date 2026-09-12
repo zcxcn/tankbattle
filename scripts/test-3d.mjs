@@ -218,13 +218,32 @@ await test('aim stays accurate across performance and high-DPR render scaling', 
     r.scene.getTransformMatrix(),
     viewport,
   );
-  for (const scale of [0.625, 1, 1.5]) {
-    engine.setHardwareScalingLevel(scale);
-    const aim = r.pointer(projected.x, projected.y);
-    assert(aim);
-    assert(Math.abs(aim.x - expected.x) < 0.03, `x aim at scale ${scale}`);
-    assert(Math.abs(aim.y - expected.y) < 0.03, `y aim at scale ${scale}`);
+  const bounds = canvas.getBoundingClientRect;
+  for (const rect of [
+    bounds(),
+    { left: 0, top: 66, width: 390, height: 778 },
+    { left: 0, top: 66, width: 844, height: 324 },
+    { left: 12, top: 66, width: 320, height: 502 },
+  ]) {
+    canvas.getBoundingClientRect = () => rect;
+    for (const scale of [1 / 3, 0.5, 0.625, 1, 1.5]) {
+      engine.setHardwareScalingLevel(scale);
+      const aim = r.pointer(
+        rect.left + (projected.x / 1280) * rect.width,
+        rect.top + (projected.y / 800) * rect.height,
+      );
+      assert(aim);
+      assert(
+        Math.abs(aim.x - expected.x) < 0.03,
+        `x aim at scale ${scale}, width ${rect.width}`,
+      );
+      assert(
+        Math.abs(aim.y - expected.y) < 0.03,
+        `y aim at scale ${scale}, height ${rect.height}`,
+      );
+    }
   }
+  canvas.getBoundingClientRect = bounds;
   engine.setHardwareScalingLevel(1);
 });
 await test('clicking own armor does not snap the cannon toward the player center', () => {
