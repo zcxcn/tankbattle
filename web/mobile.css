@@ -1,0 +1,680 @@
+/* Phone web layout. Loaded after the shared UI; the frozen Android app has its own styles. */
+.weapon-rack-toggle {
+  display: none;
+}
+@media (max-width: 760px) {
+  .topbar {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    height: auto;
+    gap: 0 8px;
+    padding: env(safe-area-inset-top) max(12px, env(safe-area-inset-right)) 0
+      max(12px, env(safe-area-inset-left));
+  }
+  .brand {
+    min-height: 56px;
+    font-size: 18px;
+  }
+  .topbar > [data-slot='tabs'] {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+  }
+  .main-tabs {
+    width: 100%;
+    height: 48px;
+    gap: 0 !important;
+  }
+  .main-tabs [data-slot='tabs-trigger'] {
+    flex: 1;
+    min-height: 48px;
+    height: 48px;
+    font-size: 14px;
+    padding: 0 8px;
+  }
+  .top-tools {
+    display: flex;
+    gap: 2px;
+  }
+  .topbar .top-tools > button {
+    display: inline-flex;
+    min-width: 44px;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+  }
+  .top-tools .online,
+  .top-tools .profile,
+  .top-tools .gamepad-connect {
+    display: none;
+  }
+  .command-body {
+    padding: 20px 12px max(20px, env(safe-area-inset-bottom));
+  }
+  .page-heading {
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .page-heading h1 {
+    font-size: 23px;
+  }
+  .page-heading h1 > span {
+    display: none;
+  }
+  .career-progress {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    padding: 10px;
+    margin-bottom: 12px;
+    gap: 8px;
+  }
+  .career-meter {
+    grid-column: 1 / -1;
+    min-width: 0;
+  }
+  .career-meter > div {
+    font-size: 12px;
+    margin-bottom: 5px;
+  }
+  .career-title > strong > span {
+    display: none;
+  }
+  .career-title {
+    min-width: 0;
+  }
+  .career-title > strong {
+    font-size: 14px;
+  }
+  .career-progress > button {
+    min-height: 44px;
+    font-size: 12px;
+    padding: 8px;
+  }
+  .mission-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .briefing {
+    order: -1;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+  }
+  .briefing > .deploy-button {
+    order: 1;
+  }
+  .briefing > .briefing-copy,
+  .briefing > .mission-meta,
+  .briefing > .briefing-loadout,
+  .briefing > .training-button,
+  .briefing > .save-note {
+    order: 2;
+  }
+  .briefing-top {
+    margin-bottom: 6px;
+  }
+  .mission-number {
+    font-size: 28px;
+    margin: 8px 0;
+  }
+  .briefing h2 {
+    font-size: 26px;
+    margin: 8px 0;
+  }
+  .briefing-copy {
+    margin: 14px 0;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  .briefing-copy > span {
+    display: none;
+  }
+  .objective {
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+  .mission-meta {
+    padding: 10px 0;
+  }
+  .briefing-loadout {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .briefing-loadout button {
+    min-height: 44px;
+    flex-shrink: 0;
+    font-size: 12px;
+  }
+  .difficulty {
+    margin-top: 4px;
+  }
+  .difficulty button {
+    min-width: 54px;
+    min-height: 44px;
+    font-size: 14px;
+  }
+  .deploy-button {
+    min-height: 52px;
+  }
+  .training-button,
+  .text-button,
+  .app-footer button {
+    min-height: 44px;
+  }
+  .keyart {
+    min-height: 220px;
+    height: 220px;
+  }
+  .keyart > img {
+    object-position: center 60%;
+  }
+  .hero-title {
+    top: 42px;
+    left: 20px;
+  }
+  .hero-title h2 {
+    font-size: 38px;
+  }
+  .hero-title h2 > span {
+    font-size: 13px;
+  }
+  .hero-title > p,
+  .chapter-kicker,
+  .art-badge {
+    display: none;
+  }
+  .art-topline {
+    left: 20px;
+    right: 20px;
+    top: 14px;
+  }
+  .art-bottom {
+    left: 20px;
+    right: 20px;
+    bottom: 14px;
+  }
+  .chapter-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .game-dialog {
+    width: calc(100% - 24px) !important;
+    max-height: calc(
+      100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 24px
+    );
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 24px 16px !important;
+  }
+  .game-dialog input,
+  .game-dialog select {
+    font-size: 16px;
+  }
+  .game-dialog button {
+    min-height: 44px;
+  }
+}
+
+/* The same geometry also supports touch laptops and narrow browser windows. */
+@media (any-pointer: coarse), (max-width: 760px), (max-height: 540px) {
+  .battle-screen {
+    height: 100dvh;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right)
+      env(safe-area-inset-bottom) env(safe-area-inset-left);
+    touch-action: pan-x;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+  .battle-screen button {
+    touch-action: none;
+  }
+  .battle-footer {
+    display: none;
+  }
+  .battle-hud {
+    height: 56px;
+    min-height: 56px;
+    gap: 8px;
+    padding: 0 10px;
+  }
+  .hud-player {
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .hud-player strong {
+    font-size: 12px;
+  }
+  .hud-level-badge {
+    min-width: 30px;
+    height: 36px;
+    font-size: 18px;
+  }
+  .health-row {
+    gap: 5px;
+  }
+  .health-row meter {
+    width: 84px;
+  }
+  .health-row span {
+    font-size: 11px;
+  }
+  .hud-right {
+    gap: 0;
+    margin-left: auto;
+  }
+  .hud-right button {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    padding: 8px;
+  }
+  .hud-score,
+  .hud-right button[aria-label='切换战斗配乐'],
+  .hud-right button[aria-label='全屏游戏'] {
+    display: none;
+  }
+  .hud-mission {
+    min-width: 0;
+    max-width: none;
+  }
+  .hud-mission > span {
+    display: none;
+  }
+  .hud-mission strong {
+    font-size: 12px;
+    line-height: 1.4;
+  }
+  .hud-growth {
+    display: none;
+  }
+  .camera-label {
+    left: 8px;
+    top: 8px;
+    font-size: 12px;
+  }
+  .camera-label > span,
+  .camera-label > i {
+    display: none;
+  }
+  .performance-status {
+    display: block;
+    font-size: 11px;
+    margin: 2px 0 0;
+  }
+  .tactical-radar {
+    width: 86px;
+    top: 8px;
+    right: 8px;
+    bottom: auto;
+    padding: 4px;
+  }
+  .tactical-radar > div {
+    display: none;
+  }
+  .objective-wayfinder {
+    top: 47px;
+    left: 8px;
+    right: auto;
+    bottom: auto;
+    transform: none;
+    font-size: 12px;
+    padding: 5px 8px;
+  }
+  .boss-hud {
+    top: 64px;
+    width: calc(100% - 16px);
+    max-width: 360px;
+    padding: 7px 10px;
+  }
+  .boss-hud > span {
+    display: block;
+    font-size: 12px;
+    margin-bottom: 5px;
+  }
+  .boss-hud small {
+    display: inline;
+    font-size: 12px;
+  }
+  .boss-hud meter {
+    display: block;
+  }
+  .command-radio {
+    top: 110px;
+    left: 8px;
+    max-width: calc(100% - 16px);
+    padding: 4px 10px;
+  }
+  .command-radio small,
+  .command-radio > i {
+    display: none;
+  }
+  .command-radio span {
+    font-size: 12px;
+  }
+  .battle-screen .battle-notice,
+  .battle-screen .boss-hud + .battle-notice {
+    top: 156px;
+    max-width: calc(100% - 24px);
+    font-size: 12px;
+    padding: 6px 10px;
+    pointer-events: none;
+  }
+  .rankup-notice {
+    top: 28%;
+    max-width: calc(100% - 24px);
+    pointer-events: none;
+  }
+  .buffs {
+    bottom: 286px;
+    left: 8px;
+    font-size: 12px;
+  }
+  .touch-stick {
+    display: block;
+    position: absolute;
+    left: 14px;
+    bottom: 104px;
+    width: 104px;
+    height: 104px;
+    border-radius: 50%;
+    border: 1px solid #b6c29d80;
+    background: #1c2a1bb3;
+    touch-action: none;
+    z-index: 12;
+  }
+  .touch-stick span {
+    position: absolute;
+    width: 42px;
+    height: 42px;
+    left: calc(50% - 21px);
+    top: calc(50% - 21px);
+    border-radius: 50%;
+    border: 1px solid #c9d7b1aa;
+    background: #78955b80;
+    transform: translate(var(--sx, 0px), var(--sy, 0px));
+    pointer-events: none;
+  }
+  .touch-stick i {
+    position: absolute;
+    bottom: 6px;
+    width: 100%;
+    text-align: center;
+    color: #d2dfba;
+    font-size: 12px;
+    font-style: normal;
+    pointer-events: none;
+  }
+  .touch-aim {
+    left: auto;
+    right: 14px;
+    border-color: #edbc73aa;
+    background: #4b3d28b8;
+  }
+  .touch-aim span {
+    border-color: #ffcf86;
+    background: #ba8c3e88;
+  }
+  .touch-fire {
+    display: flex;
+    position: absolute;
+    right: calc(50% - 34px);
+    bottom: 124px;
+    width: 68px;
+    height: 68px;
+    border-radius: 50%;
+    border: 1px solid #e3bc86aa;
+    background: #755232dc;
+    color: #ffdab0;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+    touch-action: none;
+    z-index: 12;
+  }
+  .battle-abilities {
+    bottom: 222px;
+    left: 8px;
+    right: 8px;
+    width: auto;
+    transform: none;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .battle-abilities button {
+    min-width: 0;
+    min-height: 56px;
+    padding: 6px 2px;
+    gap: 3px;
+    flex-direction: column;
+    position: relative;
+  }
+  .battle-abilities button > svg {
+    width: 18px;
+    height: 18px;
+  }
+  .battle-abilities button > span {
+    display: block;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .battle-abilities kbd {
+    margin: 0;
+    font-size: 12px;
+  }
+  .battle-abilities kbd[data-ready='true'] {
+    display: none;
+  }
+  .battle-abilities kbd[data-ready='false'] {
+    position: absolute;
+    top: 6px;
+    left: 0;
+    right: 0;
+    text-align: center;
+  }
+  .battle-abilities button:has(kbd[data-ready='false']) > svg {
+    visibility: hidden;
+  }
+  .mine-control b {
+    position: absolute;
+    top: 5px;
+    right: 4px;
+    min-width: 16px;
+    font-size: 12px;
+  }
+  .weapon-rack {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: auto;
+    max-width: none;
+    transform: none;
+    padding: 6px 8px;
+    border-radius: 0;
+  }
+  .weapon-rack-status {
+    display: inline-flex;
+    gap: 0;
+    padding: 0;
+  }
+  .weapon-rack-status strong {
+    font-size: 12px;
+  }
+  .weapon-rack-status small {
+    display: none;
+  }
+  .weapon-ammo-status {
+    float: right;
+    gap: 8px;
+    font-size: 12px;
+    padding: 0;
+  }
+  .weapon-rack-slots {
+    display: flex;
+    gap: 5px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    touch-action: pan-x;
+    scrollbar-width: none;
+    margin-top: 5px;
+    padding: 2px;
+    clear: both;
+  }
+  .weapon-rack-slots::-webkit-scrollbar {
+    display: none;
+  }
+  .weapon-rack-slots button {
+    flex: 1 0 56px;
+    min-width: 56px;
+    min-height: 54px;
+    padding: 4px 2px;
+    gap: 3px;
+    touch-action: pan-x;
+  }
+  .weapon-rack-slots button > svg,
+  .weapon-rack-slots button > kbd {
+    display: none;
+  }
+  .weapon-rack-slots button > span {
+    font-size: 12px;
+  }
+  .weapon-rack-slots button > em {
+    position: static;
+    font-size: 12px;
+  }
+  .weapon-rack-slots .cycle-weapon {
+    display: none;
+  }
+}
+
+@media (max-width: 600px) and (orientation: portrait) {
+  .canvas-wrap canvas {
+    height: calc(100% - 100px);
+    align-self: flex-start;
+  }
+  .battle-hud {
+    height: 82px;
+    min-height: 82px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: 52px 30px;
+    gap: 0 4px;
+  }
+  .hud-mission {
+    grid-row: 2;
+    grid-column: 1 / -1;
+    width: 100%;
+    align-self: start;
+  }
+  .hud-mission strong {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .hud-right {
+    grid-column: 2;
+    grid-row: 1;
+  }
+}
+
+@media (orientation: landscape) and (any-pointer: coarse),
+  (orientation: landscape) and (max-height: 540px) {
+  .touch-stick {
+    bottom: 14px;
+    left: 12px;
+    width: 100px;
+    height: 100px;
+  }
+  .touch-aim {
+    left: auto;
+    right: 12px;
+  }
+  .weapon-rack {
+    bottom: 8px;
+    left: 124px;
+    right: 124px;
+    width: auto;
+    min-height: 54px;
+    padding-right: 58px;
+  }
+  .weapon-rack-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: absolute;
+    right: 5px;
+    top: 4px;
+    min-height: 44px;
+    width: 46px;
+    border: 1px solid #8e9b72;
+    color: #e4edcf;
+    background: #293421;
+    font-size: 12px;
+  }
+  .weapon-rack[data-expanded='false'] .weapon-rack-slots {
+    display: none;
+  }
+  .weapon-rack-slots {
+    margin-right: -50px;
+  }
+  .weapon-rack-status {
+    display: block;
+  }
+  .weapon-ammo-status {
+    float: none;
+    justify-content: flex-start;
+  }
+  .battle-abilities {
+    bottom: 130px;
+    left: 12px;
+    right: auto;
+    width: 244px;
+    gap: 5px;
+  }
+  .battle-abilities button {
+    min-height: 52px;
+  }
+  .battle-abilities button > span {
+    font-size: 11px;
+  }
+  .touch-fire {
+    right: 124px;
+    bottom: 104px;
+    width: 64px;
+    height: 64px;
+  }
+  .boss-hud {
+    top: 8px;
+    max-width: min(340px, calc(100% - 310px));
+  }
+  .command-radio {
+    top: 67px;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: calc(100% - 250px);
+    text-align: center;
+  }
+  .battle-screen .battle-notice,
+  .battle-screen .boss-hud + .battle-notice {
+    top: auto;
+    bottom: 64px;
+    max-width: calc(100% - 250px);
+  }
+  .buffs {
+    bottom: 128px;
+    left: 8px;
+  }
+  .game-dialog {
+    max-height: calc(
+      100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 20px
+    );
+    overflow-y: auto;
+  }
+}

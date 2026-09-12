@@ -114,6 +114,7 @@ export default function BattleGame({
   const musicCallback = useRef(onMusicScene);
   musicCallback.current = onMusicScene;
   const [gamepad, setGamepad] = useState(false);
+  const [weaponRackOpen, setWeaponRackOpen] = useState(false);
   const [radioCue, setRadioCue] = useState<RadioCue | null>(null);
   const radioCallback = useRef(onRadioActive);
   radioCallback.current = onRadioActive;
@@ -402,6 +403,9 @@ export default function BattleGame({
     window.addEventListener('keyup', keyup);
     window.addEventListener('blur', blur);
     window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+    // A rotated/resized viewport invalidates the thumb positions and capture.
+    window.addEventListener('resize', clear);
     document.addEventListener('visibilitychange', hidden);
     canvas.current?.addEventListener('wheel', wheel, { passive: false });
     const contextLost = (event: Event) => {
@@ -716,6 +720,8 @@ export default function BattleGame({
       window.removeEventListener('tank-native-state', nativeState);
       window.removeEventListener('tank-native-back', nativeBack);
       window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+      window.removeEventListener('resize', clear);
       document.removeEventListener('visibilitychange', hidden);
       surface?.removeEventListener('wheel', wheel);
       surface?.removeEventListener('webglcontextlost', contextLost);
@@ -744,16 +750,29 @@ export default function BattleGame({
     const r = e.currentTarget.getBoundingClientRect();
     const dx = (e.clientX - r.left - r.width / 2) / (r.width * 0.35);
     const dy = (e.clientY - r.top - r.height / 2) / (r.height * 0.35);
-    const len = Math.max(1, Math.hypot(dx, dy));
+    const magnitude = Math.hypot(dx, dy);
+    const len = Math.max(1, magnitude);
     if (aiming) {
-      const magnitude = Math.hypot(dx, dy);
       if (magnitude > 0.18) {
         touchAim.current = { x: dx / magnitude, y: dy / magnitude, fire: true };
         aimSource.current = 'touch';
       } else touchAim.current.fire = false;
-    } else touch.current = { x: dx / len, y: dy / len };
-    e.currentTarget.style.setProperty('--sx', `${(dx / len) * 25}px`);
-    e.currentTarget.style.setProperty('--sy', `${(dy / len) * 25}px`);
+    } else {
+      // Ignore resting-thumb jitter, then smoothly recover the full speed range.
+      const speed = Math.min(1, Math.max(0, (magnitude - 0.12) / 0.88));
+      touch.current =
+        magnitude > 0
+          ? { x: (dx / magnitude) * speed, y: (dy / magnitude) * speed }
+          : { x: 0, y: 0 };
+    }
+    e.currentTarget.style.setProperty(
+      '--sx',
+      `${(dx / len) * r.width * 0.24}px`,
+    );
+    e.currentTarget.style.setProperty(
+      '--sy',
+      `${(dy / len) * r.height * 0.24}px`,
+    );
   };
   const stickStart = (
     e: React.PointerEvent<HTMLDivElement>,
@@ -1152,12 +1171,14 @@ export default function BattleGame({
         <div className="battle-abilities">
           <button
             onClick={() => (controls.current.dash = true)}
-            disabled={hud.dash > 0}
+            disabled={
+              paused || loading || !!loadError || hud.hp <= 0 || hud.dash > 0
+            }
             title="空格：冲刺"
           >
             <Wind />
             <span>战术冲刺</span>
-            <kbd>
+            <kbd data-ready={hud.dash <= 0}>
               {hud.dash > 0
                 ? hud.dash.toFixed(1) + 's'
                 : gamepad
@@ -1167,12 +1188,14 @@ export default function BattleGame({
           </button>
           <button
             onClick={() => (controls.current.emp = true)}
-            disabled={hud.emp > 0}
+            disabled={
+              paused || loading || !!loadError || hud.hp <= 0 || hud.emp > 0
+            }
             title="E：电磁脉冲，排除 300 范围内所有地雷"
           >
             <Zap />
             <span>脉冲排雷</span>
-            <kbd>
+            <kbd data-ready={hud.emp <= 0}>
               {hud.emp > 0 ? hud.emp.toFixed(1) + 's' : gamepad ? 'RB' : 'E'}
             </kbd>
           </button>
@@ -1180,12 +1203,14 @@ export default function BattleGame({
             onClick={() => {
               controls.current.support = true;
             }}
-            disabled={hud.support > 0}
+            disabled={
+              paused || loading || !!loadError || hud.hp <= 0 || hud.support > 0
+            }
             title="Q：支援装备"
           >
             <Shield />
             <span>{SUPPORTS[save.support].name}</span>
-            <kbd>
+            <kbd data-ready={hud.support <= 0}>
               {hud.support > 0
                 ? hud.support.toFixed(1) + 's'
                 : gamepad
@@ -1199,13 +1224,20 @@ export default function BattleGame({
             onClick={() => {
               controls.current.mine = true;
             }}
-            disabled={hud.mineCd > 0 || hud.mineAmmo <= 0}
+            disabled={
+              paused ||
+              loading ||
+              !!loadError ||
+              hud.hp <= 0 ||
+              hud.mineCd > 0 ||
+              hud.mineAmmo <= 0
+            }
             title="M / 右摇杆按下：车尾布雷。每击毁 3 辆补充 1 枚，上限 8 枚。"
           >
             <CircleDot size={20} />
             <span>布设地雷</span>
             <b>{hud.mineAmmo}</b>
-            <kbd>
+            <kbd data-ready={hud.mineCd <= 0}>
               {hud.mineCd > 0
                 ? hud.mineCd.toFixed(1) + 's'
                 : gamepad
@@ -1242,7 +1274,21 @@ export default function BattleGame({
           <span />
           <i>瞄准 · 开火</i>
         </div>
-        <section className="weapon-rack" aria-label="战斗武器切换">
+        <section
+          className="weapon-rack"
+          aria-label="战斗武器切换"
+          data-expanded={weaponRackOpen}
+        >
+          <button
+            type="button"
+            className="weapon-rack-toggle"
+            aria-label={weaponRackOpen ? '收起武器栏' : '展开武器栏'}
+            aria-expanded={weaponRackOpen}
+            aria-controls="battle-weapon-slots"
+            onClick={() => setWeaponRackOpen((open) => !open)}
+          >
+            {weaponRackOpen ? '收起' : '换武器'}
+          </button>
           <div className="weapon-rack-status">
             <strong>{WEAPONS[hud.weapon].name}</strong>
             <small>{WEAPONS[hud.weapon].features}</small>
@@ -1255,7 +1301,7 @@ export default function BattleGame({
               {hud.reload > 0.05 ? `装填 ${hud.reload.toFixed(1)}s` : '就绪'}
             </span>
           </div>
-          <div className="weapon-rack-slots">
+          <div className="weapon-rack-slots" id="battle-weapon-slots">
             {WEAPONS.map((weapon, index) => {
               const Icon = WEAPON_ICONS[index];
               return (
@@ -1267,9 +1313,12 @@ export default function BattleGame({
                   title={`${index + 1} · ${weapon.name}：${weapon.desc} ${index > 0 ? `备弹 ${hud.ammo[index]}，击毁敌车后拾取补充` : '弹药无限'}`}
                   data-empty={hud.ammo[index] === 0}
                   disabled={paused || loading || !!loadError || hud.hp <= 0}
-                  onPointerDown={(event) => event.preventDefault()}
+                  onPointerDown={(event) => {
+                    if (event.pointerType === 'mouse') event.preventDefault();
+                  }}
                   onClick={() => {
                     controls.current.weapon = index;
+                    setWeaponRackOpen(false);
                     sound.current?.unlock();
                   }}
                 >
