@@ -1,0 +1,4 @@
+interface:
+  display_name: "游戏开发知识库"
+  short_description: "按需查阅游戏开发经验，覆盖模型、战斗、地图、性能、自检与原生发布"
+  default_prompt: "使用 $game-development-knowledge，结合当前项目定位相关经验，完成游戏开发并验证实际效果。"
