@@ -10,6 +10,7 @@ import {
   Wind,
   Shield,
   Radio,
+  Radar,
   Volume2,
   Music2,
   VolumeX,
@@ -115,6 +116,7 @@ export default function BattleGame({
   musicCallback.current = onMusicScene;
   const [gamepad, setGamepad] = useState(false);
   const [weaponRackOpen, setWeaponRackOpen] = useState(false);
+  const [radarOpen, setRadarOpen] = useState(false);
   const [radioCue, setRadioCue] = useState<RadioCue | null>(null);
   const radioCallback = useRef(onRadioActive);
   radioCallback.current = onRadioActive;
@@ -795,10 +797,27 @@ export default function BattleGame({
     e.currentTarget.style.setProperty('--sx', '0px');
     e.currentTarget.style.setProperty('--sy', '0px');
   };
+  // Phones use one reserved status line; urgent warnings take precedence.
+  const mobileStatus = hud.bossWarning
+    ? '齐射预警 · 立即侧移 / BARRAGE — MOVE!'
+    : hud.hp > 0 && hud.hp < hud.max * 0.3
+      ? '装甲危急 · 寻找掩体 / ARMOR CRITICAL'
+      : hud.levelUp > 0
+        ? `LV.${hud.career.level} · ${hud.career.title} · 装甲进化`
+        : radioCue?.text || hud.notice || hud.objective;
+  const bossNearby =
+    hud.bossWarning ||
+    hud.radarEnemies.some(
+      (enemy) =>
+        enemy.boss &&
+        Math.hypot(enemy.x - hud.radarPlayer.x, enemy.y - hud.radarPlayer.y) <
+          900,
+    );
   return (
     <section
       className={'battle-screen ' + (hud.hp < hud.max * 0.3 ? 'critical' : '')}
       aria-label="坦克战场"
+      data-radar-open={radarOpen}
     >
       <header className="battle-hud">
         <div className="hud-player">
@@ -833,6 +852,18 @@ export default function BattleGame({
           <strong>{hud.objective}</strong>
         </div>
         <div className="hud-right">
+          <button
+            className="mobile-radar-toggle"
+            aria-label={radarOpen ? '收起战术雷达' : '展开战术雷达'}
+            aria-expanded={radarOpen}
+            aria-controls="battle-tactical-radar"
+            onClick={() => {
+              setRadarOpen((open) => !open);
+              setWeaponRackOpen(false);
+            }}
+          >
+            <Radar size={19} />
+          </button>
           <div className="hud-score">
             <strong>{String(hud.score).padStart(5, '0')}</strong>
             <span>{clock(hud.time)}</span>
@@ -876,6 +907,14 @@ export default function BattleGame({
           </button>
         </div>
       </header>
+      <div
+        className="mobile-battle-status"
+        role="status"
+        data-alert={hud.bossWarning || hud.hp < hud.max * 0.3}
+        title={mobileStatus}
+      >
+        {mobileStatus}
+      </div>
       <div className="canvas-wrap">
         <div className="hud-growth">
           <span>
@@ -989,6 +1028,7 @@ export default function BattleGame({
         {hud.bossMax > 0 && (
           <div
             className={'boss-hud' + (hud.bossWarning ? ' boss-warning' : '')}
+            data-nearby={bossNearby}
           >
             <span>
               {bossName(mission)}{' '}
@@ -1023,6 +1063,7 @@ export default function BattleGame({
         )}
         <div
           className="tactical-radar"
+          id="battle-tactical-radar"
           aria-label="战术雷达：蓝色为我方，橙色为敌军，彩色方块为弹药"
         >
           <div>
@@ -1175,6 +1216,8 @@ export default function BattleGame({
               paused || loading || !!loadError || hud.hp <= 0 || hud.dash > 0
             }
             title="空格：冲刺"
+            aria-label="战术冲刺"
+            data-touch-label="冲刺"
           >
             <Wind />
             <span>战术冲刺</span>
@@ -1192,6 +1235,8 @@ export default function BattleGame({
               paused || loading || !!loadError || hud.hp <= 0 || hud.emp > 0
             }
             title="E：电磁脉冲，排除 300 范围内所有地雷"
+            aria-label="脉冲排雷"
+            data-touch-label="排雷"
           >
             <Zap />
             <span>脉冲排雷</span>
@@ -1207,6 +1252,8 @@ export default function BattleGame({
               paused || loading || !!loadError || hud.hp <= 0 || hud.support > 0
             }
             title="Q：支援装备"
+            aria-label={SUPPORTS[save.support].name}
+            data-touch-label="支援"
           >
             <Shield />
             <span>{SUPPORTS[save.support].name}</span>
@@ -1220,6 +1267,7 @@ export default function BattleGame({
           </button>
           <button
             className="mine-control"
+            data-touch-label="布雷"
             aria-label={`布设地雷，剩余 ${hud.mineAmmo} 枚`}
             onClick={() => {
               controls.current.mine = true;
@@ -1285,9 +1333,19 @@ export default function BattleGame({
             aria-label={weaponRackOpen ? '收起武器栏' : '展开武器栏'}
             aria-expanded={weaponRackOpen}
             aria-controls="battle-weapon-slots"
-            onClick={() => setWeaponRackOpen((open) => !open)}
+            onClick={() => {
+              setWeaponRackOpen((open) => !open);
+              setRadarOpen(false);
+            }}
           >
-            {weaponRackOpen ? '收起' : '换武器'}
+            <span>
+              {weaponRackOpen
+                ? '收起武器'
+                : `${WEAPON_LABELS[hud.weapon]} ${hud.weapon === 0 ? '∞' : hud.ammo[hud.weapon]}`}
+            </span>
+            <small>
+              {hud.reload > 0.05 ? `装填 ${hud.reload.toFixed(1)}s` : '换武器'}
+            </small>
           </button>
           <div className="weapon-rack-status">
             <strong>{WEAPONS[hud.weapon].name}</strong>
@@ -1407,6 +1465,22 @@ export default function BattleGame({
           <DialogDescription>
             喘口气，指挥官。所有人都在等你的命令。
           </DialogDescription>
+          <div className="mobile-pause-details">
+            <strong>{hud.objective}</strong>
+            <p>{mobileStatus}</p>
+            <span>
+              LV.{hud.career.level} · {hud.career.title} · {performanceLabel}
+            </span>
+            <div className="mobile-pause-tools">
+              <button className="outline-button" onClick={fullscreen}>
+                <Maximize size={18} />
+                全屏
+              </button>
+              <button className="outline-button" onClick={toggleMute}>
+                {save.sound || save.music ? '静音' : '开启声音'}
+              </button>
+            </div>
+          </div>
           <MusicControls settings={save} onChange={onAudioChange} />
           <button className="deploy-button" onClick={() => pause(false)}>
             <Play size={18} />

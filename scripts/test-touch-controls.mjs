@@ -14,7 +14,17 @@ const ast = ts.createSourceFile(
   ts.ScriptKind.TSX,
 );
 const handlers = new Map();
+const mobileExpressions = new Map();
 function visit(node) {
+  if (
+    ts.isVariableDeclaration(node) &&
+    node.initializer &&
+    ['mobileStatus', 'bossNearby'].includes(node.name.getText(ast))
+  )
+    mobileExpressions.set(
+      node.name.getText(ast),
+      node.initializer.getText(ast),
+    );
   if (
     ts.isVariableDeclaration(node) &&
     node.initializer &&
@@ -24,6 +34,53 @@ function visit(node) {
   ts.forEachChild(node, visit);
 }
 visit(ast);
+const statusHud = {
+  hp: 100,
+  max: 100,
+  bossWarning: false,
+  levelUp: 0,
+  career: { level: 3, title: '装甲列兵' },
+  notice: '',
+  objective: '清除敌军 0/6',
+  radarPlayer: { x: 0, y: 0 },
+  radarEnemies: [{ x: 0, y: 1900, boss: true }],
+};
+const mobileContext = vm.createContext({ hud: statusHud, radioCue: null });
+const mobileValue = (name) =>
+  vm.runInContext(`(${mobileExpressions.get(name)})`, mobileContext);
+assert.equal(mobileValue('mobileStatus'), statusHud.objective);
+assert.equal(
+  mobileValue('bossNearby'),
+  false,
+  'distant Boss must not occupy the phone HUD',
+);
+statusHud.radarEnemies[0].y = 850;
+assert.equal(
+  mobileValue('bossNearby'),
+  true,
+  'Boss health appears within engagement range',
+);
+statusHud.notice = '地雷已布设';
+assert.equal(mobileValue('mobileStatus'), statusHud.notice);
+mobileContext.radioCue = { text: 'Enemy approaching.' };
+assert.equal(mobileValue('mobileStatus'), 'Enemy approaching.');
+statusHud.levelUp = 2;
+assert.match(mobileValue('mobileStatus'), /LV.3/);
+statusHud.hp = 10;
+assert.match(mobileValue('mobileStatus'), /ARMOR CRITICAL/);
+statusHud.bossWarning = true;
+statusHud.radarEnemies[0].y = 1900;
+assert.equal(
+  mobileValue('bossNearby'),
+  true,
+  'attack warnings remain visible even from a distant Boss',
+);
+assert.match(
+  mobileValue('mobileStatus'),
+  /BARRAGE/,
+  'attack warning overrides every routine notice',
+);
+console.log('PASS: single mobile status priority and proximity-based Boss HUD');
 const ref = (current) => ({ current });
 function target(left = 0) {
   const properties = new Map();
