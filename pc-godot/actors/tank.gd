@@ -184,9 +184,9 @@ func _apply_role_stats() -> void:
 		fire_interval = 5.4
 		aim_acquire_time = 1.5
 		projectile_speed = 220.0
-		sight_range = 68.0
+		sight_range = 220.0
 		sight_angle = 130.0
-		_ideal_distance = 32.0
+		_ideal_distance = 95.0
 		active = false
 		counts_for_objective = false
 		return
@@ -560,7 +560,12 @@ func _ai_control(delta: float) -> void:
 			_patrol_control(delta)
 		return
 	var desired := Vector3.ZERO
-	if distance > _ideal_distance + 7.0:
+	# Take a visible long-range firing opportunity before repositioning.
+	# Previously navigation kept the hull moving until point-blank ideal range,
+	# so the settled-hull firing gate rejected otherwise valid distant targets.
+	if reload <= aim_acquire_time:
+		ai_state = "aim"
+	elif distance > _ideal_distance + 7.0:
 		ai_state = "navigate"
 		desired = _navigation_offset(target.global_position).normalized()
 	elif distance < _ideal_distance - 12.0:
@@ -687,7 +692,7 @@ func _update_boss_attack(delta: float, target: TankActor, distance: float) -> vo
 			_salvo_clock = boss_salvo_interval()
 			_salvo_recovery = 3.2
 			reload = maxf(reload, 3.2)
-	elif _salvo_clock <= 0.0 and _salvo_recovery <= 0.0 and distance < 62.0:
+	elif _salvo_clock <= 0.0 and _salvo_recovery <= 0.0 and distance < sight_range:
 		_charge_clock = boss_telegraph_duration()
 		_salvo_aim_point = target.global_position + Vector3.UP
 		_salvo_shot_count = boss_salvo_count()
@@ -835,6 +840,12 @@ func _update_turret(delta: float) -> void:
 		var offset := target - socket.global_position
 		var launch_pitch := atan2(offset.y, maxf(0.1, Vector2(offset.x, offset.z).length()))
 		pod.rotation.x = rotate_toward(pod.rotation.x, clampf(launch_pitch, deg_to_rad(-10.0), deg_to_rad(20.0)), 0.7 * delta)
+		if not is_player:
+			# Side-mounted tubes must converge on the firing solution instead of
+			# sending long-range rockets parallel to (and beside) the target.
+			var local_target := _turret.global_basis.inverse() * offset
+			var convergence := atan2(-local_target.x, -local_target.z)
+			pod.rotation.y = rotate_toward(pod.rotation.y, clampf(convergence, -0.14, 0.14), 0.7 * delta)
 
 
 func _selected_weapon_kind() -> String:

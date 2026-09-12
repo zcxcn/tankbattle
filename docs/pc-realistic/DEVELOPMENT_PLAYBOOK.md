@@ -54,6 +54,7 @@ if ($taskExit -ne 0) { throw "Godot test failed: $taskExit" }
 ```
 
 - `--fixed-fps 60` 适合已有的确定性物理场景；不要盲目加到依赖真实音频时间的所有测试。
+- `pacing_regression_test.tscn` 沿用构建脚本的实时模式；快进会让其 120 秒模拟超时在真实音频退出前触发。敌车射程用 `enemy_range_test.tscn` 验证实际 AI 发射/命中，而不只断言配置数字。
 - 读失败标记和最终计数；工具返回 0 或“打开场景成功”不代表所有断言通过。完整测试名单以构建脚本为准。
 - 测试使用独立 `SaveService._directory`，通常为 `user://tests/<名称>_<进程号>`。不覆盖玩家真实存档和设置；需要共享进程时保存并恢复原值。
 - 退出沿用 `tests/test_shutdown.gd`，让真实音频线程回收后退出，避免未清理播放对象。

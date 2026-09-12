@@ -20,7 +20,7 @@
 | 工作 | 入口 |
 | --- | --- |
 | 游戏状态、战役/无尽切换、伤害、UI 快照 | `pc-godot/scripts/game.gd` |
-| 坦克、炮弹、爆炸、地雷、残骸 | `pc-godot/actors/`；武器参数在 `pc-godot/data/combat_loadout.gd` |
+| 坦克、炮弹、爆炸、地雷、残骸 | `pc-godot/actors/`；武器/车型参数在 `pc-godot/data/{combat_loadout,vehicle_catalog}.gd` |
 | 无尽波次、怪物、商店 | `pc-godot/scripts/endless_director.gd`、`pc-godot/actors/giant_monster.gd`、`pc-godot/data/endless_upgrades.gd` |
 | 镜头/远程鼠标、手柄、界面 | `pc-godot/scripts/battle_camera_rig.gd`、`gamepad_input.gd`（同目录）、`pc-godot/ui/game_ui.gd` |
 | 地形、城市、天气、履带 | `pc-godot/scenes/missions/`、`pc-godot/scripts/{river_terrain,city_architecture,battlefield_weather,track_marks}.gd` |
@@ -37,5 +37,5 @@
 ## 按需资料
 
 - [开发手册](docs/pc-realistic/DEVELOPMENT_PLAYBOOK.md)：只读任务对应小节，含测试选型、建模坑、发布检查与传文件诊断。
-- 当前沉淀基线为 0.4.10；实际版本以 `pc-godot/export_presets.cfg` 为准。[0.4.10 自检](docs/pc-realistic/SELF_CHECK_0.4.10.md)记录性能/追击/续波，[Mac 导出说明](docs/pc-realistic/MACOS_EXPORT_0.4.8.md)记录跨平台流程。
+- 当前沉淀基线为 0.4.11；实际版本以 `pc-godot/export_presets.cfg` 为准。[0.4.11 自检](docs/pc-realistic/SELF_CHECK_0.4.11.md)记录敌车射程，[0.4.10 自检](docs/pc-realistic/SELF_CHECK_0.4.10.md)记录性能/追击/续波，[Mac 导出说明](docs/pc-realistic/MACOS_EXPORT_0.4.8.md)记录跨平台流程。
 - 不把历史通过数、截图 FPS 或静态签名验证当成当前改动、性能或 M4 实机运行的证明。文档类改动检查路径、差异即可，无需重建游戏。

@@ -7,7 +7,7 @@ import sys
 import zipfile
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-README = """钢铁余烬 · Iron Embers 0.4.10 / macOS Universal
+README = """钢铁余烬 · Iron Embers 0.4.11 / macOS Universal
 
 适用于 MacBook Pro M4，以及 Apple Silicon 芯片的 Mac（macOS 13 或更新版本）。
 通用包内含 ARM64 原生应用，包含完整战役及无尽防守，无需安装 Godot、Rosetta 或额外模型。
@@ -50,7 +50,7 @@ def main() -> None:
     source, destination = map(pathlib.Path, sys.argv[1:3])
     assert source.resolve() != destination.resolve()
     destination.parent.mkdir(parents=True, exist_ok=True)
-    manifest = {"product": "Iron Embers", "version": "0.4.10", "engine": "Godot 4.7.2", "architecture": "universal (arm64 + x86_64)", "signing": "ad-hoc; not notarized", "runtime_test": "not run on macOS", "files": []}
+    manifest = {"product": "Iron Embers", "version": "0.4.11", "engine": "Godot 4.7.2", "architecture": "universal (arm64 + x86_64)", "signing": "ad-hoc; not notarized", "runtime_test": "not run on macOS", "files": []}
     with zipfile.ZipFile(source) as original, zipfile.ZipFile(destination, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
         assert original.testzip() is None, "Original export ZIP has a damaged member"
         for item in original.infolist():

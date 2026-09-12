@@ -122,6 +122,8 @@ if (-not $SkipTests) {
     Write-Host "Running weapon, ballistics, navigation and campaign tests..."
     & $GodotPath --headless --path $projectRoot --script "res://tests/field_combat_test.gd" -- --test
     Assert-LastExitCode -Action "Godot field combat tests"
+    & $GodotPath --headless --fixed-fps 60 --path $projectRoot "res://tests/enemy_range_test.tscn" -- --test
+    Assert-LastExitCode -Action "Godot distant enemy acquisition, actual hits and cover"
     & $GodotPath --headless --path $projectRoot "res://tests/ballistics_test.tscn" -- --test
     Assert-LastExitCode -Action "Godot ballistic collision tests"
     & $GodotPath --headless --path $projectRoot "res://tests/barrel_elevation_test.tscn" -- --test
@@ -247,7 +249,7 @@ foreach ($credit in $creditSources.GetEnumerator()) {
     }
 }
 
-$productVersion = "0.4.10"
+$productVersion = "0.4.11"
 $manifestPath = Join-Path $artifactDirectory "build-manifest.json"
 $payloadFiles = @(Get-ChildItem -LiteralPath $artifactDirectory -File -Recurse | Sort-Object FullName)
 $manifestFiles = @(
