@@ -92,6 +92,9 @@ func run() -> void:
 	check(root.gui_get_focus_owner() == game.ui._title_mission, "D-pad moves menu focus exactly one item")
 	var chassis_before: int = game.selected_chassis
 	await tap(JOY_BUTTON_DPAD_DOWN)
+	var woodland_focus: Control = game.ui.find_child("WoodlandStart", true, false)
+	check(root.gui_get_focus_owner() == woodland_focus, "D-pad reaches the new woodland entry between mission and chassis selection")
+	await tap(JOY_BUTTON_DPAD_DOWN)
 	await tap(JOY_BUTTON_A)
 	check(game.selected_chassis != chassis_before and game.mode == "title", "A activates the focused chassis button without starting combat")
 	start_focus.grab_focus()
@@ -99,7 +102,7 @@ func run() -> void:
 	game.ui._update_controller_menu(0.01)
 	check(root.gui_get_focus_owner() == game.ui._title_mission, "left-stick menu nudge moves focus once")
 	game.ui._update_controller_menu(0.37)
-	check(root.gui_get_focus_owner() == game.ui._title_chassis, "held left stick repeats menu navigation after its delay")
+	check(root.gui_get_focus_owner() == woodland_focus, "held left stick repeats menu navigation after its delay")
 	axis(JOY_AXIS_LEFT_Y, 0.0)
 	game.ui._update_controller_menu(0.01)
 	game.open_settings()

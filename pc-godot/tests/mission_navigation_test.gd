@@ -42,8 +42,9 @@ func _segment_clear(from: Vector3, to: Vector3) -> bool:
 
 
 func _run() -> void:
-	_check(Catalog.count() == 6, "campaign contains six progressive missions")
-	for chapter in range(Catalog.count()):
+	_check(Catalog.count() == 7, "campaign contains six industrial missions and a woodland chapter")
+	# Woodland heightfield movement is covered by woodland_map_test.tscn.
+	for chapter in range(Catalog.WOODLAND_CHAPTER):
 		var spec := Catalog.get_mission(chapter)
 		var arena := ArenaScript.new()
 		arena.mission_index = chapter

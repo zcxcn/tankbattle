@@ -42,6 +42,7 @@ Godot 与模板的固定版本和哈希在 `scripts/build-pc-godot.ps1`、`scrip
 | 敌车视野、追击与远射 | `enemy_pursuit_test.tscn`、`enemy_range_test.tscn`、`field_combat_test.gd`（`--script`）、`pacing_regression_test.tscn` |
 | 炮声/受击声音 | `weapon_audio_test.tscn`、`impact_audio_test.tscn` |
 | 地形与实际通行 | `river_terrain_test.tscn`、`world_traversal_test.tscn`、`river_navigation_test.tscn` |
+| 青岚河谷与树林 | `woodland_map_test.tscn`；渲染 `woodland_visual_test.tscn`；增加章节同时复查 `campaign_regression_test.tscn` 和手柄菜单顺序 |
 
 示例：在仓库根运行生产调度器连续波次检查。
 
@@ -57,6 +58,7 @@ if ($taskExit -ne 0) { throw "Godot test failed: $taskExit" }
 - `--fixed-fps 60` 适合已有的确定性物理场景；不要盲目加到依赖真实音频时间的所有测试。
 - `pacing_regression_test.tscn` 沿用构建脚本的实时模式；快进会让其 120 秒模拟超时在真实音频退出前触发。敌车射程用 `enemy_range_test.tscn` 验证实际 AI 发射/命中，而不只断言配置数字。
 - 敌车初始视野 `vision`、已发现目标的跟踪距离 `engage`、理想机动距离 `ideal` 分开调整。扩大射程时同步验证追击位移；0.4.11 曾因 `ideal` 过大而在 70 米处整段装填期间原地不动。失去视线后只搜索最后位置，回归等待应使用 `search_duration`，避免硬编码旧的 9 秒期限。
+- 高度场共用 `woodland_layout.gd` 的高度采样，出生/巡逻/补给随地形定位；低位避障射线命中可行走坡面时应继续爬坡。叶片碎网格的自动 LOD 容易过早丢失树冠，树林按空间分批并单独提高 LOD 精度；道路着色仅应用于可玩地表，背景山体另用材质实例。
 - 读失败标记和最终计数；工具返回 0 或“打开场景成功”不代表所有断言通过。完整测试名单以构建脚本为准。
 - 测试使用独立 `SaveService._directory`，通常为 `user://tests/<名称>_<进程号>`。不覆盖玩家真实存档和设置；需要共享进程时保存并恢复原值。
 - 退出沿用 `tests/test_shutdown.gd`，让真实音频线程回收后退出，避免未清理播放对象。

@@ -132,6 +132,8 @@ if (-not $SkipTests) {
     Assert-LastExitCode -Action "Godot weapon elevation tests"
     & $GodotPath --headless --path $projectRoot "res://tests/mission_navigation_test.tscn" -- --test
     Assert-LastExitCode -Action "Godot map navigation tests"
+    & $GodotPath --headless --fixed-fps 60 --path $projectRoot "res://tests/woodland_map_test.tscn" -- --test
+    Assert-LastExitCode -Action "Godot woodland entry, terrain, weather and traversal"
     & $GodotPath --headless --path $projectRoot "res://tests/campaign_regression_test.tscn" -- --test
     Assert-LastExitCode -Action "Godot campaign progression tests"
     & $GodotPath --headless --path $projectRoot --script "res://tests/camera_regression_test.gd" -- --test
@@ -223,6 +225,9 @@ $creditSources = [ordered]@{
     "models/environment/CREDITS.md" = "assets/models/environment/polyhaven_factory/CREDITS.md"
     "models/environment/LICENSE.txt" = "assets/models/environment/polyhaven_factory/LICENSE.txt"
     "models/environment/rock09/CREDITS.md" = "assets/models/environment/polyhaven_rock09/CREDITS.md"
+    "models/environment/woodland/CREDITS.md" = "assets/models/environment/polyhaven_tree_small02/CREDITS.md"
+    "models/environment/woodland/LICENSE.txt" = "assets/models/environment/polyhaven_tree_small02/LICENSE.txt"
+    "models/environment/woodland/download-manifest.json" = "assets/models/environment/polyhaven_tree_small02/download-manifest.json"
     "models/environment/rock09/LICENSE.txt" = "assets/models/environment/polyhaven_rock09/LICENSE.txt"
     "models/environment/concrete_facade/CREDITS.md" = "assets/models/environment/polyhaven_concrete_facade/CREDITS.md"
     "models/environment/concrete_facade/LICENSE.txt" = "assets/models/environment/polyhaven_concrete_facade/LICENSE.txt"
@@ -251,7 +256,7 @@ foreach ($credit in $creditSources.GetEnumerator()) {
     }
 }
 
-$productVersion = "0.4.12"
+$productVersion = "0.4.13"
 $manifestPath = Join-Path $artifactDirectory "build-manifest.json"
 $payloadFiles = @(Get-ChildItem -LiteralPath $artifactDirectory -File -Recurse | Sort-Object FullName)
 $manifestFiles = @(

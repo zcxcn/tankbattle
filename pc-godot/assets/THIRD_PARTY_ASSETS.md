@@ -187,6 +187,12 @@ authored skinned models with original color and normal maps. The glutton is 34m;
 the stone body is shared by 52m and 72m gameplay roles.
 [Source links, checksums, licenses and adaptations](models/monsters/colossal/CREDITS.md).
 
+## PC 0.4.13 woodland
+
+Rico Cilliers' **Tree Small 02** from Poly Haven (CC0) supplies the textured trees
+in Qinglan Valley. Original UV/PBR textures accompany a normalized, simplified
+mesh for spatial forest instancing. [Source, license and conversion details](models/environment/polyhaven_tree_small02/CREDITS.md).
+
 ## Original modeled ordnance
 
 AP shells, HE shells, machine-gun bullets and rockets are original closed GLB

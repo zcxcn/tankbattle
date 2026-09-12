@@ -51,7 +51,7 @@ if ([string]::IsNullOrWhiteSpace($ArtifactDirectory)) {
 $ArtifactDirectory = (Resolve-Path -LiteralPath $ArtifactDirectory).Path
 
 if ([string]::IsNullOrWhiteSpace($ArchivePath)) {
-    $ArchivePath = Join-Path $repositoryRoot "outputs/pc-godot/Iron-Embers-Windows-x86_64-0.4.12.zip"
+    $ArchivePath = Join-Path $repositoryRoot "outputs/pc-godot/Iron-Embers-Windows-x86_64-0.4.13.zip"
 }
 $ArchivePath = (Resolve-Path -LiteralPath $ArchivePath).Path
 
@@ -65,6 +65,8 @@ $requiredCreditPaths = @(
     "credits/models/environment/CREDITS.md"
     "credits/models/environment/LICENSE.txt"
     "credits/models/environment/rock09/CREDITS.md"
+    "credits/models/environment/woodland/CREDITS.md"
+    "credits/models/environment/woodland/LICENSE.txt"
     "credits/models/environment/rock09/LICENSE.txt"
     "credits/models/environment/concrete_facade/CREDITS.md"
     "credits/models/environment/concrete_facade/LICENSE.txt"
@@ -94,8 +96,8 @@ $expectedVersionFields = [ordered]@{
     ProductName = "Iron Embers"
     CompanyName = "Iron Embers Studio"
     FileDescription = "Iron Embers — Native PC Tank Combat"
-    FileVersion = "0.4.12.0"
-    ProductVersion = "0.4.12.0"
+    FileVersion = "0.4.13.0"
+    ProductVersion = "0.4.13.0"
 }
 foreach ($entry in $expectedVersionFields.GetEnumerator()) {
     if ([string]$versionInfo.($entry.Key) -ne [string]$entry.Value) {

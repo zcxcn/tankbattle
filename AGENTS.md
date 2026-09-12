@@ -24,6 +24,7 @@
 | 无尽波次、怪物、商店 | `pc-godot/scripts/endless_director.gd`、`pc-godot/actors/giant_monster.gd`、`pc-godot/data/endless_upgrades.gd` |
 | 镜头/远程鼠标、手柄、界面 | `pc-godot/scripts/battle_camera_rig.gd`、`gamepad_input.gd`（同目录）、`pc-godot/ui/game_ui.gd` |
 | 地形、城市、天气、履带 | `pc-godot/scenes/missions/`、`pc-godot/scripts/{river_terrain,city_architecture,battlefield_weather,track_marks}.gd` |
+| 青岚河谷、丘陵、树林 | `pc-godot/scenes/missions/woodland_arena.gd`、`pc-godot/data/woodland_layout.gd`、`pc-godot/scripts/{woodland_terrain,woodland_forest}.gd` |
 | 声音、设置、存档 | `pc-godot/autoload/{audio_service,settings_service,save_service}.gd` |
 
 ## 工具与验证入口
@@ -37,5 +38,5 @@
 ## 按需资料
 
 - [开发手册](docs/pc-realistic/DEVELOPMENT_PLAYBOOK.md)：只读任务对应小节，含测试选型、建模坑、发布检查与传文件诊断。
-- 当前沉淀基线为 0.4.12；实际版本以 `pc-godot/export_presets.cfg` 为准。[0.4.12 自检](docs/pc-realistic/SELF_CHECK_0.4.12.md)记录敌车视野/追击/远射，[0.4.10 自检](docs/pc-realistic/SELF_CHECK_0.4.10.md)记录性能/巨怪追击/续波，[Mac 导出说明](docs/pc-realistic/MACOS_EXPORT_0.4.8.md)记录跨平台流程。
+- 当前沉淀基线为 0.4.13；实际版本以 `pc-godot/export_presets.cfg` 为准。[0.4.13 自检](docs/pc-realistic/SELF_CHECK_0.4.13.md)记录丘陵树林地图，[0.4.12 自检](docs/pc-realistic/SELF_CHECK_0.4.12.md)记录敌车视野/追击/远射，[0.4.10 自检](docs/pc-realistic/SELF_CHECK_0.4.10.md)记录性能/巨怪追击/续波，[Mac 导出说明](docs/pc-realistic/MACOS_EXPORT_0.4.8.md)记录跨平台流程。
 - 不把历史通过数、截图 FPS 或静态签名验证当成当前改动、性能或 M4 实机运行的证明。文档类改动检查路径、差异即可，无需重建游戏。

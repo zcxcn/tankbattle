@@ -5,6 +5,7 @@ extends Control
 
 signal start_requested
 signal endless_requested
+signal woodland_requested
 signal upgrade_requested(id: String)
 signal resume_requested
 signal retry_requested
@@ -288,6 +289,10 @@ func _build_title_layer() -> void:
 	command.add_child(_title_start_button)
 	_title_mission = _button("选择任务", &"CommandButton", func() -> void: mission_requested.emit())
 	command.add_child(_title_mission)
+	var woodland_button := _button("新地图 · 青岚河谷", &"CommandButton", func() -> void: woodland_requested.emit())
+	woodland_button.name = "WoodlandStart"
+	woodland_button.tooltip_text = "直接进入丘陵树林与河流地图。沿缓坡土路清除巡逻队，经桥梁渡河迎战山地指挥车。"
+	command.add_child(woodland_button)
 	_title_chassis = _button("选择战车", &"CommandButton", func() -> void: chassis_requested.emit())
 	command.add_child(_title_chassis)
 	_title_vehicle = _label("", &"Micro")
@@ -304,7 +309,7 @@ func _build_title_layer() -> void:
 	command.add_child(settings_button)
 	var quit_button := _button("退出游戏", &"DangerButton", func() -> void: quit_requested.emit())
 	command.add_child(quit_button)
-	_wire_vertical_focus([_title_start_button, _title_mission, _title_chassis, _title_endless_button, settings_button, quit_button])
+	_wire_vertical_focus([_title_start_button, _title_mission, woodland_button, _title_chassis, _title_endless_button, settings_button, quit_button])
 	_focus_targets["title"] = _title_start_button
 	command.add_child(_spacer(false, true))
 
@@ -348,7 +353,7 @@ func _build_title_layer() -> void:
 	layout.add_child(HSeparator.new())
 	var footer := HBoxContainer.new()
 	layout.add_child(footer)
-	footer.add_child(_label("BUILD 0.4.12 · FORWARD+ / PBR ARMOR", &"Micro"))
+	footer.add_child(_label("BUILD 0.4.13 · FORWARD+ / PBR ARMOR", &"Micro"))
 	footer.add_child(_spacer(true, false))
 	var asset_credit := _label("3D：tomm8 · GRIP420 / David Falke · Comrade1280 · CC BY 4.0\n机枪录音：KuraiWolf / Nightshade Game Studios · CC BY 4.0", &"Micro")
 	asset_credit.name = "AssetCredit"

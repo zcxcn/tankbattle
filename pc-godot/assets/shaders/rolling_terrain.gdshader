@@ -8,6 +8,8 @@ uniform sampler2D grass_normal : hint_normal, filter_linear_mipmap_anisotropic, 
 uniform sampler2D grass_arm : filter_linear_mipmap_anisotropic, repeat_enable;
 uniform float wetness : hint_range(0.0, 1.0) = 0.0;
 uniform float snow_amount : hint_range(0.0, 1.0) = 0.0;
+uniform bool woodland_paths = false;
+uniform vec3 turf_tint = vec3(1.0);
 uniform vec3 grass_color : source_color = vec3(0.21, 0.235, 0.115);
 uniform vec3 earth_color : source_color = vec3(0.33, 0.265, 0.17);
 varying vec3 world_position;
@@ -47,8 +49,14 @@ void fragment() {
 	vec2 grass_uv = world_position.xz / 15.0;
 	vec3 grass = texture(grass_albedo, grass_uv).rgb;
 	vec3 turf = grass * mix(vec3(0.83, 0.9, 0.75), vec3(1.05, 0.94, 0.77), smoothstep(0.43, 0.72, broad));
-	turf *= mix(0.92, 1.07, detail);
+	turf *= mix(0.92, 1.07, detail) * turf_tint;
 	ALBEDO = mix(turf, stone * vec3(0.59, 0.57, 0.5), exposed);
+	if (woodland_paths) {
+		float lane = min(abs(world_position.x), min(abs(world_position.x - 96.0), abs(world_position.x + 96.0)));
+		float cross_lane = abs(world_position.z - clamp(round(world_position.z / 72.0) * 72.0, -144.0, 144.0));
+		float track = 1.0 - smoothstep(4.5, 7.5, min(lane, cross_lane) + (broad - 0.5) * 2.0);
+		ALBEDO = mix(ALBEDO, stone * vec3(0.60, 0.48, 0.33), track * 0.86);
+	}
 	ALBEDO *= mix(1.0, 0.69, wetness);
 	float snow = snow_amount * smoothstep(0.65, 0.96, world_normal.y) * (0.88 + broad * 0.12);
 	ALBEDO = mix(ALBEDO, vec3(0.81, 0.86, 0.88), snow);

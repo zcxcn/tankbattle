@@ -808,6 +808,10 @@ func _avoid_obstacles(desired: Vector3) -> Vector3:
 	if hit.is_empty():
 		return desired
 	var normal: Vector3 = hit.get("normal", Vector3.RIGHT)
+	# A hillside in the low forward probe is drivable ground, not a wall.
+	# Match CharacterBody3D's floor limit so patrols climb rather than sidestep.
+	if normal.dot(Vector3.UP) >= cos(floor_max_angle):
+		return desired
 	var tangent := Vector3(-normal.z, 0, normal.x) * _strafe_sign
 	return (desired * 0.2 + tangent).normalized()
 

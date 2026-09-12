@@ -1,5 +1,5 @@
 extends Node3D
-## Six-mission campaign, patrol encounters and native PC game flow.
+## Seven-mission campaign, patrol encounters and native PC game flow.
 
 const TankScript = preload("res://actors/tank.gd")
 const ProjectileScript = preload("res://actors/projectile.gd")
@@ -9,6 +9,7 @@ const MissionCatalog = preload("res://data/mission_catalog.gd")
 const VehicleCatalog = preload("res://data/vehicle_catalog.gd")
 const MissionTarget = preload("res://actors/mission_target.gd")
 const ArenaScript = preload("res://scenes/missions/industrial_arena.gd")
+const WoodlandArena = preload("res://scenes/missions/woodland_arena.gd")
 const Deployment = preload("res://scripts/battle_deployment.gd")
 const WreckScript = preload("res://actors/tank_wreck.gd")
 const TrackMarksScript = preload("res://scripts/track_marks.gd")
@@ -79,7 +80,7 @@ func _ready() -> void:
 	get_tree().auto_accept_quit = false
 	Input.joy_connection_changed.connect(_on_joy_connection_changed)
 	_smoke_test = "--smoke-test" in OS.get_cmdline_user_args()
-	print("IRON_EMBERS_PC_READY | Godot native | Campaign 0.4.12 | city-scale beasts + continuous waves")
+	print("IRON_EMBERS_PC_READY | Godot native | Campaign 0.4.13 | city-scale beasts + continuous waves")
 	if _smoke_test:
 		call_deferred("start_game")
 
@@ -88,6 +89,9 @@ func _build_arena() -> void:
 	if is_instance_valid(arena):
 		arena.free()
 	arena = EndlessArena.new() if run_type == "endless" else ArenaScript.new()
+	if run_type == "campaign" and mission_index == MissionCatalog.WOODLAND_CHAPTER:
+		arena.free()
+		arena = WoodlandArena.new()
 	arena.name = "GrayIgnitionArena"
 	arena.game = self
 	arena.mission_index = mission_index
@@ -127,6 +131,7 @@ func _create_ui() -> void:
 	_connect_ui_signal("quit_requested", quit_game)
 	_connect_ui_signal("next_requested", next_mission)
 	_connect_ui_signal("mission_requested", cycle_mission)
+	_connect_ui_signal("woodland_requested", start_woodland)
 	_connect_ui_signal("chassis_requested", cycle_chassis)
 	if ui.has_signal("setting_requested"):
 		ui.connect("setting_requested", _on_setting_requested)
@@ -189,6 +194,13 @@ func _build_title_shot() -> void:
 	_title_rig.add_child(rim_light)
 
 
+func start_woodland() -> void:
+	if mode != "title":
+		return
+	selected_mission = MissionCatalog.WOODLAND_CHAPTER
+	start_game()
+
+
 func start_game() -> void:
 	_settle_abandoned_run()
 	AudioService.set_game_state("title")
@@ -225,6 +237,9 @@ func start_game() -> void:
 		var data: Dictionary = deployed[index]
 		var enemy := _spawn_tank("Enemy_%02d" % index, data.position, TankActor.TEAM_ENEMY, false, false, data.kind)
 		enemy.patrol_route.assign(data.get("patrol", []))
+		if arena.has_meta("woodland_arena"):
+			for point_index in enemy.patrol_route.size():
+				enemy.patrol_route[point_index].y = arena.get_surface_height(enemy.patrol_route[point_index])
 		enemy.rotation.y = float(data.get("yaw", 0.0))
 		enemy.max_hp *= float(mission_data.health_multiplier)
 		enemy.hp = enemy.max_hp
@@ -471,6 +486,8 @@ func _spawn_tank(node_name: String, at: Vector3, tank_team: int, controlled: boo
 	tank.is_boss = chapter_boss
 	tank.archetype = kind
 	tank.position = at
+	if is_instance_valid(arena) and arena.has_meta("woodland_arena"):
+		tank.position.y = arena.get_surface_height(at)
 	add_child(tank)
 	tank.tank_destroyed.connect(_on_tank_destroyed)
 	return tank
