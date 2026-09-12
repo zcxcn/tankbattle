@@ -62,8 +62,9 @@ var aim_point := Vector3.FORWARD * -20.0
 var ai_state := "spawn"
 var patrol_route: Array[Vector3] = []
 var sight_range := 48.0
+var engagement_range := 150.0
 var sight_angle := 105.0
-var search_duration := 9.0
+var search_duration := 16.0
 var _loadout: RefCounted
 var _patrol_index := 0
 var _patrol_pause := 0.0
@@ -184,9 +185,10 @@ func _apply_role_stats() -> void:
 		fire_interval = 5.4
 		aim_acquire_time = 1.5
 		projectile_speed = 220.0
-		sight_range = 220.0
+		sight_range = 120.0
+		engagement_range = 220.0
 		sight_angle = 130.0
-		_ideal_distance = 95.0
+		_ideal_distance = 48.0
 		active = false
 		counts_for_objective = false
 		return
@@ -199,6 +201,7 @@ func _apply_role_stats() -> void:
 	projectile_damage = role.damage
 	aim_acquire_time = role.acquire
 	sight_range = role.vision
+	engagement_range = role.engage
 	sight_angle = role.fov
 	_ideal_distance = role.ideal
 	_enemy_weapon_kind = role.weapon
@@ -561,8 +564,8 @@ func _ai_control(delta: float) -> void:
 		return
 	var desired := Vector3.ZERO
 	# Take a visible long-range firing opportunity before repositioning.
-	# Previously navigation kept the hull moving until point-blank ideal range,
-	# so the settled-hull firing gate rejected otherwise valid distant targets.
+	# While reloading, close toward the role's combat position. Detection and
+	# tracking ranges must not double as the preferred maneuver distance.
 	if reload <= aim_acquire_time:
 		ai_state = "aim"
 	elif distance > _ideal_distance + 7.0:
@@ -604,10 +607,12 @@ func can_see_target(target: Node3D) -> bool:
 	var offset := target.global_position - global_position
 	offset.y = 0.0
 	var distance := offset.length()
-	if distance > sight_range:
+	var observation_range := engagement_range if _has_contact and _search_remaining > 0.0 else sight_range
+	if distance > observation_range:
 		return false
 	# Close crews hear tracks around them, but neither vision nor hearing can
-	# reveal a tank through a wall. A known contact widens observation, not range.
+	# reveal a tank through a wall. A recently observed contact can be tracked
+	# farther away, but losing it for the full search window resets acquisition.
 	var cone := 165.0 if _has_contact else sight_angle
 	var forward := -_turret.global_basis.z.normalized() if is_instance_valid(_turret) else -global_basis.z.normalized()
 	if distance > 10.0 and forward.dot(offset.normalized()) < cos(deg_to_rad(cone * 0.5)):
@@ -692,7 +697,7 @@ func _update_boss_attack(delta: float, target: TankActor, distance: float) -> vo
 			_salvo_clock = boss_salvo_interval()
 			_salvo_recovery = 3.2
 			reload = maxf(reload, 3.2)
-	elif _salvo_clock <= 0.0 and _salvo_recovery <= 0.0 and distance < sight_range:
+	elif _salvo_clock <= 0.0 and _salvo_recovery <= 0.0 and distance < engagement_range:
 		_charge_clock = boss_telegraph_duration()
 		_salvo_aim_point = target.global_position + Vector3.UP
 		_salvo_shot_count = boss_salvo_count()

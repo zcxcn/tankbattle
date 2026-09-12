@@ -144,7 +144,7 @@ func _test_perception_and_actors() -> void:
 	var shot_count := fixture.shots.size()
 	enemy._ai_control(0.1)
 	check(enemy.ai_state == "search" and enemy._last_seen_position == remembered and fixture.shots.size() == shot_count, "lost contact searches the last observation without tracking through cover")
-	for tick in 100:
+	for tick in ceili(enemy.search_duration / 0.1) + 2:
 		enemy._ai_control(0.1)
 	check(enemy.ai_state == "patrol" and not enemy._has_contact, "expired search returns the crew to its patrol route")
 	enemy.receive_damage(2.0, 0, enemy.global_position + Vector3.RIGHT)

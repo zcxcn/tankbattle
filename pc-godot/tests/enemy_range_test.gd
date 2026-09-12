@@ -67,6 +67,11 @@ func run() -> void:
 		enemy._rng.seed = 411
 		enemy._turret.rotation = Vector3.ZERO
 		enemy._salvo_clock = 999.0 # Measure Boss main gun independently of rockets.
+		check(not enemy.can_see_target(game.player), "%s does not initially spot a distant unknown player" % kind)
+		game.player.position.z = -minf(enemy.sight_range - 10.0, distance)
+		await frames(3)
+		check(enemy._has_contact, "%s first acquires the player inside its normal sight range" % kind)
+		game.player.position.z = -distance
 		var before := float(game.player.hp)
 		var shots_before := shots
 		for frame in 1200:
@@ -90,7 +95,7 @@ func run() -> void:
 			enemy._ai_control(0.1)
 			check(shots == shots_before and enemy._aim_hold_time == 0.0, "occlusion cancels a prepared distant shot")
 			wall.free()
-			game.player.position.z = -enemy.sight_range - 20.0
+			game.player.position.z = enemy.position.z - enemy.engagement_range - 20.0
 			check(not enemy.can_see_target(game.player), "enemy vision remains bounded beyond its extended range")
 		if kind == "boss":
 			enemy.set_physics_process(false)

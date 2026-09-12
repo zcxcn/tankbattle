@@ -79,7 +79,7 @@ func _ready() -> void:
 	get_tree().auto_accept_quit = false
 	Input.joy_connection_changed.connect(_on_joy_connection_changed)
 	_smoke_test = "--smoke-test" in OS.get_cmdline_user_args()
-	print("IRON_EMBERS_PC_READY | Godot native | Campaign 0.4.11 | city-scale beasts + continuous waves")
+	print("IRON_EMBERS_PC_READY | Godot native | Campaign 0.4.12 | city-scale beasts + continuous waves")
 	if _smoke_test:
 		call_deferred("start_game")
 

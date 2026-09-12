@@ -39,6 +39,7 @@ Godot 与模板的固定版本和哈希在 `scripts/build-pc-godot.ps1`、`scrip
 | 商店和存档隔离 | `endless_progression_test.tscn`、`endless_ui_test.tscn` |
 | 摄像机/远程鼠标/手柄 | `camera_regression_test.gd`（`--script`）、`remote_mouse_test.tscn`、`gamepad_regression_test.gd`（`--script`） |
 | 炮弹、仰角、命中 | `ballistics_test.tscn`、`barrel_elevation_test.tscn`、`hit_feedback_test.tscn` |
+| 敌车视野、追击与远射 | `enemy_pursuit_test.tscn`、`enemy_range_test.tscn`、`field_combat_test.gd`（`--script`）、`pacing_regression_test.tscn` |
 | 炮声/受击声音 | `weapon_audio_test.tscn`、`impact_audio_test.tscn` |
 | 地形与实际通行 | `river_terrain_test.tscn`、`world_traversal_test.tscn`、`river_navigation_test.tscn` |
 
@@ -55,6 +56,7 @@ if ($taskExit -ne 0) { throw "Godot test failed: $taskExit" }
 
 - `--fixed-fps 60` 适合已有的确定性物理场景；不要盲目加到依赖真实音频时间的所有测试。
 - `pacing_regression_test.tscn` 沿用构建脚本的实时模式；快进会让其 120 秒模拟超时在真实音频退出前触发。敌车射程用 `enemy_range_test.tscn` 验证实际 AI 发射/命中，而不只断言配置数字。
+- 敌车初始视野 `vision`、已发现目标的跟踪距离 `engage`、理想机动距离 `ideal` 分开调整。扩大射程时同步验证追击位移；0.4.11 曾因 `ideal` 过大而在 70 米处整段装填期间原地不动。失去视线后只搜索最后位置，回归等待应使用 `search_duration`，避免硬编码旧的 9 秒期限。
 - 读失败标记和最终计数；工具返回 0 或“打开场景成功”不代表所有断言通过。完整测试名单以构建脚本为准。
 - 测试使用独立 `SaveService._directory`，通常为 `user://tests/<名称>_<进程号>`。不覆盖玩家真实存档和设置；需要共享进程时保存并恢复原值。
 - 退出沿用 `tests/test_shutdown.gd`，让真实音频线程回收后退出，避免未清理播放对象。

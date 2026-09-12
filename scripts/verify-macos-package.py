@@ -299,7 +299,7 @@ def verify_archive(path: Path, version: str, require_extras: bool, architecture:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("archive", type=Path)
-    parser.add_argument("--version", default="0.4.11")
+    parser.add_argument("--version", default="0.4.12")
     parser.add_argument("--architecture", choices=("universal", "arm64"), default="universal")
     parser.add_argument("--require-extras", action="store_true", help="Require outer README and credits after final packaging")
     args = parser.parse_args()

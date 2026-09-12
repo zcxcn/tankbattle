@@ -12,7 +12,9 @@
 
 ## Godot PC 原生重制
 
-`pc-godot/` 是用 **Godot 4.7.2、Forward+ 和 Jolt Physics** 制作的 Windows / macOS 原生坦克游戏。PC **0.4.11** 提供六关连续战役，每张地图 **288 × 384 米**：工业外围、补给港区、指挥堡垒、钢厂反击、港口封锁和最后壁垒，分别执行肃清、占领或摧毁任务，然后迎战各关首领。普通敌车逐关增加到 **6 / 9 / 12 / 15 / 18 / 22 辆**，装甲、火力和装填能力逐步增强；通关解锁、整备补给和重玩奖励均独立结算。
+`pc-godot/` 是用 **Godot 4.7.2、Forward+ 和 Jolt Physics** 制作的 Windows / macOS 原生坦克游戏。PC **0.4.12** 提供六关连续战役，每张地图 **288 × 384 米**：工业外围、补给港区、指挥堡垒、钢厂反击、港口封锁和最后壁垒，分别执行肃清、占领或摧毁任务，然后迎战各关首领。普通敌车逐关增加到 **6 / 9 / 12 / 15 / 18 / 22 辆**，装甲、火力和装填能力逐步增强；通关解锁、整备补给和重玩奖励均独立结算。
+
+**0.4.12 敌车主动追击。** 初始观察距离调整为 70–125 米；发现玩家后利用装填间隙接近，保留停车瞄准和远距离交战。已发现的可见目标可跟踪至 120–220 米，建筑遮挡仍有效；失去目标后搜索最后位置，16 秒未找回则恢复巡逻。[0.4.12 追击与实弹自检](docs/pc-realistic/SELF_CHECK_0.4.12.md)。
 
 **0.4.11 敌车远距离交战。** 敌车索敌扩大到 120–220 米（按车型区分），装填就绪后可直接停车稳定瞄准远方可见目标，不必先开到近处。侧置敌方火箭筒修正远距离水平偏差；建筑遮挡、瞄准预备、原有射速与伤害继续保留。[0.4.11 自检与实弹验证](docs/pc-realistic/SELF_CHECK_0.4.11.md)。
 
@@ -110,7 +112,7 @@ $godot = (Resolve-Path .\work\tools\godot-4.7.2\editor\Godot_v4.7.2-stable_win64
 pwsh -NoProfile -File .\scripts\build-pc-godot.ps1 -Configuration Release
 ```
 
-构建脚本固定校验官方 Godot 可执行文件和模板的 SHA-256；其他位置的同版 console 程序可通过 `-GodotPath <路径>` 指定，Windows 模板仍放在 `work/tools/godot-4.7.2/templates/`。Release 成品位于 `outputs/pc-godot/windows-x86_64/`，可分发压缩包为 `outputs/pc-godot/Iron-Embers-Windows-x86_64-0.4.11.zip`。解压后双击 `IronEmbers.exe`，保留同目录 `IronEmbers.pck` 和 `credits/` 即可离线运行。当前 Windows 可执行文件未做代码签名，首次运行可能显示系统信誉提示。
+构建脚本固定校验官方 Godot 可执行文件和模板的 SHA-256；其他位置的同版 console 程序可通过 `-GodotPath <路径>` 指定，Windows 模板仍放在 `work/tools/godot-4.7.2/templates/`。Release 成品位于 `outputs/pc-godot/windows-x86_64/`，可分发压缩包为 `outputs/pc-godot/Iron-Embers-Windows-x86_64-0.4.12.zip`。解压后双击 `IronEmbers.exe`，保留同目录 `IronEmbers.pck` 和 `credits/` 即可离线运行。当前 Windows 可执行文件未做代码签名，首次运行可能显示系统信誉提示。
 
 本次 PC 重制的源码集中在 `pc-godot/`，构建与验收脚本为 `scripts/build-pc-godot.ps1`、`scripts/smoke-pc-godot.ps1`；`mobile/baseline/` 和 `android/` 未改动。
 

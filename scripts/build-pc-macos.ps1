@@ -35,7 +35,7 @@ if ((Get-FileHash -LiteralPath $templatePath -Algorithm SHA256).Hash.ToLowerInva
 $stageDirectory = Join-Path $repositoryRoot "work/mac-export"
 [System.IO.Directory]::CreateDirectory($stageDirectory) | Out-Null
 $rawArchive = Join-Path $stageDirectory "IronEmbers.raw.zip"
-$outputArchive = Join-Path $repositoryRoot "outputs/pc-godot/Iron-Embers-macOS-Universal-0.4.11.zip"
+$outputArchive = Join-Path $repositoryRoot "outputs/pc-godot/Iron-Embers-macOS-Universal-0.4.12.zip"
 [System.IO.Directory]::CreateDirectory([System.IO.Path]::GetDirectoryName($outputArchive)) | Out-Null
 
 Write-Host "Importing ARM64 texture variants..."
