@@ -90,7 +90,7 @@ func run() -> void:
 	check(brute._skin.get_active_material(0) != titan._skin.get_active_material(0), "elite variants have distinct skin color materials")
 	var another_brute := spawn("brute")
 	check(brute._skin.get_active_material(0) == another_brute._skin.get_active_material(0), "same archetype instances share immutable PBR resources")
-	for kind in ["forest", "reaver", "kaiju"]:
+	for kind in ["forest", "reaver", "kaiju", "glutton", "golem", "juggernaut"]:
 		var beast := spawn(kind)
 		check(beast._skin.mesh != actor._skin.mesh, "%s uses a distinct downloaded mesh from the zombie" % kind)
 		check(beast._skeleton != null and not beast._walk_name.is_empty(), "%s has a functioning skinned walk" % kind)

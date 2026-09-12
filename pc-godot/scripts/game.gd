@@ -79,7 +79,7 @@ func _ready() -> void:
 	get_tree().auto_accept_quit = false
 	Input.joy_connection_changed.connect(_on_joy_connection_changed)
 	_smoke_test = "--smoke-test" in OS.get_cmdline_user_args()
-	print("IRON_EMBERS_PC_READY | Godot native | Campaign 0.4.9 | city-scale beasts + continuous waves")
+	print("IRON_EMBERS_PC_READY | Godot native | Campaign 0.4.10 | city-scale beasts + continuous waves")
 	if _smoke_test:
 		call_deferred("start_game")
 
@@ -261,6 +261,7 @@ func start_endless() -> void:
 	_settle_abandoned_run()
 	AudioService.set_game_state("title")
 	_clear_combat_nodes()
+	EndlessDirector.Monster.warm_up_geometry()
 	run_type = "endless"
 	current_run_id = ""
 	mission_index = 0
@@ -781,7 +782,7 @@ func get_ui_snapshot() -> Dictionary:
 	var snapshot := {
 		"mode": mode,
 		"run_type": run_type,
-		"endless": endless.snapshot() if is_instance_valid(endless) else {"best_wave": SaveService.profile.get("endless_best_wave", 0), "best_kills": SaveService.profile.get("endless_best_kills", 0)},
+		"endless": endless.snapshot(mode == "paused") if is_instance_valid(endless) else {"best_wave": SaveService.profile.get("endless_best_wave", 0), "best_kills": SaveService.profile.get("endless_best_kills", 0)},
 		"hp": player.hp if player_valid else 0.0,
 		"max_hp": player.max_hp if player_valid else 240.0,
 		"armor": roundi(player.armor * 100.0) if player_valid else 0,

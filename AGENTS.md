@@ -37,5 +37,5 @@
 ## 按需资料
 
 - [开发手册](docs/pc-realistic/DEVELOPMENT_PLAYBOOK.md)：只读任务对应小节，含测试选型、建模坑、发布检查与传文件诊断。
-- 当前沉淀基线为 0.4.9；实际版本以 `pc-godot/export_presets.cfg` 为准。[0.4.9 自检](docs/pc-realistic/SELF_CHECK_0.4.9.md)记录巨兽/续波，[Mac 导出说明](docs/pc-realistic/MACOS_EXPORT_0.4.8.md)记录跨平台流程。
+- 当前沉淀基线为 0.4.10；实际版本以 `pc-godot/export_presets.cfg` 为准。[0.4.10 自检](docs/pc-realistic/SELF_CHECK_0.4.10.md)记录性能/追击/续波，[Mac 导出说明](docs/pc-realistic/MACOS_EXPORT_0.4.8.md)记录跨平台流程。
 - 不把历史通过数、截图 FPS 或静态签名验证当成当前改动、性能或 M4 实机运行的证明。文档类改动检查路径、差异即可，无需重建游戏。

@@ -57,7 +57,7 @@ func run() -> void:
 			break
 	check(director.wave >= 6 and clear_count >= 5, "production scheduler autonomously reaches wave six after clearing successive waves")
 	check(game.mode == "playing", "empty waves never trigger campaign victory or stop combat")
-	check(kinds.size() == 6, "all six enemy archetypes actually enter scheduled waves")
+	check(kinds.size() == 9, "all nine enemy archetypes actually enter scheduled waves")
 	check(director.corpses.size() <= director.MAX_CORPSES, "accelerated clearing keeps retained corpses bounded")
 	# Backlog is not a cleared wave, even when no live monsters remain.
 	director.monsters.clear()

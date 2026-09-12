@@ -147,6 +147,8 @@ func _damage_and_pause(monster: Node3D) -> void:
 	_freeze_actors()
 	monster.stunned = 0.0
 	monster.global_position = Vector3(0, 0.1, 108)
+	monster._aggro_remaining = 0.0 # Base-attack fixture is no longer retaliating.
+	monster._sense_clock = 0.0
 	before = director.base_hp
 	director.monster_reached_base(monster, -5.0)
 	check(is_equal_approx(director.base_hp, before), "invalid negative base attack cannot heal or damage shelter")

@@ -28,6 +28,7 @@ var _warning_clock := 0.0
 var _elite_pending := 0
 var _clear_announced := false
 var _kaiju_pending := 0
+var _colossus_pending := 0
 
 func _ready() -> void:
 	name = "EndlessDirector"
@@ -40,8 +41,12 @@ func _physics_process(delta: float) -> void:
 	wave_clock -= delta
 	spawn_clock -= delta
 	_warning_clock = maxf(0.0, _warning_clock - delta)
-	monsters = monsters.filter(func(m: Node3D) -> bool: return is_instance_valid(m) and not m.destroyed)
-	corpses = corpses.filter(func(m: Node3D) -> bool: return is_instance_valid(m))
+	for index in range(monsters.size() - 1, -1, -1):
+		if not is_instance_valid(monsters[index]) or monsters[index].destroyed:
+			monsters.remove_at(index)
+	for index in range(corpses.size() - 1, -1, -1):
+		if not is_instance_valid(corpses[index]):
+			corpses.remove_at(index)
 	# A cleared battlefield advances promptly, independent of corpse lifetime.
 	# Pending reinforcements still belong to this wave and must not be skipped.
 	if wave > 0 and pending == 0 and monsters.is_empty() and not _clear_announced:
@@ -55,7 +60,7 @@ func _physics_process(delta: float) -> void:
 		spawn_clock = minf(spawn_clock, 1.0)
 	if pending > 0 and spawn_clock <= 0.0 and monsters.size() < MAX_ALIVE:
 		if spawn_monster() != null:
-			spawn_clock = maxf(3.0, 7.0 - float(wave) * 0.22)
+			spawn_clock = maxf(2.0, 3.8 - float(wave) * 0.12)
 	game.objective = "无尽防守 · 第 %d 波 · 守住避难所" % maxi(1, wave)
 	if not monsters.is_empty() and _warning_clock <= 0.0:
 		for monster in monsters:
@@ -74,9 +79,11 @@ func begin_wave() -> void:
 		_elite_pending = mini(3, _elite_pending + 1)
 	if wave == 2 or wave % 5 == 0:
 		_kaiju_pending = mini(2, _kaiju_pending + 1)
+	if wave % 4 == 0:
+		_colossus_pending = mini(2, _colossus_pending + 1)
 	spawn_clock = 0.0
-	var giant_wave := wave == 2 or wave % 5 == 0
-	var warning := "60 米灭城巨蜥正在接近" if giant_wave else ("42 米灾厄泰坦正在接近" if wave % 3 == 0 else "怪物正在穿过封锁区")
+	var giant_wave := wave == 2 or wave % 5 == 0 or wave % 4 == 0
+	var warning := "72 米断岳巨神正在接近" if wave % 4 == 0 else ("60 米灭城巨蜥正在接近" if giant_wave else ("42 米灾厄泰坦正在接近" if wave % 3 == 0 else "怪物正在穿过封锁区"))
 	game.notify("第 %d 波 · %s\nEsc / Start：升级火力、维修防线、购买弹药" % [wave, warning], 5.0)
 	AudioService.radio("boss_incoming" if giant_wave or wave % 3 == 0 else "mission_start")
 	# A wave is an interval, not a requirement to kill the previous wave.
@@ -91,12 +98,12 @@ func spawn_monster() -> Node3D:
 	var chosen := Vector3.ZERO
 	var found := false
 	# Try all lanes: parking at one entrance must never freeze the whole siege.
-	for attempt in 6:
+	for attempt in 15:
 		lane = (spawned + attempt) % 3
-		var spawn_x: float = [-32.0, 0.0, 32.0][lane] + _rng.randf_range(-5.0, 5.0)
-		var spawn_z := -64.0 - _rng.randf_range(0.0, 12.0) - float(attempt / 3) * 28.0
-		if wave == 1 and spawned < 2:
-			spawn_z = -42.0 - spawned * 12.0
+		var spawn_x: float = [-36.0, 0.0, 36.0][lane] + _rng.randf_range(-3.0, 3.0)
+		# Five depth bands: the old two-row approach could exhaust every entrance.
+		# Stay within the arena and outside the tank's personal space.
+		var spawn_z := -36.0 - float(attempt / 3) * 22.0 - _rng.randf_range(0.0, 4.0)
 		chosen = Vector3(spawn_x, 0.1, spawn_z)
 		var occupied := false
 		for other in monsters:
@@ -118,6 +125,8 @@ func spawn_monster() -> Node3D:
 		_elite_pending -= 1
 	elif role == "kaiju" and _kaiju_pending > 0:
 		_kaiju_pending -= 1
+	elif role == "juggernaut" and _colossus_pending > 0:
+		_colossus_pending -= 1
 	monster.position = chosen
 	monster.set_meta("siege_lane", lane)
 	game.add_child(monster)
@@ -127,11 +136,13 @@ func spawn_monster() -> Node3D:
 	return monster
 
 func next_archetype() -> String:
+	if _colossus_pending > 0:
+		return "juggernaut"
 	if _elite_pending > 0:
 		return "titan"
 	if _kaiju_pending > 0:
 		return "kaiju"
-	var roster := ["shambler", "forest", "reaver", "shambler", "brute", "forest"]
+	var roster := ["shambler", "glutton", "forest", "golem", "reaver", "brute"]
 	return roster[spawned % roster.size()]
 
 func get_monster_goal(monster: Node3D) -> Vector3:
@@ -216,8 +227,8 @@ func settle() -> void:
 	_settled = true
 	SaveService.record_endless_result(wave, kills, game.play_time)
 
-func snapshot() -> Dictionary:
-	var offers: Array = upgrades.catalog()
+func snapshot(include_offers := true) -> Dictionary:
+	var offers: Array = upgrades.catalog() if include_offers else []
 	for offer: Dictionary in offers:
 		if offer.id == "repair" and is_instance_valid(game.player) and base_hp >= base_max_hp and game.player.hp >= game.player.max_hp:
 			offer.available = false

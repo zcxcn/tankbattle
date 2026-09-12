@@ -180,6 +180,8 @@ if (-not $SkipTests) {
     Assert-LastExitCode -Action "Godot actual endless siege integration"
     & $GodotPath --headless --fixed-fps 60 --path $projectRoot "res://tests/endless_waves_test.tscn" -- --test
     Assert-LastExitCode -Action "Godot autonomous wave clearing and city-scale giant collision"
+    & $GodotPath --headless --fixed-fps 60 --path $projectRoot "res://tests/endless_recovery_test.tscn" -- --test
+    Assert-LastExitCode -Action "Godot first-wave recovery, blocked entrances and player pursuit"
 }
 
 $outputRoot = [System.IO.Path]::GetFullPath((Join-Path $repositoryRoot "outputs/pc-godot"))
@@ -229,6 +231,7 @@ $creditSources = [ordered]@{
     "models/monsters/Publisher-README.txt" = "assets/models/monsters/horror_creature/Publisher-README.txt"
     "models/monsters/siege_beasts/CREDITS.md" = "assets/models/monsters/siege_beasts/CREDITS.md"
     "models/monsters/siege_beasts/Publisher-README.txt" = "assets/models/monsters/siege_beasts/Publisher-README.txt"
+    "models/monsters/colossal/CREDITS.md" = "assets/models/monsters/colossal/CREDITS.md"
     "models/challenger2/SOURCE_LICENSE.txt" = "assets/models/realistic/challenger2/SOURCE_LICENSE.txt"
     "models/kf51/SOURCE_LICENSE.txt" = "assets/models/realistic/kf51/SOURCE_LICENSE.txt"
     "models/kv2/SOURCE_LICENSE.txt" = "assets/models/realistic/kv2/SOURCE_LICENSE.txt"
@@ -244,7 +247,7 @@ foreach ($credit in $creditSources.GetEnumerator()) {
     }
 }
 
-$productVersion = "0.4.9"
+$productVersion = "0.4.10"
 $manifestPath = Join-Path $artifactDirectory "build-manifest.json"
 $payloadFiles = @(Get-ChildItem -LiteralPath $artifactDirectory -File -Recurse | Sort-Object FullName)
 $manifestFiles = @(

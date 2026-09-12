@@ -179,6 +179,14 @@ CC0 Forest Monster, and thecubber's CC BY 3.0 Reptile commissioned by the
 The reptile is adapted with a skinned tail, dorsal scutes and a new walk animation.
 Source links, licenses and modification notes: [siege beast credits](models/monsters/siege_beasts/CREDITS.md).
 
+## PC 0.4.10 colossal creatures
+
+Teh_Bucket / RayMooHawk's **Glutton Demon** (CC0) and
+hendori-sama / umask007 / Dm3d's **Rock Golem** (selected CC BY 3.0) add two
+authored skinned models with original color and normal maps. The glutton is 34m;
+the stone body is shared by 52m and 72m gameplay roles.
+[Source links, checksums, licenses and adaptations](models/monsters/colossal/CREDITS.md).
+
 ## Original modeled ordnance
 
 AP shells, HE shells, machine-gun bullets and rockets are original closed GLB

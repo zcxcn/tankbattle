@@ -348,7 +348,7 @@ func _build_title_layer() -> void:
 	layout.add_child(HSeparator.new())
 	var footer := HBoxContainer.new()
 	layout.add_child(footer)
-	footer.add_child(_label("BUILD 0.4.9 · FORWARD+ / PBR ARMOR", &"Micro"))
+	footer.add_child(_label("BUILD 0.4.10 · FORWARD+ / PBR ARMOR", &"Micro"))
 	footer.add_child(_spacer(true, false))
 	var asset_credit := _label("3D：tomm8 · GRIP420 / David Falke · Comrade1280 · CC BY 4.0\n机枪录音：KuraiWolf / Nightshade Game Studios · CC BY 4.0", &"Micro")
 	asset_credit.name = "AssetCredit"
@@ -769,11 +769,17 @@ func _apply_snapshot() -> void:
 	_settings_layer.visible = _mode == "settings"
 	_result_layer.visible = _mode in ["won", "lost"] and _float_value("result_delay", 0.0) <= 0.0
 
-	_update_title()
-	_update_hud()
-	_update_settings()
-	_update_pause()
-	_update_result()
+	# Hidden menus are refreshed on entry, not rebuilt throughout every battle.
+	if _title_layer.visible:
+		_update_title()
+	if _hud_layer.visible:
+		_update_hud()
+	if _settings_layer.visible:
+		_update_settings()
+	if _pause_layer.visible:
+		_update_pause()
+	if _result_layer.visible:
+		_update_result()
 	if _focused_mode != _mode or (_result_layer.visible and not result_was_visible):
 		_menu_stick = Vector2.ZERO
 		_menu_direction = Vector2i.ZERO

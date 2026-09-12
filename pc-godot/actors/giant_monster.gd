@@ -6,6 +6,8 @@ extends CharacterBody3D
 const CREATURE := preload("res://assets/models/monsters/horror_creature/horror_creature.glb")
 const FOREST := preload("res://assets/models/monsters/siege_beasts/forest.glb")
 const REPTILE := preload("res://assets/models/monsters/siege_beasts/reptile.glb")
+const GLUTTON := preload("res://assets/models/monsters/colossal/glutton.glb")
+const GOLEM := preload("res://assets/models/monsters/colossal/golem.glb")
 const SOURCE_HEIGHT := 1.86
 const FALL_SECONDS := 2.6
 const CORPSE_SECONDS := 28.0
@@ -18,8 +20,12 @@ const ROLES := {
 	"forest": {"height": 22.0, "hp": 200.0, "speed": 1.5, "damage": 45.0, "reward": 40, "name": "枯林岩魔", "tint": Color(0.78, 0.81, 0.73)},
 	"reaver": {"height": 30.0, "hp": 240.0, "speed": 1.7, "damage": 48.0, "reward": 50, "name": "裂脊猎兽", "tint": Color(0.63, 0.74, 0.62)},
 	"kaiju": {"height": 60.0, "hp": 680.0, "speed": 1.15, "damage": 85.0, "reward": 150, "name": "灭城巨蜥", "tint": Color(0.44, 0.52, 0.55)},
+	"glutton": {"height": 34.0, "hp": 270.0, "speed": 1.65, "damage": 48.0, "reward": 55, "name": "深渊吞噬者", "tint": Color(0.82, 0.71, 0.67)},
+	"golem": {"height": 52.0, "hp": 390.0, "speed": 1.4, "damage": 62.0, "reward": 80, "name": "裂岩巨像", "tint": Color(0.80, 0.85, 0.87)},
+	"juggernaut": {"height": 72.0, "hp": 820.0, "speed": 1.25, "damage": 88.0, "reward": 180, "name": "断岳巨神", "tint": Color(0.72, 0.65, 0.57)},
 }
 static var _skin_materials: Dictionary = {}
+static var _deform_cache: Dictionary = {}
 var game: Node
 var director: Node
 var archetype := "shambler"
@@ -58,6 +64,11 @@ var _arm_indices: Array[int] = []
 var _head_bone := -1
 var _eye_glow: OmniLight3D
 var _health_display: Label3D
+var _deform_indices: Array[int] = []
+var _sense_clock := 0.0
+var _pursuing := false
+var _aggro_remaining := 0.0
+var _crowd_push := Vector3.ZERO
 
 
 func _ready() -> void:
@@ -71,7 +82,7 @@ func _ready() -> void:
 	# Health grows faster than speed: later waves stay ponderous and readable.
 	max_hp = float(role.hp) * (1.0 + 0.16 * float(maxi(0, wave - 1)))
 	hp = max_hp
-	move_speed = minf(2.65, float(role.speed) + float(maxi(0, wave - 1)) * 0.035)
+	move_speed = minf(4.8, float(role.speed) * 1.85 + float(maxi(0, wave - 1)) * 0.045)
 	attack_damage = float(role.damage) * (1.0 + minf(1.0, float(maxi(0, wave - 1)) * 0.055))
 	reward = int(role.reward)
 	display_name = role.name
@@ -91,10 +102,15 @@ func _ready() -> void:
 	add_child(collider)
 	_build_visual(role.tint)
 	_step_clock += float(get_instance_id() % 19) * 0.04
+	_sense_clock = float(get_instance_id() % 11) * 0.015
 	_fall_roll = -0.11 if get_instance_id() % 2 else 0.11
 	set_meta("monster_height", height)
 	set_meta("height", height)
 	set_meta("model_source", "CDmir / CC0" if archetype == "forest" else ("thecubber / CC BY 3.0" if archetype in ["reaver", "kaiju"] else "HorrorGameMaker / CC0"))
+	if archetype == "glutton":
+		set_meta("model_source", "Teh_Bucket / RayMooHawk / CC0")
+	elif archetype in ["golem", "juggernaut"]:
+		set_meta("model_source", "hendori-sama / umask007 / Dm3d / CC BY 3.0")
 
 
 func _build_visual(tint: Color) -> void:
@@ -102,6 +118,10 @@ func _build_visual(tint: Color) -> void:
 	_visual.name = "FallingBody"
 	add_child(_visual)
 	var scene: PackedScene = FOREST if archetype == "forest" else (REPTILE if archetype in ["reaver", "kaiju"] else CREATURE)
+	if archetype == "glutton":
+		scene = GLUTTON
+	elif archetype in ["golem", "juggernaut"]:
+		scene = GOLEM
 	var model := scene.instantiate() as Node3D
 	_model = model
 	model.name = "SkinnedCreature"
@@ -148,11 +168,15 @@ func _build_visual(tint: Color) -> void:
 	var rigs := model.find_children("*", "Skeleton3D", true, false)
 	if not rigs.is_empty():
 		_skeleton = rigs[0] as Skeleton3D
-		for bone_name in ["joint14", "joint14_001", "joint14.001", "upper_arm.L", "upper_arm.R", "Arm_L", "Arm_R"]:
+		for bone_name in ["joint14", "joint14_001", "joint14.001", "upper_arm.L", "upper_arm.R", "Arm_L", "Arm_R", "upperhand.L", "upperhand.R", "Bone.002_L", "Bone.002_R"]:
 			var index := _skeleton.find_bone(bone_name)
 			if index >= 0:
 				_arm_indices.append(index)
 		_head_bone = _skeleton.find_bone("joint15")
+		for mesh in _skins:
+			for bone in deform_indices(mesh, _skeleton):
+				if bone not in _deform_indices:
+					_deform_indices.append(bone)
 	_health_display = Label3D.new()
 	_health_display.name = "MonsterIdentity"
 	_health_display.position.y = minf(height + 0.8, 15.0)
@@ -174,6 +198,42 @@ func _build_visual(tint: Color) -> void:
 	_visual.add_child(_eye_glow)
 
 
+static func deform_indices(mesh: MeshInstance3D, skeleton: Skeleton3D) -> Array[int]:
+	# Scan immutable weights once per shared mesh/skin, never on a combat death.
+	var indices: Array[int] = []
+	if mesh.skin == null:
+		return indices
+	var key := "%d/%d" % [mesh.mesh.get_instance_id(), mesh.skin.get_instance_id()]
+	if _deform_cache.has(key):
+		return _deform_cache[key]
+	var used: Dictionary = {}
+	for surface in mesh.mesh.get_surface_count():
+		var arrays := mesh.mesh.surface_get_arrays(surface)
+		var bones: PackedInt32Array = arrays[Mesh.ARRAY_BONES]
+		var weights: PackedFloat32Array = arrays[Mesh.ARRAY_WEIGHTS]
+		for index in bones.size():
+			if weights[index] > 0.001:
+				used[bones[index]] = true
+	for bind: int in used:
+		var bone := skeleton.find_bone(mesh.skin.get_bind_name(bind))
+		if bone < 0:
+			bone = mesh.skin.get_bind_bone(bind)
+		if bone >= 0 and bone not in indices:
+			indices.append(bone)
+	_deform_cache[key] = indices
+	return indices
+
+
+static func warm_up_geometry() -> void:
+	for scene: PackedScene in [CREATURE, FOREST, REPTILE, GLUTTON, GOLEM]:
+		var model := scene.instantiate()
+		var rigs := model.find_children("*", "Skeleton3D", true, false)
+		if not rigs.is_empty():
+			for mesh in model.find_children("*", "MeshInstance3D", true, false):
+				deform_indices(mesh, rigs[0])
+		model.free()
+
+
 func _physics_process(delta: float) -> void:
 	if not is_instance_valid(game) or not game.is_combat_running():
 		return
@@ -183,6 +243,7 @@ func _physics_process(delta: float) -> void:
 	stunned = maxf(0.0, stunned - delta)
 	_hit_clock = maxf(0.0, _hit_clock - delta)
 	attack_cooldown = maxf(0.0, attack_cooldown - delta)
+	_aggro_remaining = maxf(0.0, _aggro_remaining - delta)
 	if not is_on_floor():
 		velocity.y -= 16.0 * delta
 	else:
@@ -202,24 +263,22 @@ func _physics_process(delta: float) -> void:
 	var offset := goal - global_position
 	offset.y = 0.0
 	var player := game.get("player") as Node3D
+	_sense_clock -= delta
+	if _sense_clock <= 0.0:
+		_sense_clock = 0.15
+		_update_awareness(player)
+	if _pursuing and is_instance_valid(player) and not bool(player.get("destroyed")):
+		offset = player.global_position - global_position
+		offset.y = 0.0
 	var melee_range := height * 0.24 + 3.5
 	if is_instance_valid(player) and not bool(player.get("destroyed")) and global_position.distance_to(player.global_position) < melee_range and _clear_reach(player.global_position):
 		_begin_attack(player, false)
-	elif offset.length() < base_attack_range() and _clear_reach(goal):
+	elif not _pursuing and offset.length() < base_attack_range() and _clear_reach(goal):
 		_begin_attack(null, true)
 	else:
 		var heading := offset.normalized()
-		var separation := Vector3.ZERO
-		for other: Node in get_tree().get_nodes_in_group("monsters"):
-			if other == self or bool(other.get("destroyed")):
-				continue
-			var apart := global_position - (other as Node3D).global_position
-			apart.y = 0.0
-			var safe_distance := (height + float(other.get("height"))) * 0.18
-			if apart.length_squared() > 0.01 and apart.length() < safe_distance:
-				separation += apart.normalized() * (1.0 - apart.length() / safe_distance)
 		# Forward progress always wins over lateral crowd avoidance.
-		heading = (heading + separation * 0.65).normalized()
+		heading = (heading + _crowd_push * 0.65).normalized()
 		rotation.y = lerp_angle(rotation.y, atan2(-heading.x, -heading.z), minf(1.0, delta * 1.8))
 		velocity.x = heading.x * move_speed
 		velocity.z = heading.z * move_speed
@@ -228,14 +287,35 @@ func _physics_process(delta: float) -> void:
 	_update_identity(player)
 
 
+func _update_awareness(player: Node3D) -> void:
+	_pursuing = false
+	if is_instance_valid(player) and not bool(player.get("destroyed")):
+		var distance := global_position.distance_to(player.global_position)
+		var notice_range := maxf(48.0, height * 1.1)
+		if distance < notice_range or (_aggro_remaining > 0.0 and distance < 110.0):
+			_pursuing = _clear_reach(player.global_position)
+	_crowd_push = Vector3.ZERO
+	var crowd: Array = director.monsters if is_instance_valid(director) and director.get("monsters") is Array else get_tree().get_nodes_in_group("monsters")
+	for other: Node3D in crowd:
+		if not is_instance_valid(other) or other == self or other.destroyed:
+			continue
+		var apart := global_position - other.global_position
+		apart.y = 0.0
+		var safe_distance := (height + float(other.height)) * 0.18
+		var squared := apart.length_squared()
+		if squared > 0.01 and squared < safe_distance * safe_distance:
+			var distance := sqrt(squared)
+			_crowd_push += apart / distance * (1.0 - distance / safe_distance)
+
+
 func _tick_walk(delta: float) -> void:
 	if is_instance_valid(_animation) and not _walk_name.is_empty():
 		var clip := _animation.get_animation(_walk_name)
-		_walk_phase = fposmod(_walk_phase + delta * clampf(0.65 * sqrt(14.0 / height), 0.28, 0.75), clip.length)
+		_walk_phase = fposmod(_walk_phase + delta * clampf(0.65 * sqrt(14.0 / height), 0.28, 0.75) * 1.5, clip.length)
 		_animation.seek(_walk_phase, true)
 	_step_clock -= delta
 	if _step_clock <= 0.0 and Vector2(velocity.x, velocity.z).length() > 0.2:
-		_step_clock = 1.45 * sqrt(height / 14.0)
+		_step_clock = 1.45 * sqrt(height / 14.0) / 1.5
 		step_count += 1
 		_ground_contact(0.16, false)
 
@@ -308,6 +388,8 @@ func receive_damage(amount: float, attacker_team: int, hit_position := Vector3.Z
 		accepted *= 1.65
 	accepted = minf(hp, accepted)
 	hp = maxf(0.0, hp - accepted)
+	_aggro_remaining = 12.0
+	_sense_clock = 0.0
 	_hit_clock = 2.2
 	_health_display.visible = true
 	_health_display.text = "%s  %d%%" % [display_name, ceili(hp / max_hp * 100.0)]
@@ -350,26 +432,8 @@ func _die() -> void:
 		_animation.seek(0.28, true)
 	if is_instance_valid(_skeleton):
 		var skeleton_to_visual := _visual.global_transform.affine_inverse() * _skeleton.global_transform
-		# Only deform joints referenced by skin weights, never outlying IK controls.
-		var used: Dictionary = {}
-		for mesh in _skins:
-			var skin := mesh.skin
-			if skin == null:
-				continue
-			for surface in mesh.mesh.get_surface_count():
-				var arrays := mesh.mesh.surface_get_arrays(surface)
-				var bones: PackedInt32Array = arrays[Mesh.ARRAY_BONES]
-				var weights: PackedFloat32Array = arrays[Mesh.ARRAY_WEIGHTS]
-				for index in bones.size():
-					if weights[index] <= 0.001:
-						continue
-					var bind := bones[index]
-					var bone := _skeleton.find_bone(skin.get_bind_name(bind))
-					if bone < 0:
-						bone = skin.get_bind_bone(bind)
-					if bone >= 0 and not used.has(bone):
-						used[bone] = true
-						_death_bone_points.append(skeleton_to_visual * _skeleton.get_bone_global_pose(bone).origin)
+		for bone in _deform_indices:
+			_death_bone_points.append(skeleton_to_visual * _skeleton.get_bone_global_pose(bone).origin)
 	if is_instance_valid(director):
 		director.monster_killed(self, reward)
 	AudioService.play_3d("explosion_tail", global_position + Vector3.UP * height * 0.6, -10.0, 0.65, 55)
