@@ -641,7 +641,6 @@ export function createNature(
   quality: Quality,
 ) {
   const low = quality === 'performance',
-    desert = b.battlefield.biome === 'desert',
     rand = seeded(1777 + b.mission * 61);
   const meshes: Mesh[] = [],
     mountains: { x: number; z: number; width: number; depth: number }[] = [];
@@ -661,9 +660,8 @@ export function createNature(
       mountains.push({ x, z, width, depth });
       const data = geometry(),
         segments = low ? 10 : quality === 'cinematic' ? 28 : 24,
-        peak = desert
-          ? 9 + rand() * 12
-          : b.battlefield.biome === 'highlands'
+        peak =
+          b.battlefield.biome === 'highlands'
             ? 27 + rand() * 24
             : 16 + rand() * 20;
       for (let row = 0; row <= segments; row++)
@@ -732,14 +730,22 @@ export function createNature(
   grassMaterial.backFaceCulling = false;
   const chunks = new Map<string, { grass: Geometry; soil: Geometry }>(),
     stones = geometry();
+  const inFootprint = (
+    x: number,
+    y: number,
+    rect: { x: number; y: number; w: number; h: number; shape?: 'ellipse' },
+    padding: number,
+  ) =>
+    rect.shape === 'ellipse'
+      ? ((x - rect.x - rect.w / 2) / (rect.w / 2 + padding)) ** 2 +
+          ((y - rect.y - rect.h / 2) / (rect.h / 2 + padding)) ** 2 <
+        1
+      : x > rect.x - padding &&
+        x < rect.x + rect.w + padding &&
+        y > rect.y - padding &&
+        y < rect.y + rect.h + padding;
   const excluded = (x: number, y: number) =>
-    b.terrain.some(
-      (feature) =>
-        x > feature.x - 12 &&
-        x < feature.x + feature.w + 12 &&
-        y > feature.y - 12 &&
-        y < feature.y + feature.h + 12,
-    ) ||
+    b.terrain.some((feature) => inFootprint(x, y, feature, 12)) ||
     b.roads.some(
       (r) =>
         x > r.x - 12 &&
@@ -747,22 +753,11 @@ export function createNature(
         y > r.y - 12 &&
         y < r.y + r.h + 12,
     ) ||
-    b.walls.some(
-      (w) =>
-        x > w.x - 9 && x < w.x + w.w + 9 && y > w.y - 9 && y < w.y + w.h + 9,
-    ) ||
+    b.walls.some((wall) => inFootprint(x, y, wall, 9)) ||
     [b.player, b.base, ...b.objectives, ...b.route].some(
       (p) => Math.hypot(x - p.x, y - p.y) < 75,
     );
-  const step = desert
-    ? low
-      ? 110
-      : 82
-    : low
-      ? 68
-      : quality === 'cinematic'
-        ? 32
-        : 43;
+  const step = low ? 68 : quality === 'cinematic' ? 32 : 43;
   let tufts = 0;
   for (let y = 20; y < H - 20; y += step)
     for (let x = 20; x < W - 20; x += step) {
@@ -919,12 +914,6 @@ export function createNature(
       }
     }
   for (const [key, chunk] of chunks) {
-    if (desert)
-      for (let i = 0; i < chunk.grass.colors.length; i += 4) {
-        chunk.grass.colors[i] = Math.min(0.72, chunk.grass.colors[i] * 1.55);
-        chunk.grass.colors[i + 1] *= 1.16;
-        chunk.grass.colors[i + 2] *= 1.22;
-      }
     const soil = geometryMesh(scene, 'natural-verge-' + key, chunk.soil);
     soil.material = materials.soil;
     const grass = geometryMesh(scene, 'grass-cluster-' + key, chunk.grass);

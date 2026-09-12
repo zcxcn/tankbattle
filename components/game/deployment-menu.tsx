@@ -6,11 +6,7 @@ import {
   Check,
   Lock,
   Mountain,
-  Waves,
-  Trees,
-  TrainFront,
   Building2,
-  Sun,
   Play,
   Crosshair,
   Shield,
@@ -31,10 +27,6 @@ import battlefieldCover from '../../web/assets/iron-embers-cover.png?url';
 const fieldIcons = {
   city: Building2,
   highlands: Mountain,
-  desert: Sun,
-  tropical: Trees,
-  railway: TrainFront,
-  wetlands: Waves,
 };
 type Launch = { battlefield: BattlefieldId; operation: OperationId };
 export default function DeploymentMenu({

@@ -38,6 +38,10 @@ const {
   W,
   H,
   ENEMY_REGION,
+  ENEMY_PATROL_RADIUS,
+  ENEMY_LEASH_RADIUS,
+  ENEMY_ALERT_DISTANCE,
+  wallDistance,
   ENEMY_SPAWN_DISTANCE,
   segmentCircle,
   segmentRect,
@@ -682,6 +686,7 @@ test('enemy specialists heal, rush-explode, and launch different projectile patt
   Object.assign(medic, { x: 500, y: 500, spawn: 0, cooldown: 100 });
   Object.assign(ally, { x: 580, y: 500, hp: 10, spawn: 0, stun: 100 });
   Object.assign(suicide, { x: 850, y: 500, spawn: 0 });
+  for (const e of b.enemies) e.patrolOrigin = { x: e.x, y: e.y };
   sniper.spawn = 0;
   rocket.spawn = 0;
   const hp = b.player.hp;
@@ -956,32 +961,32 @@ test('growth stacks with all loadouts and remains stable at the final level', ()
     before,
   );
 });
-test('city warehouse detour reaches line of sight instead of oscillating for two minutes', () => {
+test('city patrol navigation returns home around cover without chasing a distant player', () => {
   const b = make();
-  b.player.x = 772.4;
-  b.player.y = 630;
+  b.player.x = 3000;
+  b.player.y = 2100;
   b.player.hp = 1e9;
   b.spawnTimer = 1e9;
   const e = b.enemies[0];
   Object.assign(e, {
     x: 772.4,
     y: 308,
+    patrolOrigin: { x: 772.4, y: 630 },
+    patrolTarget: { x: 772.4, y: 630 },
+    returning: true,
     spawn: 0,
-    turn: 1,
     damage: 0,
     speed: 75,
+    mineReadyAt: Infinity,
   });
   b.enemies = [e];
-  assert(b.canOccupy(e.x, e.y, e.radius));
-  assert(b.canOccupy(b.player.x, b.player.y, b.player.radius));
   for (let i = 0; i < 60 * 35; i++) b.step(1 / 60, idle);
   assert(
-    Math.hypot(e.x - b.player.x, e.y - b.player.y) < 230,
-    `enemy stuck at ${e.x}, ${e.y}`,
+    Math.hypot(e.x - e.patrolOrigin.x, e.y - e.patrolOrigin.y) <
+      ENEMY_PATROL_RADIUS + 10,
   );
-  assert(
-    !b.walls.some((w) => w.hp > 0 && segmentRect(e, b.player, w) !== null),
-  );
+  assert(Math.hypot(e.x - b.player.x, e.y - b.player.y) > ENEMY_ALERT_DISTANCE);
+  assert.equal(b.bullets.length, 0);
 });
 test('every escort segment clears buildings for a full-size convoy', () => {
   for (const mission of [7, 13]) {
@@ -1123,7 +1128,7 @@ test('living cover has real collision and is removed by the same destruction rul
     const b = make(mission),
       trees = b.walls.filter((w) => w.kind === 'tree');
     assert(
-      trees.length >= (b.battlefield.id === 'desert' ? 1 : 8),
+      trees.length >= 8,
       `mission ${mission + 1} needs biome-appropriate vegetation`,
     );
     for (const tree of trees) {
@@ -1325,7 +1330,7 @@ test('four permanent perimeter walls stop dashes and every projectile while depl
       );
     }
 });
-test('special ammo starts empty, comes from kills once, auto-equips on pickup and resets on retry', () => {
+test('special ammo starts empty, comes from kills once, keeps the current weapon on pickup and resets on retry', () => {
   const b = new Battle(0, true, { ...config(), weapon: 6 });
   assert.equal(b.weapon, 0);
   assert.equal(b.player.damage, loadoutStats(b.save, 0, 0).damage);
@@ -1341,8 +1346,10 @@ test('special ammo starts empty, comes from kills once, auto-equips on pickup an
   b.player.x = supply.x;
   b.player.y = supply.y;
   b.step(0, idle);
-  assert.equal(b.weapon, 6);
+  assert.equal(b.weapon, 0);
   assert.equal(b.ammo[6], WEAPONS[6].supply);
+  assert(b.selectWeapon(6));
+  assert.equal(b.weapon, 6);
   const fresh = new Battle(0, true, b.save);
   assert.equal(fresh.ammo[6], 0);
   assert.equal(fresh.weapon, 0);
@@ -1383,10 +1390,11 @@ test('supplies cap reserves, expire without collecting, and cycle skips empty sl
   b.pickups = [{ ...b.player, kind: 3, weapon: 3, amount: 999, life: 2 }];
   b.step(0, idle);
   assert.equal(b.ammo[3], WEAPONS[3].capacity);
-  b.step(0, { ...idle, nextWeapon: true });
   assert.equal(b.weapon, 0);
   b.step(0, { ...idle, nextWeapon: true });
   assert.equal(b.weapon, 3);
+  b.step(0, { ...idle, nextWeapon: true });
+  assert.equal(b.weapon, 0);
   b.pickups = [{ ...b.player, kind: 3, weapon: 6, amount: 5, life: 0.001 }];
   b.step(0.01, idle);
   assert.equal(b.ammo[6], 0);
@@ -1580,7 +1588,7 @@ test('music switching on gamepad View uses a release edge and saves validate the
 const { BATTLEFIELDS, OPERATIONS } = await import(
   pathToFileURL(path.join(tmp, 'battlefields.mjs'))
 );
-test('six maps have distinct geometry and every operation has navigable deployment and objectives', () => {
+test('two maps have distinct geometry and every operation has navigable deployment and objectives', () => {
   const layouts = new Set();
   for (const field of BATTLEFIELDS) {
     for (const operation of OPERATIONS) {
@@ -1624,7 +1632,7 @@ test('six maps have distinct geometry and every operation has navigable deployme
           `${field.id} trapped enemy`,
         );
       for (const feature of b.terrain.filter(
-        (feature) => feature.kind === 'water' || feature.kind === 'hill',
+        (feature) => feature.kind === 'hill',
       )) {
         assert(
           b.walls.some(
@@ -1651,7 +1659,7 @@ test('six maps have distinct geometry and every operation has navigable deployme
         layouts.add(JSON.stringify({ roads: b.roads, walls: b.walls }));
     }
   }
-  assert.equal(layouts.size, 6);
+  assert.equal(layouts.size, 2);
 });
 test('spawn sampling spreads across both dimensions of the opposing region', () => {
   const xs = new Set(),
@@ -1744,7 +1752,7 @@ test('scenario options migrate safely and quick victories retain kills without u
     'survival',
   );
   for (const selection of [
-    { battlefield: 'desert' },
+    { battlefield: 'highlands' },
     { operation: 'survival' },
   ]) {
     const save = beginRun({ ...config(), ...selection }, 'scenario');
@@ -1764,6 +1772,262 @@ test('quick objectives have stable targets even after selecting a boss chapter',
     assert.equal(b.operationDuration, 60);
     assert(b.target >= 18);
   }
+});
+test('wilderness has only natural cover, fordable water and exact elliptical hills', () => {
+  assert.deepEqual(
+    BATTLEFIELDS.map((f) => f.id),
+    ['city', 'highlands'],
+  );
+  const b = new Battle(0, false, { ...config(), battlefield: 'highlands' });
+  assert(
+    b.walls.every((wall) => ['hill', 'tree', 'boundary'].includes(wall.kind)),
+  );
+  const ponds = b.terrain.filter((feature) => feature.kind === 'water');
+  assert.equal(ponds.length, 3);
+  for (const pond of ponds) {
+    const x = pond.x + pond.w / 2,
+      y = pond.y + pond.h / 2;
+    assert(b.inWater(x, y));
+    assert(b.canOccupy(x, y, 46));
+    Object.assign(b.player, { x, y });
+    const start = b.player.x;
+    b.move(b.player, 20, 0);
+    assert(Math.abs(b.player.x - start - 14.4) < 1e-6);
+    assert(
+      b.navigation.guide(
+        { x: pond.x - 80, y },
+        { x: pond.x + pond.w + 80, y },
+        26,
+        0,
+      ),
+    );
+  }
+  const hill = {
+    x: 1000,
+    y: 500,
+    w: 400,
+    h: 240,
+    hp: Infinity,
+    maxHp: Infinity,
+    steel: true,
+    kind: 'hill',
+    shape: 'ellipse',
+  };
+  assert.equal(
+    segmentRect({ x: 950, y: 501 }, { x: 1100, y: 501 }, hill),
+    null,
+  );
+  assert.equal(
+    segmentRect({ x: 900, y: 620 }, { x: 1500, y: 620 }, hill),
+    1 / 6,
+  );
+  assert(Math.abs(wallDistance({ x: 980, y: 620 }, hill) - 20) < 1e-5);
+  b.walls = [hill];
+  assert(b.canOccupy(1005, 505, 20));
+  assert(!b.canOccupy(1200, 620, 20));
+  b.enemies = [];
+  b.spawnTimer = 999;
+  b.bullets = [
+    { x: 900, y: 620, vx: 2000, vy: 0, damage: 999, enemy: false, life: 2 },
+  ];
+  b.step(0.1, idle);
+  assert.equal(hill.hp, Infinity);
+  assert.equal(b.bullets.length, 0);
+  for (const id of ['desert', 'tropical', 'railway', 'wetlands'])
+    assert.equal(
+      parseSave(JSON.stringify({ battlefield: id })).battlefield,
+      'highlands',
+    );
+});
+const localPatrol = () => {
+  const b = new Battle(0, true, config(), 77);
+  b.walls = [];
+  b.terrain = [];
+  b.enemies = [];
+  b.spawnTimer = 999;
+  Object.assign(b.player, { x: 3000, y: 2100, hp: 1e9, maxHp: 1e9 });
+  b.spawnEnemy(0);
+  const e = b.enemies[0];
+  Object.assign(e, {
+    x: 1200,
+    y: 700,
+    patrolOrigin: { x: 1200, y: 700 },
+    spawn: 0,
+    mineReadyAt: Infinity,
+    cooldown: 0,
+  });
+  return { b, e };
+};
+test('distant enemies patrol locally, react only to visible nearby targets and return on a leash', () => {
+  const { b, e } = localPatrol();
+  let shots = 0;
+  const shoot = b.shoot.bind(b);
+  b.shoot = (tank, enemy) => {
+    if (enemy) shots++;
+    shoot(tank, enemy);
+  };
+  stepFor(b, 12);
+  assert.equal(shots, 0);
+  assert(Math.hypot(e.x - 1200, e.y - 700) > 5);
+  assert(Math.hypot(e.x - 1200, e.y - 700) <= ENEMY_LEASH_RADIUS);
+  Object.assign(e, {
+    x: 1200,
+    y: 700,
+    turret: 0,
+    patrolTarget: undefined,
+    returning: false,
+  });
+  Object.assign(b.player, { x: 1600, y: 700 });
+  stepFor(b, 4);
+  assert(shots > 0);
+  let returned = false,
+    maxRadius = 0;
+  for (let i = 0; i < 60 * 20; i++) {
+    b.player.x = e.x + 450;
+    b.player.y = e.y;
+    b.step(1 / 60, idle);
+    returned ||= e.returning;
+    maxRadius = Math.max(maxRadius, Math.hypot(e.x - 1200, e.y - 700));
+  }
+  assert(returned);
+  assert(maxRadius <= ENEMY_LEASH_RADIUS + 1);
+  Object.assign(b.player, { x: 3000, y: 2100 });
+  stepFor(b, 15);
+  assert(Math.hypot(e.x - 1200, e.y - 700) < ENEMY_PATROL_RADIUS + 20);
+  const hidden = localPatrol();
+  Object.assign(hidden.b.player, { x: 1550, y: 700 });
+  hidden.b.walls = [
+    {
+      x: 1400,
+      y: 300,
+      w: 25,
+      h: 1000,
+      hp: Infinity,
+      maxHp: Infinity,
+      steel: true,
+    },
+  ];
+  let hiddenShots = 0;
+  hidden.b.onSound = (event) => {
+    if (event === 'enemyfire') hiddenShots++;
+  };
+  stepFor(hidden.b, 10);
+  assert.equal(hiddenShots, 0);
+  assert(
+    Math.hypot(hidden.e.x - 1200, hidden.e.y - 700) <= ENEMY_PATROL_RADIUS + 30,
+  );
+});
+test('defense and escort targets attract nearby ranged fire without global pursuit', () => {
+  for (const operation of ['defend', 'escort']) {
+    const b = new Battle(0, false, { ...config(), operation });
+    b.walls = [];
+    b.terrain = [];
+    b.enemies = [];
+    b.spawnTimer = 999;
+    Object.assign(b.player, { x: 100, y: 100 });
+    b.spawnEnemy(0);
+    const e = b.enemies[0];
+    Object.assign(e, {
+      x: b.base.x - 450,
+      y: b.base.y,
+      patrolOrigin: { x: b.base.x - 450, y: b.base.y },
+      spawn: 0,
+      turret: 0,
+      cooldown: 0,
+      mineReadyAt: Infinity,
+    });
+    const hp = b.base.hp;
+    stepFor(b, 4);
+    assert(b.base.hp < hp, operation);
+    assert(
+      Math.hypot(e.x - e.patrolOrigin.x, e.y - e.patrolOrigin.y) <=
+        ENEMY_LEASH_RADIUS,
+    );
+  }
+});
+test('enemy mine attempts are rare with long cooldowns for ordinary and boss tanks', () => {
+  for (const kind of [0, 3]) {
+    const { b, e } = localPatrol();
+    e.kind = kind;
+    e.mineReadyAt = 0;
+    e.cooldown = 999;
+    Object.assign(b.player, { x: 1500, y: 700 });
+    b.random = () => 0;
+    let attempts = 0;
+    const times = [];
+    b.layMine = () => {
+      attempts++;
+      times.push(b.elapsed);
+      return true;
+    };
+    stepFor(b, 12);
+    assert.equal(attempts, 1);
+    Object.assign(e, { x: 1200, y: 700, returning: false });
+    stepFor(b, 28);
+    assert(attempts <= 2);
+    if (times.length > 1) assert(times[1] - times[0] >= 35);
+    e.mineReadyAt = b.elapsed;
+    b.random = () => 0.9;
+    const before = attempts;
+    Object.assign(e, { x: 1200, y: 700, returning: false });
+    b.step(0.01, idle);
+    assert.equal(attempts, before);
+    assert(e.mineReadyAt >= b.elapsed + 35);
+  }
+});
+test('Boss cancels a lost player windup even when another defended target remains visible', () => {
+  const b = new Battle(0, false, { ...config(), operation: 'defend' });
+  b.walls = [];
+  b.terrain = [];
+  b.enemies = [b.boss];
+  b.spawnTimer = 999;
+  Object.assign(b.player, { x: 500, y: 1000 });
+  Object.assign(b.base, { x: 1500, y: 1320 });
+  Object.assign(b.boss, {
+    x: 1500,
+    y: 1000,
+    patrolOrigin: { x: 1500, y: 1000 },
+    spawn: 0,
+    attackWindup: 0.1,
+    windupTarget: 'player',
+    turret: Math.PI,
+    mineReadyAt: 999,
+  });
+  b.step(0.1, idle);
+  assert.equal(b.bullets.length, 0);
+  assert.equal(b.boss.attackWindup, 0);
+});
+test('a suicide attack on a nearby beacon cannot splash the player through cover', () => {
+  const b = new Battle(0, false, { ...config(), operation: 'defend' });
+  b.terrain = [];
+  b.enemies = [b.enemies[1]];
+  b.spawnTimer = 999;
+  Object.assign(b.player, { x: 1000, y: 1080 });
+  Object.assign(b.base, { x: 1040, y: 1000 });
+  Object.assign(b.enemies[0], {
+    kind: 6,
+    x: 1000,
+    y: 1000,
+    patrolOrigin: { x: 1000, y: 1000 },
+    spawn: 0,
+    mineReadyAt: 999,
+  });
+  b.walls = [
+    {
+      x: 900,
+      y: 1030,
+      w: 200,
+      h: 20,
+      hp: Infinity,
+      maxHp: Infinity,
+      steel: true,
+    },
+  ];
+  const hp = b.player.hp,
+    baseHp = b.base.hp;
+  b.step(0.01, idle);
+  assert.equal(b.player.hp, hp);
+  assert(b.base.hp < baseHp);
 });
 console.log(`\n${passed} gameplay checks passed.`);
 await fs.rm(tmp, { recursive: true, force: true });

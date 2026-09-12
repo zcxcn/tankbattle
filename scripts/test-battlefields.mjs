@@ -89,38 +89,100 @@ for (const { id: battlefield } of BATTLEFIELDS) {
         .filter((_, i) => i % 3 === 1)
         .every((value) => value > 0),
     );
+    const positions = mesh.getVerticesData('position');
+    let edgeVertices = 0;
+    assert.equal(feature.shape, 'ellipse');
+    for (let i = 0; i < positions.length; i += 3) {
+      const u =
+        (positions[i] - (feature.x + feature.w / 2 - W / 2) * 0.1) /
+        (feature.w * 0.05);
+      const v =
+        (positions[i + 2] - (feature.y + feature.h / 2 - H / 2) * 0.1) /
+        (feature.h * 0.05);
+      const radius = u * u + v * v;
+      assert(
+        radius <= 1.00001,
+        'hill geometry stays within its elliptical collision',
+      );
+      if (radius > 0.99999) {
+        edgeVertices++;
+        assert(
+          Math.abs(positions[i + 1] - 0.045) < 0.0001,
+          'hill foot meets the ground without a slab',
+        );
+      }
+    }
+    assert(edgeVertices >= 32);
   }
   const wall = b.walls.find(
     (wall) => wall.kind === 'office' || wall.kind === 'warehouse',
   );
-  assert(wall && Number.isFinite(wall.maxHp));
-  const view = world.walls.get(wall),
-    allocations = [scene.meshes.length, scene.materials.length];
-  for (const [ratio, stage] of [
-    [0.7, 1],
-    [0.3, 2],
-    [0, 0],
-    [1, 0],
-  ]) {
-    wall.hp = wall.maxHp * ratio;
-    world.updateDamage();
-    assert.equal(view.solid.metadata.damageStage, stage);
-    assert.equal(view.solid.isEnabled(), ratio > 0);
-    assert.equal(view.rubble.isEnabled(), ratio <= 0);
-    assert(view.rubble.getChildMeshes().length > 0);
-    assert.deepEqual(
-      [scene.meshes.length, scene.materials.length],
-      allocations,
+  if (battlefield === 'city') {
+    assert(wall && Number.isFinite(wall.maxHp));
+    const view = world.walls.get(wall),
+      allocations = [scene.meshes.length, scene.materials.length];
+    for (const [ratio, stage] of [
+      [0.7, 1],
+      [0.3, 2],
+      [0, 0],
+      [1, 0],
+    ]) {
+      wall.hp = wall.maxHp * ratio;
+      world.updateDamage();
+      assert.equal(view.solid.metadata.damageStage, stage);
+      assert.equal(view.solid.isEnabled(), ratio > 0);
+      assert.equal(view.rubble.isEnabled(), ratio <= 0);
+      assert(view.rubble.getChildMeshes().length > 0);
+      assert.deepEqual(
+        [scene.meshes.length, scene.materials.length],
+        allocations,
+      );
+    }
+    console.log(
+      `PASS ${battlefield}: staged damage and rubble without new allocations`,
+    );
+  } else {
+    assert(!wall);
+    assert(
+      !b.walls.some((wall) =>
+        ['office', 'warehouse', 'container', 'water'].includes(wall.kind),
+      ),
+    );
+    assert(
+      !world.staticMeshes.some((mesh) =>
+        /distant-industrial|rail-spur|rail-sleeper/.test(mesh.name),
+      ),
+    );
+    const water = world.staticMeshes.filter(
+      (mesh) => mesh.metadata?.terrain === 'water',
+    );
+    const bottoms = world.staticMeshes.filter(
+      (mesh) => mesh.metadata?.terrain === 'ford-bottom',
+    );
+    assert.equal(water.length, 3);
+    assert.equal(bottoms.length, 3);
+    for (const mesh of water) {
+      assert(mesh.metadata.fordable && mesh.material.needAlphaBlending());
+      assert(
+        Math.max(
+          ...mesh.getVerticesData('position').filter((_, i) => i % 3 === 1),
+        ) < 0.07,
+      );
+      assert(
+        mesh
+          .getVerticesData('color')
+          .some((value, i) => i % 4 === 3 && value === 0),
+      );
+    }
+    console.log(
+      `PASS ${battlefield}: rounded hills match collision, fordable shallow water, no houses or rail`,
     );
   }
-  console.log(
-    `PASS ${battlefield}: matching terrain bounds, outward normals, staged damage and rubble without new allocations`,
-  );
   scene.dispose();
   await new Promise((resolve) => setTimeout(resolve, 0));
 }
 const scene = new Scene(engine),
-  b = new Battle(0, false, { ...defaultSave, battlefield: 'tropical' }, 1234),
+  b = new Battle(0, false, { ...defaultSave, battlefield: 'highlands' }, 1234),
   progress = [];
 let ticks = 0;
 const timer = setInterval(() => ticks++, 0);

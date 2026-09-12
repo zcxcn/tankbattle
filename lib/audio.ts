@@ -26,6 +26,7 @@ export class GameAudio {
   private voices = new Set<{ stop: () => void }>();
   private enemyShots = new Set<{ stop: () => void }>();
   private shots = new Map<number, AudioBuffer>();
+  private cannonBuffer: AudioBuffer | null = null;
   constructor(
     private onRadio: (cue: RadioCue | null) => void = () => {},
     private onSpeaking: (active: boolean) => void = () => {},
@@ -228,22 +229,34 @@ export class GameAudio {
       Number.isInteger(weapon) && weapon >= 0 && weapon < 7 ? weapon : 0;
     const sequence = this.shotSequence++;
     const clips = WEAPON_CLIPS[index];
+    // Keep the cannon's first selected report for the entire deployment. A
+    // late decode must not change its timbre between shots or after a pause.
     let buffer =
-      this.recordings?.get(clips[sequence % clips.length]) ??
-      clips.map((id) => this.recordings?.get(id)).find(Boolean) ??
-      this.shots.get(index);
+      index === 0
+        ? (this.cannonBuffer ??
+          this.recordings?.get(clips[0]) ??
+          this.shots.get(0))
+        : (this.recordings?.get(clips[sequence % clips.length]) ??
+          clips.map((id) => this.recordings?.get(id)).find(Boolean) ??
+          this.shots.get(index));
     if (!buffer) {
       const samples = weaponRecording(index, c.sampleRate);
       buffer = c.createBuffer(1, samples.length, c.sampleRate);
       buffer.copyToChannel(samples, 0);
       this.shots.set(index, buffer);
     }
+    if (index === 0) this.cannonBuffer = buffer;
     this.startSample(
       buffer,
       enemy ? 0.19 : index === 0 ? 0.7 : index === 1 ? 0.27 : 0.48,
-      (enemy ? 0.96 : 1) * [0.987, 1, 1.013][sequence % 3],
+      index === 0
+        ? enemy
+          ? 0.91
+          : 0.94
+        : (enemy ? 0.96 : 1) * [0.987, 1, 1.013][sequence % 3],
       'shot',
       enemy,
+      index === 0,
     );
   }
   /** One budgeted voice may contain several layered scheduled sources. */
@@ -292,6 +305,7 @@ export class GameAudio {
     rate: number,
     category: 'shot' | 'effect' | 'explosion',
     enemy = false,
+    cannon = false,
   ) {
     const c = this.context!;
     const source = c.createBufferSource(),
@@ -299,9 +313,24 @@ export class GameAudio {
     source.buffer = buffer;
     source.playbackRate.value = rate;
     gain.gain.value = volume;
-    source.connect(gain);
+    const nodes: AudioNode[] = [source, gain];
+    if (cannon) {
+      // The recording and offline source share the same deep, restrained report.
+      const lowpass = c.createBiquadFilter(),
+        body = c.createBiquadFilter();
+      lowpass.type = 'lowpass';
+      lowpass.frequency.value = 1600;
+      lowpass.Q.value = 0.7;
+      body.type = 'lowshelf';
+      body.frequency.value = 180;
+      body.gain.value = 3;
+      source.connect(lowpass);
+      lowpass.connect(body);
+      body.connect(gain);
+      nodes.push(lowpass, body);
+    } else source.connect(gain);
     gain.connect(this.output());
-    const voice = this.ownVoice(category, [source], [source, gain]);
+    const voice = this.ownVoice(category, [source], nodes);
     if (enemy) this.enemyShots.add(voice);
     try {
       source.start();
@@ -448,5 +477,6 @@ export class GameAudio {
     this.master = null;
     this.noise.clear();
     this.shots.clear();
+    this.cannonBuffer = null;
   }
 }

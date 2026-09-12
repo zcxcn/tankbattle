@@ -31,6 +31,7 @@ for (const name of [
   'three/muzzle',
   'three/weapon-mount',
   'three/projectiles',
+  'three/supplies',
   'three/renderer3d',
 ]) {
   const source = await fs.readFile(`lib/${name}.ts`, 'utf8');
@@ -1199,7 +1200,53 @@ await test('larger supplies are labeled, non-pickable, color-coded and bounded n
   box.computeWorldMatrix(true);
   assert(box.getBoundingInfo().boundingBox.extendSizeWorld.x > 1.5);
   const count = view.meshCount;
-  for (let i = 0; i < 20; i++) view.draw(b, null);
+  const allocation = [
+    view.scene.materials.length,
+    view.scene.geometries.length,
+  ];
+  const signatures = new Set();
+  for (let kind = 0; kind < 4; kind++) {
+    for (const item of b.pickups) item.kind = kind;
+    for (let i = 0; i < 5; i++) view.draw(b, null);
+    const bodies = first
+      .getChildMeshes()
+      .filter(
+        (mesh) => mesh.isEnabled() && mesh.metadata?.supplyFamily !== undefined,
+      );
+    assert(bodies.length <= 5);
+    const parts = bodies.flatMap((mesh) => mesh.metadata.parts).join(',');
+    assert(
+      parts.includes(
+        [
+          'socket-wrench',
+          'overclock-capacitor',
+          'shield-cell-core',
+          'exposed-ammunition-shell',
+        ][kind],
+      ),
+    );
+    assert(
+      !first
+        .getChildMeshes()
+        .some((mesh) => /cross|beacon|marker/.test(mesh.name)),
+    );
+    signatures.add(
+      bodies.reduce((sum, mesh) => sum + mesh.getTotalVertices(), 0),
+    );
+    const peers = view.pickupPool[1].getChildMeshes();
+    assert(
+      bodies.every(
+        (mesh) =>
+          mesh.geometry ===
+          peers.find((peer) => peer.name === mesh.name).geometry,
+      ),
+    );
+    assert.deepEqual(
+      [view.scene.materials.length, view.scene.geometries.length],
+      allocation,
+    );
+  }
+  assert.equal(signatures.size, 4, 'four distinct modeled pickup families');
   assert.equal(view.meshCount, count);
   b.pickups = [];
   view.draw(b, null);

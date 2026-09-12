@@ -71,7 +71,11 @@ const statusHud = {
 const mobileContext = vm.createContext({ hud: statusHud, radioCue: null });
 const mobileValue = (name) =>
   vm.runInContext(`(${mobileExpressions.get(name)})`, mobileContext);
-assert.equal(mobileValue('mobileStatus'), statusHud.objective);
+assert.equal(
+  mobileValue('mobileStatus'),
+  '',
+  'idle HUD has no repeated objective banner',
+);
 assert.equal(
   mobileValue('bossNearby'),
   false,
@@ -95,13 +99,13 @@ statusHud.bossWarning = true;
 statusHud.radarEnemies[0].y = 1900;
 assert.equal(
   mobileValue('bossNearby'),
-  true,
-  'attack warnings remain visible even from a distant Boss',
+  false,
+  'distant Boss attacks must not summon a HUD banner',
 );
 assert.match(
   mobileValue('mobileStatus'),
-  /BARRAGE/,
-  'attack warning overrides every routine notice',
+  /ARMOR CRITICAL/,
+  'Boss attacks do not replace the quiet edge status',
 );
 console.log('PASS: single mobile status priority and proximity-based Boss HUD');
 const ref = (current) => ({ current });

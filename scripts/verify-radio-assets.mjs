@@ -2,8 +2,21 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import ts from 'typescript';
 
+// Validate the actual bundled script without importing gameplay dependencies.
+const source = await fs.readFile('lib/tactical-radio.ts', 'utf8');
+const ast = ts.createSourceFile(
+  'tactical-radio.ts',
+  source,
+  ts.ScriptTarget.ES2022,
+  true,
+);
+const lines = ast.statements
+  .filter(ts.isVariableStatement)
+  .flatMap((statement) => [...statement.declarationList.declarations])
+  .find((declaration) => declaration.name.getText(ast) === 'RADIO_LINES');
+assert(lines?.initializer);
 const js = ts.transpileModule(
-  await fs.readFile('lib/tactical-radio.ts', 'utf8'),
+  `export const RADIO_LINES = ${lines.initializer.getText(ast)};`,
   {
     compilerOptions: {
       module: ts.ModuleKind.ES2022,

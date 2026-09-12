@@ -8,38 +8,10 @@ export const BATTLEFIELDS = [
   },
   {
     id: 'highlands',
-    name: '苍岩高地',
-    description: '山谷迂回 · 岩丘与林间道路',
+    name: '山林荒野',
+    description: '山林巡游 · 天然山丘与可涉浅水',
     biome: 'highlands',
     accent: '#9ebc9a',
-  },
-  {
-    id: 'desert',
-    name: '赤沙荒漠',
-    description: '开阔机动 · 台地与补给哨站',
-    biome: 'desert',
-    accent: '#e9af70',
-  },
-  {
-    id: 'tropical',
-    name: '雨林河谷',
-    description: '丛林穿插 · 河道与桥梁',
-    biome: 'tropical',
-    accent: '#72c7a0',
-  },
-  {
-    id: 'railway',
-    name: '断轨货场',
-    description: '铁路争夺 · 货列与装卸区',
-    biome: 'railway',
-    accent: '#b5b7cb',
-  },
-  {
-    id: 'wetlands',
-    name: '雾湾湿地',
-    description: '桥头突破 · 河网与堤岸',
-    biome: 'wetlands',
-    accent: '#80bfd1',
   },
 ] as const;
 export type Battlefield = (typeof BATTLEFIELDS)[number];
@@ -91,6 +63,7 @@ export type OperationId = (typeof OPERATIONS)[number]['id'];
 export type OperationChoice = 'campaign' | OperationId;
 export type TerrainFeature = {
   kind: 'water' | 'hill' | 'bridge' | 'rail';
+  shape?: 'ellipse';
   x: number;
   y: number;
   w: number;
@@ -99,21 +72,21 @@ export type TerrainFeature = {
 };
 const CAMPAIGN_FIELDS: BattlefieldId[] = [
   'city',
-  'wetlands',
-  'railway',
-  'city',
-  'desert',
+  'highlands',
+  'highlands',
   'city',
   'highlands',
-  'tropical',
-  'desert',
-  'railway',
-  'wetlands',
+  'city',
   'highlands',
-  'tropical',
-  'wetlands',
-  'railway',
-  'desert',
+  'highlands',
+  'highlands',
+  'highlands',
+  'highlands',
+  'highlands',
+  'highlands',
+  'highlands',
+  'highlands',
+  'highlands',
   'highlands',
   'city',
 ];

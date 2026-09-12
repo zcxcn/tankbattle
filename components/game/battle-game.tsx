@@ -562,18 +562,7 @@ export default function BattleGame({
         );
       if (initialized) {
         const cue = radio.update(b);
-        if (cue) {
-          if (cue.id === 'incoming_barrage') {
-            const warningBoss = b.boss;
-            cue.maxDelayMs = Math.min(
-              500,
-              (warningBoss?.attackWindup ?? 0) * 1000,
-            );
-            cue.valid = () =>
-              b.boss === warningBoss && (warningBoss?.attackWindup ?? 0) > 0;
-          }
-          a.announce(cue);
-        }
+        if (cue) a.announce(cue);
       }
       r.draw(b, controls.current.aim);
       renderDirty.current = false;
@@ -849,22 +838,19 @@ export default function BattleGame({
     e.currentTarget.style.setProperty('--sx', '0px');
     e.currentTarget.style.setProperty('--sy', '0px');
   };
-  // Phones use one reserved status line; urgent warnings take precedence.
-  const mobileStatus = hud.bossWarning
-    ? '齐射预警 · 立即侧移 / BARRAGE — MOVE!'
-    : hud.hp > 0 && hud.hp < hud.max * 0.3
-      ? '装甲危急 · 寻找掩体 / ARMOR CRITICAL'
+  // One quiet edge message; the aiming area stays free of banners.
+  const mobileStatus =
+    hud.hp > 0 && hud.hp < hud.max * 0.3
+      ? 'ARMOR CRITICAL · 装甲危急'
       : hud.levelUp > 0
-        ? `LV.${hud.career.level} · ${hud.career.title} · 装甲进化`
-        : radioCue?.text || hud.notice || hud.objective;
-  const bossNearby =
-    hud.bossWarning ||
-    hud.radarEnemies.some(
-      (enemy) =>
-        enemy.boss &&
-        Math.hypot(enemy.x - hud.radarPlayer.x, enemy.y - hud.radarPlayer.y) <
-          900,
-    );
+        ? `LV.${hud.career.level} · ${hud.career.title}`
+        : radioCue?.text || hud.notice || '';
+  const bossNearby = hud.radarEnemies.some(
+    (enemy) =>
+      enemy.boss &&
+      Math.hypot(enemy.x - hud.radarPlayer.x, enemy.y - hud.radarPlayer.y) <
+        900,
+  );
   return (
     <section
       className={'battle-screen ' + (hud.hp < hud.max * 0.3 ? 'critical' : '')}
@@ -936,7 +922,7 @@ export default function BattleGame({
           <button
             onClick={switchCamera}
             aria-label="切换镜头"
-            title="C · 切换视角"
+            title={`${cameraMode === 'assault' ? '突击视角' : '战术俯瞰'} · C 切换 · 滚轮缩放`}
           >
             <Camera size={19} />
           </button>
@@ -961,53 +947,12 @@ export default function BattleGame({
           </button>
         </div>
       </header>
-      <div
-        className="mobile-battle-status"
-        role="status"
-        data-alert={hud.bossWarning || hud.hp < hud.max * 0.3}
-        title={mobileStatus}
-      >
-        {mobileStatus}
-      </div>
       <div className="canvas-wrap">
-        <div className="hud-growth">
-          <span>
-            LV.{hud.career.level} · {hud.career.title}
-          </span>
-          <meter
-            min={0}
-            max={1}
-            value={hud.career.progress}
-            aria-label="击毁成长进度"
-          />
-          <small>
-            {hud.career.maxed
-              ? '最终形态已达成'
-              : `再击毁 ${hud.career.remaining} 辆升级`}
-          </small>
-        </div>
-        <div className="camera-label">
-          <i />
-          {cameraMode === 'assault' ? '突击视角' : '战术俯瞰'}
-          <span>{gamepad ? 'Y 切换 · 手柄已连接' : 'C 切换 · 滚轮缩放'}</span>
-          <small className="performance-status">{performanceLabel}</small>
-        </div>
-        {radioCue && !paused && (
-          <div
-            className={
-              'command-radio' +
-              (radioCue.priority >= 80 ? ' command-radio-alert' : '')
-            }
-            role="status"
-            lang="en"
-          >
-            <Radio size={16} />
-            <div>
-              <small>COMMAND · FIELD RADIO</small>
-              <span>{radioCue.text}</span>
-            </div>
-            <i aria-hidden="true" />
-          </div>
+        {!!mobileStatus && !paused && (
+          <output className="combat-status" data-alert={hud.hp < hud.max * 0.3}>
+            <Radio size={12} aria-hidden="true" />
+            <span>{mobileStatus}</span>
+          </output>
         )}
         {(loading || loadError) && (
           <div
@@ -1099,39 +1044,14 @@ export default function BattleGame({
           }}
         />
         {hud.bossMax > 0 && (
-          <div
-            className={'boss-hud' + (hud.bossWarning ? ' boss-warning' : '')}
-            data-nearby={bossNearby}
-          >
-            <span>
-              {bossName(mission)}{' '}
-              <small>
-                {hud.bossWarning
-                  ? '齐射预警 · 立即侧移'
-                  : `阶段 ${hud.bossPhase + 1} / 3 · ${['重炮压制', '榴弹攻势', '火箭齐射'][hud.bossPhase]}`}
-              </small>
-            </span>
+          <div className="boss-hud" data-nearby={bossNearby}>
+            <span>{bossName(mission)}</span>
             <meter
               min={0}
               max={hud.bossMax}
               value={hud.boss}
               aria-label="首领生命"
             />
-          </div>
-        )}
-        {hud.levelUp > 0 && (
-          <output className="rankup-notice">
-            <small>装甲进化 · LEVEL UP</small>
-            <strong>
-              LV.{hud.career.level} · {hud.career.title}
-            </strong>
-            <span>{hud.career.evolution.name} · 装甲、火力、机动提升</span>
-          </output>
-        )}
-        {hud.notice && hud.levelUp <= 0 && (
-          <div className="battle-notice" role="status">
-            <Radio size={16} />
-            {hud.notice}
           </div>
         )}
         <div

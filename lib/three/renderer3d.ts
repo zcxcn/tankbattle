@@ -41,6 +41,7 @@ import { ExplosionEffects } from './explosions';
 import { createWeaponMount } from './weapon-mount';
 import { ProjectileEffects } from './projectiles';
 import { MuzzleEffects, recoilDistance } from './muzzle';
+import { createSupplyModel, configureSupplyModel } from './supplies';
 import {
   createWorld,
   createWorldAsync,
@@ -1142,61 +1143,7 @@ export class Renderer3D {
       const item = supplies[i];
       let node = this.pickupPool[i];
       if (!node) {
-        node = new TransformNode('field-supply', this.scene);
-        box(
-          this.scene,
-          'supply-case',
-          [3.2, 1.45, 2.4],
-          [0, 1.1, 0],
-          this.materials.armor,
-          node,
-        );
-        box(
-          this.scene,
-          'supply-band',
-          [3.35, 0.3, 2.55],
-          [0, 1.2, 0],
-          this.materials.blue,
-          node,
-        );
-        box(
-          this.scene,
-          'supply-cross-a',
-          [0.32, 0.06, 1.5],
-          [0, 1.87, 0],
-          this.materials.blue,
-          node,
-        );
-        box(
-          this.scene,
-          'supply-cross-b',
-          [1.5, 0.06, 0.32],
-          [0, 1.87, 0],
-          this.materials.blue,
-          node,
-        );
-        const ring = MeshBuilder.CreateTorus(
-          'supply-marker',
-          { diameter: 7, thickness: 0.12, tessellation: 24 },
-          this.scene,
-        );
-        ring.parent = node;
-        const beam = MeshBuilder.CreateCylinder(
-          'supply-beacon',
-          { diameter: 0.14, height: 7, tessellation: 6 },
-          this.scene,
-        );
-        beam.parent = node;
-        beam.position.y = 3.5;
-        const label = MeshBuilder.CreatePlane(
-          'supply-label',
-          { width: 5.6, height: 1.86 },
-          this.scene,
-        );
-        label.parent = node;
-        label.position.y = 6.1;
-        label.billboardMode = Mesh.BILLBOARDMODE_ALL;
-        for (const child of node.getChildMeshes()) child.isPickable = false;
+        node = createSupplyModel(this.scene, this.materials, this.quality);
         this.pickupPool.push(node);
       }
       node.setEnabled(true);
@@ -1204,12 +1151,13 @@ export class Renderer3D {
         worldPosition(item.x, item.y, 0.15 + Math.sin(b.elapsed * 2 + i) * 0.1),
       );
       const type = item.kind === 3 ? (item.weapon ?? 1) : 7 + item.kind;
-      for (const child of node.getChildMeshes()) {
-        if (child.name === 'supply-label')
-          child.material = this.supplyLabels[type];
-        else if (child.name !== 'supply-case')
-          child.material = this.supplyColors[type];
-      }
+      configureSupplyModel(
+        node,
+        item.kind,
+        type,
+        this.supplyColors[type],
+        this.supplyLabels[type],
+      );
     }
     for (let i = supplies.length; i < this.pickupPool.length; i++)
       this.pickupPool[i].setEnabled(false);

@@ -107,6 +107,11 @@ class Context {
     this.gains.push(node);
     return node;
   }
+  createBiquadFilter() {
+    const node = new Node();
+    for (const prop of ['gain', 'frequency', 'Q']) node[prop] = new Param();
+    return node;
+  }
   createDynamicsCompressor() {
     const node = new Node();
     for (const prop of ['threshold', 'knee', 'ratio', 'attack', 'release'])

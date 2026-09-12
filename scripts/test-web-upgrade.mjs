@@ -60,7 +60,14 @@ const seconds = (b, t, input = idle) => {
 const enemy = (b, x = 1300, y = 1000, kind = 0) => {
   b.spawnEnemy(kind);
   const e = b.enemies.at(-1);
-  Object.assign(e, { x, y, spawn: 0, stun: 999, mineReadyAt: 999 });
+  Object.assign(e, {
+    x,
+    y,
+    patrolOrigin: { x, y },
+    spawn: 0,
+    stun: 999,
+    mineReadyAt: 999,
+  });
   return e;
 };
 let passed = 0;
@@ -269,6 +276,7 @@ test('enemy AI lays mines with a cooldown and global limits', () => {
   const b = arena(),
     e = enemy(b, 1300, 1000, 3);
   Object.assign(e, { stun: 0, mineReadyAt: 0, cooldown: 99 });
+  b.random = () => 0;
   b.step(0.01, idle);
   assert.equal(b.mines.length, 1);
   assert(b.mines[0].enemy);

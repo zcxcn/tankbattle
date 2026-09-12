@@ -407,7 +407,7 @@ function* worldSteps(
     b.battlefield.biome,
   );
   const palette = battlefieldPalette(b.battlefield.biome),
-    rural = !['city', 'railway'].includes(b.battlefield.biome);
+    rural = b.battlefield.biome === 'highlands';
   const themes = [palette.horizon, palette.zenith, palette.sun];
   scene.clearColor = Color4.FromHexString(themes[1] + 'ff');
   scene.fogMode = Scene.FOGMODE_EXP2;
@@ -851,7 +851,7 @@ function* worldSteps(
     );
   }
   // Rail spur, sleepers and perimeter curbs establish a usable district boundary.
-  for (const x of [(-W * UNIT) / 2 - 5, (-W * UNIT) / 2 - 7])
+  for (const x of rural ? [] : [(-W * UNIT) / 2 - 5, (-W * UNIT) / 2 - 7])
     box(
       scene,
       'rail-spur',
@@ -860,7 +860,7 @@ function* worldSteps(
       m.steel,
       staticRoot,
     );
-  for (let z = (-H * UNIT) / 2; z < (H * UNIT) / 2; z += 2)
+  for (let z = (-H * UNIT) / 2; !rural && z < (H * UNIT) / 2; z += 2)
     box(
       scene,
       'rail-sleeper',

@@ -26,6 +26,9 @@ export const W = 3840,
   H = 2400;
 export const ENEMY_GATES = enemyEntrances(W);
 export const ENEMY_SPAWN_DISTANCE = 700;
+export const ENEMY_PATROL_RADIUS = 180;
+export const ENEMY_LEASH_RADIUS = 360;
+export const ENEMY_ALERT_DISTANCE = 620;
 export const ENEMY_REGION = {
   x: W * 0.08,
   y: H * 0.15,
@@ -61,6 +64,11 @@ export type Tank = Vec & {
   slow?: number;
   mineReadyAt?: number;
   attackWindup?: number;
+  windupTarget?: 'player' | 'base';
+  patrolOrigin?: Vec;
+  patrolTarget?: Vec;
+  patrolUntil?: number;
+  returning?: boolean;
 };
 export type Mine = Vec & {
   id: number;
@@ -71,6 +79,7 @@ export type Mine = Vec & {
   damage: number;
 };
 export type Wall = {
+  shape?: 'ellipse';
   kind?: Structure['kind'];
   height?: number;
   x: number;
@@ -204,6 +213,18 @@ export function segmentCircle(
   return t >= 0 && t <= 1 ? t : null;
 }
 export function segmentRect(a: Vec, b: Vec, r: Wall): number | null {
+  if (r.shape === 'ellipse') {
+    const rx = r.w / 2,
+      ry = r.h / 2,
+      cx = r.x + rx,
+      cy = r.y + ry;
+    return segmentCircle(
+      { x: (a.x - cx) / rx, y: (a.y - cy) / ry },
+      { x: (b.x - cx) / rx, y: (b.y - cy) / ry },
+      { x: 0, y: 0 },
+      1,
+    );
+  }
   let lo = 0,
     hi = 1;
   for (const [p, d, min, max] of [
@@ -222,6 +243,32 @@ export function segmentRect(a: Vec, b: Vec, r: Wall): number | null {
     }
   }
   return lo;
+}
+/** Exact circle clearance against the ellipse used by hill scenery. */
+export function wallDistance(point: Vec, wall: Wall): number {
+  if (wall.shape !== 'ellipse')
+    return Math.hypot(
+      point.x - clamp(point.x, wall.x, wall.x + wall.w),
+      point.y - clamp(point.y, wall.y, wall.y + wall.h),
+    );
+  const rx = wall.w / 2,
+    ry = wall.h / 2,
+    x = Math.abs(point.x - wall.x - rx),
+    y = Math.abs(point.y - wall.y - ry);
+  if ((x / rx) ** 2 + (y / ry) ** 2 <= 1) return 0;
+  let lo = 0,
+    hi = Math.max(rx * x, ry * y);
+  for (let i = 0; i < 28; i++) {
+    const t = (lo + hi) / 2;
+    if (((rx * x) / (t + rx * rx)) ** 2 + ((ry * y) / (t + ry * ry)) ** 2 > 1)
+      lo = t;
+    else hi = t;
+  }
+  const t = (lo + hi) / 2;
+  return Math.hypot(
+    x - (rx * rx * x) / (t + rx * rx),
+    y - (ry * ry * y) / (t + ry * ry),
+  );
 }
 export class Battle {
   mission: number;
@@ -329,7 +376,6 @@ export class Battle {
     this.createArena();
     if (this.isBoss) {
       this.spawnEnemy(3);
-      this.notice = `警告：${bossName(this.mission)}已启动 · 注意齐射与增援`;
     } else {
       if (!this.endless) this.spawnEnemy(3);
       this.spawnEnemy(0);
@@ -447,6 +493,7 @@ export class Battle {
   createObjectives() {
     if (this.endless) return;
     const type = this.type;
+    if (type === 'defend') Object.assign(this.base, { x: W / 2, y: H * 0.55 });
     if (type === 'escort') {
       this.route = [
         { x: W / 2, y: H - 250 },
@@ -673,6 +720,7 @@ export class Battle {
           w: wall.w,
           h: wall.h,
           height: wall.height ?? 1,
+          shape: wall.shape,
           kind: wall.kind as 'water' | 'hill',
         })),
     ];
@@ -728,6 +776,7 @@ export class Battle {
       }
       if (
         this.canOccupy(x, y, data[4]) &&
+        !this.inWater(x, y) &&
         distance({ x, y }, this.player) >= ENEMY_SPAWN_DISTANCE &&
         (!this.protectsBase || distance({ x, y }, this.base) > data[4] + 40) &&
         this.enemies.every(
@@ -776,7 +825,9 @@ export class Battle {
       turn: this.random() > 0.5 ? 1 : -1,
       decision: 1,
       spawn: 1.2,
-      mineReadyAt: this.elapsed + (k === 3 ? 6 : 8 + this.random() * 7),
+      mineReadyAt: this.elapsed + 22 + this.random() * 18,
+      patrolOrigin: { x, y },
+      patrolUntil: 0,
     });
     if (k === 3) this.bossSpawned = true;
     if (k !== 3) this.spawned++;
@@ -798,14 +849,34 @@ export class Battle {
       !this.walls.some(
         (w) =>
           w.hp > 0 &&
-          Math.hypot(
-            x - clamp(x, w.x, w.x + w.w),
-            y - clamp(y, w.y, w.y + w.h),
-          ) < r,
+          w.kind !== 'water' &&
+          x >= w.x - r &&
+          x <= w.x + w.w + r &&
+          y >= w.y - r &&
+          y <= w.y + w.h + r &&
+          wallDistance({ x, y }, w) < r,
       )
     );
   }
+  inWater(x: number, y: number) {
+    return this.terrain.some(
+      (feature) =>
+        feature.kind === 'water' &&
+        (feature.shape === 'ellipse'
+          ? ((x - feature.x - feature.w / 2) / (feature.w / 2)) ** 2 +
+              ((y - feature.y - feature.h / 2) / (feature.h / 2)) ** 2 <=
+            1
+          : x >= feature.x &&
+            x <= feature.x + feature.w &&
+            y >= feature.y &&
+            y <= feature.y + feature.h),
+    );
+  }
   move(t: Tank, dx: number, dy: number) {
+    if (this.inWater(t.x, t.y)) {
+      dx *= 0.72;
+      dy *= 0.72;
+    }
     const ox = t.x,
       oy = t.y;
     const steps = Math.max(1, Math.ceil(Math.hypot(dx, dy) / 8));
@@ -1354,8 +1425,6 @@ export class Battle {
         this.mission >= 12 ? 8 : 1,
       );
       this.reinforcementRetry = 0;
-      this.notice = `${bossName(this.mission)}呼叫增援 · 优先压制护卫`;
-      this.noticeTime = 3;
     }
     if (
       boss &&
@@ -1379,36 +1448,88 @@ export class Battle {
       e.slow = Math.max(0, (e.slow ?? 0) - dt);
       e.stun = Math.max(0, e.stun - dt);
       if (e.stun > 0) continue;
-      if (this.elapsed >= (e.mineReadyAt ?? Infinity) && distance(e, p) < 680) {
-        if (this.layMine(e, true))
-          e.mineReadyAt = this.elapsed + (e.kind === 3 ? 6 : 13);
-        else e.mineReadyAt = this.elapsed + 1;
-      }
+      const home = (e.patrolOrigin ??= { x: e.x, y: e.y });
+      const homeDistance = distance(e, home);
+      if (homeDistance > ENEMY_LEASH_RADIUS) e.returning = true;
+      if (e.returning && homeDistance < ENEMY_PATROL_RADIUS * 0.45)
+        e.returning = false;
+      const visible = (target: Vec) =>
+        distance(e, target) <= ENEMY_ALERT_DISTANCE &&
+        !this.walls.some(
+          (wall) =>
+            wall.hp > 0 &&
+            wall.kind !== 'water' &&
+            segmentRect(e, target, wall) !== null,
+        );
+      const hostile = !e.returning
+        ? visible(p)
+          ? p
+          : this.protectsBase && visible(this.base)
+            ? this.base
+            : null
+        : null;
       e.cooldown -= dt;
       e.decision -= dt;
       const wounded =
         e.kind === 7
-          ? this.enemies
-              .filter((v) => v.id !== e.id && v.hp > 0 && v.hp < v.maxHp)
-              .sort((a, b) => distance(e, a) - distance(e, b))[0]
+          ? this.enemies.find(
+              (ally) =>
+                ally.id !== e.id &&
+                ally.hp > 0 &&
+                ally.hp < ally.maxHp &&
+                distance(e, ally) < 190 &&
+                distance(home, ally) < ENEMY_LEASH_RADIUS,
+            )
           : undefined;
-      const target =
-        wounded ??
-        (this.protectsBase && e.id % 3 !== 0 && distance(e, p) > 180
-          ? this.base
-          : p);
-      if (e.kind === 7) {
+      if (e.kind === 7)
         for (const ally of this.enemies)
           if (ally.id !== e.id && ally.hp > 0 && distance(e, ally) < 190)
             ally.hp = Math.min(ally.maxHp, ally.hp + 12 * dt);
+      if (hostile && this.elapsed >= (e.mineReadyAt ?? Infinity)) {
+        // Mines are occasional local hazards, with a long cooldown even on a miss.
+        e.mineReadyAt = this.elapsed + 35 + this.random() * 20;
+        if (this.random() < (e.kind === 3 ? 0.25 : 0.18)) this.layMine(e, true);
       }
-      if (e.kind === 6 && distance(e, target) < 65) {
+      if (
+        !hostile &&
+        !e.returning &&
+        (!e.patrolTarget ||
+          distance(e, e.patrolTarget) < 30 ||
+          this.elapsed >= (e.patrolUntil ?? 0))
+      ) {
+        e.patrolTarget = { ...home };
+        for (let attempt = 0; attempt < 12; attempt++) {
+          const angle = this.random() * Math.PI * 2,
+            radius = 60 + this.random() * (ENEMY_PATROL_RADIUS - 60);
+          const candidate = {
+            x: home.x + Math.cos(angle) * radius,
+            y: home.y + Math.sin(angle) * radius,
+          };
+          if (this.canOccupy(candidate.x, candidate.y, e.radius)) {
+            e.patrolTarget = candidate;
+            break;
+          }
+        }
+        e.patrolUntil = this.elapsed + 5 + this.random() * 4;
+      }
+      const target: Vec = e.returning
+        ? home
+        : (hostile ?? wounded ?? e.patrolTarget ?? home);
+      if (!hostile) {
+        e.attackWindup = 0;
+        e.windupTarget = undefined;
+      }
+      if (e.kind === 6 && hostile && distance(e, hostile) < 65) {
         e.hp = 0;
         this.burst(e.x, e.y, 45, 160);
         this.explode(e.x, e.y, 1.35, 'fuel');
         this.onSound?.('explosion');
-        if (distance(e, p) < 110) this.playerHit(e.damage);
-        if (this.protectsBase && distance(e, this.base) < 110)
+        if (distance(e, p) < 110 && visible(p)) this.playerHit(e.damage);
+        if (
+          this.protectsBase &&
+          distance(e, this.base) < 110 &&
+          visible(this.base)
+        )
           this.base.hp = Math.max(0, this.base.hp - e.damage);
         continue;
       }
@@ -1425,100 +1546,99 @@ export class Battle {
       if (!(e.kind === 3 && (e.attackWindup ?? 0) > 0))
         e.turret += clamp(difference, -dt * 2.2, dt * 2.2);
       const dist = distance(e, target);
-      const range =
-        e.kind === 6
+      const range = hostile
+        ? e.kind === 6
           ? 20
           : e.kind === 5
-            ? 610
-            : e.kind === 7 && wounded
-              ? 130
-              : e.kind === 8
-                ? 440
-                : e.kind === 3
-                  ? 320
-                  : e.kind === 2
-                    ? 380
-                    : 200;
+            ? 500
+            : e.kind === 8
+              ? 400
+              : e.kind === 3
+                ? 320
+                : e.kind === 2
+                  ? 350
+                  : 200
+        : wounded && !e.returning
+          ? 130
+          : 24;
       const blocked = this.walls.some(
-        (w) =>
-          w.hp > 0 &&
+        (wall) =>
+          wall.hp > 0 &&
+          wall.kind !== 'water' &&
           segmentRect(e, target, {
-            ...w,
-            x: w.x - e.radius - 3,
-            y: w.y - e.radius - 3,
-            w: w.w + e.radius * 2 + 6,
-            h: w.h + e.radius * 2 + 6,
+            ...wall,
+            x: wall.x - e.radius - 3,
+            y: wall.y - e.radius - 3,
+            w: wall.w + e.radius * 2 + 6,
+            h: wall.h + e.radius * 2 + 6,
           }) !== null,
       );
-      if ((dist > range || blocked) && !((e.attackWindup ?? 0) > 0)) {
-        const waypoint = blocked
-          ? this.navigation.guide(e, target, e.radius, navigationRevision)
-          : null;
-        let moveAngle = waypoint
-          ? Math.atan2(waypoint.y - e.y, waypoint.x - e.x)
-          : angle;
-        const probe = {
-          x: e.x + Math.cos(moveAngle) * 35,
-          y: e.y + Math.sin(moveAngle) * 35,
-        };
-        if (!waypoint && !this.canOccupy(probe.x, probe.y, e.radius)) {
-          moveAngle += (e.turn * Math.PI) / 2;
-          if (e.decision <= 0) {
-            e.turn *= -1;
-            e.decision = 2 + this.random() * 2;
+      if (!(e.attackWindup && e.attackWindup > 0)) {
+        let moveAngle = angle,
+          speed = 0;
+        if (dist > range || blocked) {
+          const waypoint = blocked
+            ? this.navigation.guide(e, target, e.radius, navigationRevision)
+            : null;
+          if (waypoint)
+            moveAngle = Math.atan2(waypoint.y - e.y, waypoint.x - e.x);
+          speed = e.speed * (hostile ? 0.85 : e.returning ? 0.8 : 0.5);
+        } else if (hostile && e.kind !== 6) {
+          const retreat = dist < range * 0.55 && [2, 3, 5, 8].includes(e.kind);
+          moveAngle = angle + (retreat ? Math.PI : (e.turn * Math.PI) / 2);
+          speed = e.speed * (retreat ? 0.65 : 0.32);
+        }
+        if (speed > 0) {
+          const travel = speed * dt * ((e.slow ?? 0) > 0 ? 0.4 : 1);
+          const dx = Math.cos(moveAngle) * travel,
+            dy = Math.sin(moveAngle) * travel;
+          if (
+            !e.returning &&
+            distance({ x: e.x + dx, y: e.y + dy }, home) > ENEMY_LEASH_RADIUS
+          ) {
+            e.returning = true;
+            e.attackWindup = 0;
+          } else {
+            const moved = this.move(e, dx, dy);
+            e.angle = moveAngle;
+            if (moved < 0.1 && e.decision <= 0) {
+              e.turn *= -1;
+              e.decision = 1;
+              e.patrolUntil = 0;
+            }
           }
         }
-        const moved = this.move(
-          e,
-          Math.cos(moveAngle) * e.speed * dt * ((e.slow ?? 0) > 0 ? 0.4 : 1),
-          Math.sin(moveAngle) * e.speed * dt * ((e.slow ?? 0) > 0 ? 0.4 : 1),
-        );
-        e.angle = moveAngle;
-        if (moved < 0.2 && e.decision <= 0) {
-          e.turn *= -1;
-          e.decision = 1;
-        }
-      } else if (e.kind !== 6 && !(e.attackWindup && e.attackWindup > 0)) {
-        // Flank while in firing range; long-range units reverse away from a rush.
-        const retreat = dist < range * 0.55 && [2, 3, 5, 8].includes(e.kind);
-        const maneuver = angle + (retreat ? Math.PI : (e.turn * Math.PI) / 2);
-        const speed =
-          e.speed * dt * (retreat ? 0.8 : 0.48) * ((e.slow ?? 0) > 0 ? 0.4 : 1);
-        const moved = this.move(
-          e,
-          Math.cos(maneuver) * speed,
-          Math.sin(maneuver) * speed,
-        );
-        if (moved < 0.1) e.turn *= -1;
-        e.angle = maneuver;
       }
       if (e.kind === 3 && (e.attackWindup ?? 0) > 0) {
+        // A visible alternate objective must not authorize a stale player shot.
+        const aimed = e.windupTarget === 'base' ? this.base : p;
+        if (e.returning || !visible(aimed)) {
+          e.attackWindup = 0;
+          e.windupTarget = undefined;
+          continue;
+        }
         e.attackWindup = Math.max(0, e.attackWindup! - dt);
         if (e.attackWindup === 0) {
           this.shoot(e, true);
+          e.windupTarget = undefined;
         }
         continue;
       }
       if (
         e.kind !== 6 &&
-        !wounded &&
-        dist < (e.kind === 5 ? 1000 : 730) &&
+        hostile &&
+        !e.returning &&
+        visible(hostile) &&
         Math.abs(difference) < 0.14 &&
-        e.cooldown <= 0 &&
-        !this.walls.some(
-          (w) =>
-            w.hp > 0 &&
-            w.kind !== 'water' &&
-            segmentRect(e, target, w) !== null,
-        )
+        e.cooldown <= 0
       ) {
         if (e.kind === 3) {
           e.attackWindup = 0.9 - this.bossThreshold * 0.15;
-          this.notice = `${bossName(this.mission)} · ${this.bossThreshold === 2 ? '火箭齐射' : this.bossThreshold === 1 ? '榴弹齐射' : '重炮齐射'}预警，侧移或使用脉冲`;
-          this.noticeTime = 1.5;
+          e.windupTarget = hostile === p ? 'player' : 'base';
         } else this.shoot(e, true);
       }
     }
+
     for (let i = 0; i < this.enemies.length; i++) {
       const a = this.enemies[i];
       if (a.hp <= 0) continue;
@@ -1726,7 +1846,6 @@ export class Battle {
             weapon.capacity,
             before + (s.amount ?? weapon.supply),
           );
-          if (before === 0 && this.weapon === 0) this.selectWeapon(s.weapon);
           this.notice = `${weapon.name} +${this.ammo[s.weapon] - before} · 备弹 ${this.ammo[s.weapon]}`;
         } else if (s.kind === 0) {
           p.hp = Math.min(p.maxHp, p.hp + 50);

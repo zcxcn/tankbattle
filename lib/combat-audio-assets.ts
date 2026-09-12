@@ -44,7 +44,8 @@ export const COMBAT_AUDIO_ASSETS = {
 export type CombatClip = keyof typeof COMBAT_AUDIO_ASSETS;
 
 export const WEAPON_CLIPS: readonly (readonly CombatClip[])[] = [
-  ['cannon01', 'cannon02', 'cannon03'],
+  // One field-recorded tank report; the alternate artillery take is much brighter.
+  ['cannon01'],
   ['mg'],
   ['shotgun'],
   ['rail'],

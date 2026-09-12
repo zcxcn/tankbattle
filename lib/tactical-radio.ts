@@ -1,4 +1,9 @@
-import type { Battle, Mine } from './engine';
+import {
+  ENEMY_ALERT_DISTANCE,
+  segmentRect,
+  type Battle,
+  type Mine,
+} from './engine';
 
 /** Original command-center lines; their IDs also name the bundled voice clips. */
 export const RADIO_LINES = {
@@ -10,6 +15,7 @@ export const RADIO_LINES = {
   boss_escalating: 'Heavy armor escalating. Reinforcements inbound.',
   boss_final_assault: 'Boss entering final assault. Keep moving.',
   boss_destroyed: 'Heavy target destroyed.',
+  // Retained for bundled asset compatibility; this line is never triggered.
   incoming_barrage: 'Incoming barrage.',
   armor_low: 'Warning. Armor integrity low.',
   armor_critical: 'Armor critical. Seek repairs.',
@@ -41,10 +47,8 @@ type Pending = Omit<RadioCue, 'valid'> & {
 };
 type Snapshot = {
   kills: number;
-  bossId: number | undefined;
   bossDefeated: boolean;
   phase: number;
-  windup: number;
   hp: number;
   empCd: number;
   ammo: number[];
@@ -54,6 +58,20 @@ type Snapshot = {
 const distance = (a: { x: number; y: number }, b: { x: number; y: number }) =>
   Math.hypot(a.x - b.x, a.y - b.y);
 const armor = (b: Battle) => b.player.hp / Math.max(1, b.player.maxHp);
+const bossVisible = (b: Battle) => {
+  const boss = b.boss;
+  return (
+    !!boss &&
+    boss.spawn <= 0 &&
+    distance(boss, b.player) <= ENEMY_ALERT_DISTANCE &&
+    !b.walls.some(
+      (wall) =>
+        wall.hp > 0 &&
+        wall.kind !== 'water' &&
+        segmentRect(b.player, boss, wall) !== null,
+    )
+  );
+};
 
 /**
  * Observes gameplay, independently of audio playback. All time is simulation time,
@@ -68,6 +86,7 @@ export class TacticalRadioDirector {
   private lastAt = -Infinity;
   private lastPriority = 0;
   private ended = false;
+  private detectedBosses = new Set<number>();
   private enemyNear = false;
   private enemyClearSince = -Infinity;
   private mineNear = false;
@@ -114,22 +133,10 @@ export class TacticalRadioDirector {
     const boss = b.boss;
     if (!previous) {
       this.enqueue('command_online', 85, now, { ttl: 4 });
-      if (boss)
-        this.enqueue('boss_detected', 70, now, {
-          delay: 3,
-          ttl: 12,
-          valid: (battle) => !!battle.boss,
-        });
     } else {
-      if (boss && boss.id !== previous.bossId)
-        this.enqueue('boss_detected', 70, now, {
-          ttl: 10,
-          valid: (battle) => !!battle.boss,
-        });
       if (b.bossDefeated && !previous.bossDefeated) {
         this.pending.delete('boss_detected');
         this.pending.delete('boss-phase');
-        this.pending.delete('incoming_barrage');
         this.pending.delete('kills');
         this.killBatch = 0;
         this.killDueAt = Infinity;
@@ -142,17 +149,6 @@ export class TacticalRadioDirector {
           now,
           { group: 'boss-phase', valid: (battle) => !!battle.boss },
         );
-      if (
-        boss &&
-        (boss.attackWindup ?? 0) > 0 &&
-        (previous.windup <= 0 || boss.id !== previous.bossId)
-      )
-        this.enqueue('incoming_barrage', 95, now, {
-          ttl: Math.min(0.6, boss.attackWindup!),
-          cooldown: 9,
-          valid: (battle) =>
-            !!battle.boss && (battle.boss.attackWindup ?? 0) > 0,
-        });
 
       const defeated = b.kills - previous.kills;
       if (defeated > 0 && !(b.bossDefeated && !previous.bossDefeated)) {
@@ -233,6 +229,19 @@ export class TacticalRadioDirector {
         this.enqueue('objective_secured', 60, now, { ttl: 9 });
     }
 
+    if (
+      boss &&
+      !this.detectedBosses.has(boss.id) &&
+      bossVisible(b) &&
+      !this.pending.has('boss_detected')
+    ) {
+      const id = boss.id;
+      this.enqueue('boss_detected', 70, now, {
+        ttl: 10,
+        valid: (battle) => battle.boss?.id === id && bossVisible(battle),
+      });
+    }
+
     const ratio = armor(b);
     if (ratio <= 0.2 && this.armorState < 2) {
       this.armorState = 2;
@@ -307,10 +316,8 @@ export class TacticalRadioDirector {
 
     this.previous = {
       kills: b.kills,
-      bossId: boss?.id,
       bossDefeated: b.bossDefeated,
       phase: b.bossThreshold,
-      windup: boss?.attackWindup ?? 0,
       hp: b.player.hp,
       empCd: b.empCd,
       ammo: [...b.ammo],
@@ -338,6 +345,7 @@ export class TacticalRadioDirector {
     this.lastAt = now;
     this.lastPriority = cue.priority;
     this.announced.set(cue.id, now);
+    if (cue.id === 'boss_detected' && boss) this.detectedBosses.add(boss.id);
     if (key === 'kills') {
       // A quiet interval after either kill line also throttles its alternate.
       this.announced.set('target_destroyed', now);

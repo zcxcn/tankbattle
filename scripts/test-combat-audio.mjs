@@ -100,6 +100,7 @@ class Context {
   destination = new Node();
   sources = [];
   decodes = [];
+  filters = [];
   constructor() {
     Context.instances.push(this);
   }
@@ -112,7 +113,9 @@ class Context {
     return new Node();
   }
   createBiquadFilter() {
-    return new Node();
+    const filter = new Node();
+    this.filters.push(filter);
+    return filter;
   }
   createOscillator() {
     return this.createBufferSource();
@@ -220,13 +223,33 @@ try {
     await bank.preload();
     assert.equal(signals.length, 3);
   });
-  await test('all seven weapons use library buffers, cannon reports vary, and shot voices stay bounded', async () => {
+  await test('all seven weapons use library buffers, cannon reports stay consistent, and shot voices stay bounded', async () => {
     const game = new GameAudio();
     game.unlock();
     await settle();
     const context = game.context;
     for (let index = 0; index < 3; index++) game.play('fire', 0);
-    assert.equal(new Set(context.sources.map((s) => s.buffer.url)).size, 3);
+    assert.equal(new Set(context.sources.map((s) => s.buffer.url)).size, 1);
+    assert(
+      context.sources.every(
+        (source) => source.buffer.url === COMBAT_AUDIO_ASSETS.cannon01,
+      ),
+    );
+    assert(
+      context.sources.every((source) => source.playbackRate.value === 0.94),
+    );
+    assert.equal(
+      context.filters.length,
+      6,
+      'each cannon report gets the same bounded EQ chain',
+    );
+    for (let index = 0; index < context.filters.length; index += 2) {
+      assert.equal(context.filters[index].type, 'lowpass');
+      assert.equal(context.filters[index].frequency.value, 1600);
+      assert.equal(context.filters[index + 1].type, 'lowshelf');
+      assert.equal(context.filters[index + 1].frequency.value, 180);
+      assert.equal(context.filters[index + 1].gain.value, 3);
+    }
     for (let weapon = 0; weapon < 7; weapon++) {
       game.play('fire', weapon);
       assert(
@@ -322,7 +345,7 @@ try {
     assert.equal(game.shotVoices, 0);
     assert.equal(game.enemyShots.size, 0);
   });
-  await test('late recordings only affect future shots and never replay a shot after pause', async () => {
+  await test('late recordings cannot replace a cannon report or replay a shot after pause', async () => {
     const ready = deferred();
     globalThis.fetch = async (url) => {
       await ready.promise;
@@ -354,8 +377,182 @@ try {
     game.unlock();
     await settle();
     game.play('fire', 0);
-    assert(!context.sources.at(-1).buffer.fallback);
+    assert.equal(
+      context.sources.at(-1).buffer,
+      first.buffer,
+      'cannon retains its selected fallback even after a pause and late decode',
+    );
+    assert.equal(
+      context.sources.at(-1).playbackRate.value,
+      first.playbackRate.value,
+    );
+    game.play('fire', 1);
+    assert.equal(
+      context.sources.at(-1).buffer.url,
+      COMBAT_AUDIO_ASSETS.mg,
+      'other weapons still use their downloaded recordings',
+    );
     game.dispose();
+    assert.equal(game.cannonBuffer, null);
+    assert(context.filters.every((filter) => filter.disconnected));
+  });
+  await test('partial loading and enemy volleys cannot select a bright alternate cannon take', async () => {
+    const canonical = deferred();
+    globalThis.fetch = async (url) => {
+      if (url === COMBAT_AUDIO_ASSETS.cannon01) await canonical.promise;
+      return response(url);
+    };
+    const game = new GameAudio();
+    game.unlock();
+    await settle();
+    const context = game.context;
+    assert(
+      game.recordings.get('cannon03'),
+      'the brighter alternate finished decoding first',
+    );
+    game.play('fire', 0);
+    const first = context.sources.at(-1);
+    assert(
+      first.buffer.fallback,
+      'never substitute another weapon/source for the canonical report',
+    );
+    canonical.resolve();
+    await settle();
+    for (let index = 0; index < 4; index++) {
+      context.currentTime += 0.1;
+      game.play('enemyfire', 1);
+      game.play('fire', 0);
+      const source = context.sources.at(-1);
+      assert.equal(source.buffer, first.buffer);
+      assert.equal(
+        source.playbackRate.value,
+        first.playbackRate.value,
+        'enemy sequence cannot alter player cannon pitch',
+      );
+      source.onended?.();
+    }
+    game.dispose();
+    assert(context.filters.every((filter) => filter.disconnected));
+    const next = new GameAudio();
+    next.unlock();
+    await settle();
+    next.play('fire', 0);
+    assert.equal(
+      next.context.sources.at(-1).buffer.url,
+      COMBAT_AUDIO_ASSETS.cannon01,
+      'a new deployment may select the now-ready field recording',
+    );
+    next.dispose();
+  });
+  await test('actual WAV PCM and synthesized PCM keep a fixed cannon timbre through mixed fire and late decode', async () => {
+    class PcmContext extends Context {
+      createBuffer(channels, length, sampleRate) {
+        const data = Array.from(
+          { length: channels },
+          () => new Float32Array(length),
+        );
+        return {
+          fallback: true,
+          length,
+          sampleRate,
+          duration: length / sampleRate,
+          getChannelData: (channel) => data[channel],
+          copyToChannel: (samples, channel) => data[channel].set(samples),
+        };
+      }
+      async decodeAudioData(bytes) {
+        // The shipped assets are PCM WAV: decode their real samples without
+        // requiring a speaker or substituting URL-only buffers in this test.
+        const view = Buffer.from(bytes);
+        assert.equal(view.toString('ascii', 0, 4), 'RIFF');
+        assert.equal(view.toString('ascii', 8, 12), 'WAVE');
+        let format = 0,
+          samples = 0,
+          size = 0;
+        for (let at = 12; at + 8 <= view.length;) {
+          const name = view.toString('ascii', at, at + 4),
+            length = view.readUInt32LE(at + 4);
+          if (name === 'fmt ') format = at + 8;
+          if (name === 'data') {
+            samples = at + 8;
+            size = length;
+          }
+          at += 8 + length + (length % 2);
+        }
+        assert(format && samples);
+        assert.equal(view.readUInt16LE(format), 1);
+        assert.equal(view.readUInt16LE(format + 2), 1);
+        assert.equal(view.readUInt16LE(format + 14), 16);
+        const buffer = this.createBuffer(
+          1,
+          size / 2,
+          view.readUInt32LE(format + 4),
+        );
+        const data = buffer.getChannelData(0);
+        for (let index = 0; index < data.length; index++)
+          data[index] = view.readInt16LE(samples + index * 2) / 32768;
+        buffer.fallback = false;
+        this.decodes.push(buffer);
+        return buffer;
+      }
+    }
+    globalThis.AudioContext = PcmContext;
+    for (const fireBeforeDecode of [false, true]) {
+      const ready = deferred();
+      globalThis.fetch = async (url) => {
+        if (fireBeforeDecode && url === COMBAT_AUDIO_ASSETS.cannon01)
+          await ready.promise;
+        const bytes = await fs.readFile(
+          path.join('web/audio/combat', path.basename(url)),
+        );
+        return {
+          ok: true,
+          arrayBuffer: async () =>
+            bytes.buffer.slice(
+              bytes.byteOffset,
+              bytes.byteOffset + bytes.byteLength,
+            ),
+        };
+      };
+      const game = new GameAudio();
+      game.unlock();
+      if (!fireBeforeDecode) await game.recordings.preload();
+      game.play('fire', 0);
+      const context = game.context,
+        first = context.sources.at(-1);
+      assert.equal(first.buffer.fallback, fireBeforeDecode);
+      const waveform = first.buffer.getChannelData(0).slice();
+      assert(
+        waveform.some((sample) => Math.abs(sample) > 0.25),
+        'real audible PCM',
+      );
+      assert(
+        first.buffer.duration >= 2.4,
+        'cannon has a substantial recorded or synthesized decay',
+      );
+      ready.resolve();
+      await game.recordings.preload();
+      assert.equal(game.recordings.get('cannon01').fallback, false);
+      if (!fireBeforeDecode)
+        assert.equal(first.buffer, game.recordings.get('cannon01'));
+      for (const weapon of [1, 3, 6, 0]) {
+        context.currentTime += 0.1;
+        game.play('enemyfire', weapon);
+        game.play('fire', 0);
+        const next = context.sources.at(-1);
+        assert.equal(next.buffer, first.buffer);
+        assert.equal(next.playbackRate.value, first.playbackRate.value);
+        assert.deepEqual(next.buffer.getChannelData(0), waveform);
+        assert.equal(next.target.type, 'lowpass');
+        assert.equal(next.target.frequency.value, 1600);
+        assert.equal(next.target.target.type, 'lowshelf');
+        assert.equal(next.target.target.gain.value, 3);
+        next.onended?.();
+      }
+      game.dispose();
+      assert(context.filters.every((filter) => filter.disconnected));
+    }
+    globalThis.AudioContext = Context;
   });
   await test('library explosions, armor, EMP and pickups use bounded voices and mute live audio', async () => {
     const game = new GameAudio();

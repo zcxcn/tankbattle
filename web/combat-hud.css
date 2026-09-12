@@ -1,0 +1,527 @@
+/* Combat overlays share the viewport with the world, without reserving bars. */
+.battle-screen {
+  --hud-left: max(12px, env(safe-area-inset-left));
+  --hud-right: max(12px, env(safe-area-inset-right));
+  --hud-top: max(8px, env(safe-area-inset-top));
+  --hud-bottom: max(12px, env(safe-area-inset-bottom));
+  height: 100dvh;
+  padding: 0;
+}
+.battle-screen .canvas-wrap {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.battle-screen .battle-hud {
+  position: absolute;
+  top: var(--hud-top);
+  left: var(--hud-left);
+  right: var(--hud-right);
+  height: 40px;
+  min-height: 40px;
+  padding: 0;
+  gap: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  pointer-events: none;
+  text-shadow:
+    0 1px 3px #000,
+    0 0 6px #000;
+  z-index: 14;
+}
+.battle-screen .hud-player {
+  gap: 7px;
+  min-width: 0;
+}
+.battle-screen .hud-level-badge {
+  width: 28px;
+  height: 30px;
+  min-width: 28px;
+  font-size: 15px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.battle-screen .hud-level-badge small {
+  font-size: 8px;
+}
+.battle-screen .hud-player strong {
+  font-size: 11px;
+  margin-bottom: 4px;
+}
+.battle-screen .health-row {
+  gap: 6px;
+}
+.battle-screen .health-row meter {
+  width: 100px;
+  height: 5px;
+}
+.battle-screen .health-row span {
+  font-size: 11px;
+  color: #e3ebd9;
+}
+.battle-screen .hud-mission {
+  position: absolute;
+  top: 46px;
+  left: 0;
+  width: min(230px, 30vw);
+  text-align: left;
+  display: block;
+  pointer-events: none;
+}
+.battle-screen .hud-mission > span {
+  display: none;
+}
+.battle-screen .hud-mission strong {
+  font-size: 11px;
+  line-height: 1.5;
+  font-weight: 400;
+  margin: 0;
+  color: #e1e9d4;
+}
+.battle-screen .hud-right {
+  gap: 1px;
+  margin-left: auto;
+}
+.battle-screen .hud-right button {
+  width: 36px;
+  height: 40px;
+  min-width: 36px;
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  pointer-events: auto;
+  color: #e5eadf;
+  background: transparent;
+  border: 0;
+  filter: drop-shadow(0 1px 2px #000);
+}
+.battle-screen .hud-right button[aria-label='切换战斗配乐'],
+.battle-screen .hud-right button[aria-label='全屏游戏'],
+.battle-screen .hud-right button[aria-label='关闭全部声音'],
+.battle-screen .hud-right button[aria-label='开启全部声音'],
+.battle-screen .hud-score,
+.battle-screen .battle-footer {
+  display: none;
+}
+.battle-screen .hud-right button[aria-expanded='true'] {
+  color: #ffd089;
+}
+.battle-screen .boss-hud {
+  display: none;
+  top: calc(var(--hud-top) + 103px);
+  left: var(--hud-left);
+  right: auto;
+  bottom: auto;
+  width: min(170px, 30vw);
+  max-width: none;
+  transform: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  text-shadow: 0 1px 3px #000;
+  z-index: 4;
+}
+.battle-screen .boss-hud[data-nearby='true'] {
+  display: block;
+}
+.battle-screen .boss-hud > span {
+  font-size: 11px;
+  text-align: left;
+  line-height: 15px;
+  margin-bottom: 3px;
+}
+.battle-screen .boss-hud meter {
+  height: 3px;
+  display: block;
+}
+.battle-screen .combat-status {
+  position: absolute;
+  left: var(--hud-left);
+  bottom: calc(var(--hud-bottom) + 62px);
+  width: min(230px, 34vw);
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  color: #d3dece;
+  font-size: 11px;
+  line-height: 16px;
+  text-shadow:
+    0 1px 3px #000,
+    0 0 6px #000;
+  pointer-events: none;
+  z-index: 4;
+}
+.battle-screen .combat-status svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.battle-screen .combat-status span {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.battle-screen .combat-status[data-alert='true'] {
+  color: #ffbb97;
+}
+.battle-screen .tactical-radar,
+.battle-screen .objective-wayfinder {
+  display: none;
+}
+.battle-screen[data-radar-open='true'] .tactical-radar {
+  display: block;
+  top: calc(var(--hud-top) + 48px);
+  right: var(--hud-right);
+  left: auto;
+  bottom: auto;
+  width: 140px;
+  padding: 3px;
+  transform: none;
+  background: #101c1970;
+  border: 1px solid #b4c2b044;
+  pointer-events: none;
+}
+.battle-screen .tactical-radar > div {
+  display: none;
+}
+.battle-screen[data-radar-open='true'] .objective-wayfinder {
+  display: flex;
+  top: calc(var(--hud-top) + 144px);
+  right: var(--hud-right);
+  left: auto;
+  bottom: auto;
+  width: 140px;
+  transform: none;
+  padding: 2px;
+  font-size: 11px;
+  line-height: 15px;
+  border: 0;
+  background: transparent;
+  text-shadow: 0 1px 3px #000;
+}
+.battle-screen .battle-abilities {
+  left: var(--hud-left);
+  right: auto;
+  bottom: var(--hud-bottom);
+  top: auto;
+  width: auto;
+  height: auto;
+  transform: none;
+  display: flex;
+  gap: 5px;
+  z-index: 12;
+}
+.battle-screen .battle-abilities button {
+  position: relative;
+  inset: auto;
+  width: 46px;
+  min-width: 46px;
+  height: 44px;
+  min-height: 44px;
+  padding: 3px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border: 1px solid #c3cdb73d;
+  border-radius: 5px;
+  background: #12201850;
+  backdrop-filter: none;
+  box-shadow: none;
+  color: #e4ebda;
+}
+.battle-screen .battle-abilities button > span {
+  display: none;
+}
+.battle-screen .battle-abilities button > svg {
+  width: 16px;
+  height: 16px;
+}
+.battle-screen .battle-abilities kbd {
+  display: block;
+  margin: 0;
+  font-size: 10px;
+  line-height: 12px;
+}
+.battle-screen .mine-control b {
+  font-size: 10px;
+  top: 2px;
+  right: 3px;
+}
+.battle-screen .buffs {
+  display: flex;
+  top: auto;
+  left: var(--hud-left);
+  bottom: calc(var(--hud-bottom) + 48px);
+  gap: 8px;
+}
+.battle-screen .buffs span {
+  font-size: 10px;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  text-shadow: 0 1px 3px #000;
+}
+.battle-screen .weapon-rack {
+  position: absolute;
+  top: auto;
+  bottom: var(--hud-bottom);
+  left: auto;
+  right: var(--hud-right);
+  width: 88px;
+  max-width: none;
+  min-height: 44px;
+  transform: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  z-index: 13;
+}
+.battle-screen .weapon-rack-toggle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 88px;
+  min-height: 44px;
+  padding: 4px;
+  border: 1px solid #c3cdb747;
+  border-radius: 5px;
+  background: #12201866;
+  color: #e4ebda;
+  font-size: 12px;
+  text-shadow: 0 1px 2px #000;
+}
+.battle-screen .weapon-rack-toggle small {
+  font-size: 10px;
+  color: #b6c2ac;
+}
+.battle-screen .weapon-rack-status,
+.battle-screen .weapon-ammo-status,
+.battle-screen .weapon-rack[data-expanded='true'] .weapon-rack-status,
+.battle-screen .weapon-rack[data-expanded='true'] .weapon-ammo-status,
+.battle-screen .weapon-rack-slots {
+  display: none;
+}
+.battle-screen .weapon-rack[data-expanded='true'] {
+  top: auto;
+  bottom: var(--hud-bottom);
+  right: var(--hud-right);
+  left: auto;
+  width: min(290px, calc(100vw - 24px));
+  padding: 8px;
+  background: #122019eb;
+  border: 1px solid #81907566;
+  border-radius: 6px;
+}
+.battle-screen .weapon-rack[data-expanded='true'] .weapon-rack-toggle {
+  position: relative;
+  top: auto;
+  right: auto;
+  width: 100%;
+  min-height: 32px;
+  flex-direction: row;
+  justify-content: space-between;
+  border: 0;
+  background: transparent;
+}
+.battle-screen .weapon-rack[data-expanded='true'] .weapon-rack-toggle small {
+  display: none;
+}
+.battle-screen .weapon-rack[data-expanded='true'] .weapon-rack-slots {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  padding: 0;
+  margin: 4px 0 0;
+  overflow: visible;
+}
+.battle-screen .weapon-rack-slots button {
+  min-width: 0;
+  min-height: 48px;
+  padding: 4px 2px;
+  gap: 3px;
+  font-size: 11px;
+  background: #26362a;
+  border-radius: 3px;
+}
+.battle-screen .weapon-rack-slots button > svg,
+.battle-screen .weapon-rack-slots button > kbd {
+  display: none;
+}
+.battle-screen .weapon-rack-slots button > span,
+.battle-screen .weapon-rack-slots button > em {
+  position: static;
+  font-size: 11px;
+}
+.battle-screen .weapon-rack-slots .cycle-weapon {
+  display: flex;
+}
+.pause-dialog .mobile-pause-details {
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+}
+.pause-dialog .mobile-pause-details > span {
+  color: #adbca0;
+  font-size: 12px;
+}
+.pause-dialog .mobile-pause-tools {
+  display: flex;
+  gap: 8px;
+}
+.pause-dialog .mobile-pause-tools button {
+  flex: 1;
+  min-height: 44px;
+}
+.deployment-map-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (any-pointer: coarse), (max-width: 760px), (max-height: 540px) {
+  .battle-screen {
+    --hud-left: max(8px, env(safe-area-inset-left));
+    --hud-right: max(8px, env(safe-area-inset-right));
+  }
+  .battle-screen .hud-player strong,
+  .battle-screen .hud-level-badge {
+    display: none;
+  }
+  .battle-screen .health-row meter {
+    width: clamp(54px, 16vw, 100px);
+  }
+  .battle-screen .hud-right button {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+  }
+  .battle-screen .hud-mission {
+    width: min(170px, 40vw);
+    top: 45px;
+  }
+  .battle-screen .boss-hud {
+    width: min(145px, 36vw);
+    top: calc(var(--hud-top) + 105px);
+  }
+  .battle-screen .combat-status {
+    bottom: calc(var(--hud-bottom) + 176px);
+    width: min(200px, 46vw);
+  }
+  .battle-screen .battle-abilities {
+    inset: auto 0 var(--hud-bottom);
+    width: 100%;
+    height: 160px;
+    display: block;
+    pointer-events: none;
+  }
+  .battle-screen .battle-abilities button {
+    position: absolute;
+    top: auto;
+    bottom: 114px;
+    width: 44px;
+    min-width: 44px;
+    pointer-events: auto;
+  }
+  .battle-screen .battle-abilities button:nth-child(1) {
+    left: var(--hud-left);
+    right: auto;
+  }
+  .battle-screen .battle-abilities button:nth-child(3) {
+    left: calc(var(--hud-left) + 49px);
+    right: auto;
+  }
+  .battle-screen .battle-abilities button:nth-child(2) {
+    right: calc(var(--hud-right) + 49px);
+    left: auto;
+  }
+  .battle-screen .battle-abilities button:nth-child(4) {
+    right: var(--hud-right);
+    left: auto;
+  }
+  .battle-screen .battle-abilities button::after {
+    font-size: 10px;
+    line-height: 12px;
+  }
+  .battle-screen .battle-abilities kbd {
+    position: absolute;
+    top: 5px;
+    left: 0;
+    right: 0;
+    font-size: 11px;
+    line-height: 16px;
+  }
+  .battle-screen .battle-abilities kbd[data-ready='true'] {
+    display: none;
+  }
+  .battle-screen .touch-stick {
+    left: var(--hud-left);
+    bottom: var(--hud-bottom);
+  }
+  .battle-screen .touch-aim {
+    left: auto;
+    right: var(--hud-right);
+  }
+  .battle-screen .touch-fire {
+    bottom: var(--hud-bottom);
+    left: calc(50% - 24px);
+    right: auto;
+    width: 48px;
+    height: 48px;
+    background: #43382144;
+  }
+  .battle-screen .touch-fire > svg {
+    width: 16px;
+    height: 16px;
+  }
+  .battle-screen .touch-fire {
+    font-size: 10px;
+  }
+  .battle-screen .buffs {
+    bottom: calc(var(--hud-bottom) + 162px);
+  }
+  .battle-screen .weapon-rack,
+  .battle-screen .weapon-rack[data-expanded='true'] {
+    top: calc(var(--hud-top) + 48px);
+    bottom: auto;
+    right: var(--hud-right);
+    left: auto;
+  }
+  .battle-screen .weapon-rack {
+    width: 76px;
+  }
+  .battle-screen .weapon-rack-toggle {
+    width: 76px;
+  }
+  .battle-screen .weapon-rack[data-expanded='true'] {
+    width: 144px;
+  }
+  .battle-screen .weapon-rack[data-expanded='true'] .weapon-rack-slots {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .battle-screen .weapon-rack[data-expanded='true'] .weapon-rack-toggle {
+    min-height: 44px;
+  }
+  .battle-screen[data-radar-open='true'] .weapon-rack {
+    display: none;
+  }
+}
+@media (orientation: landscape) and (any-pointer: coarse),
+  (orientation: landscape) and (max-height: 540px) {
+  .battle-screen .weapon-rack[data-expanded='true'] {
+    width: 252px;
+  }
+  .battle-screen .weapon-rack[data-expanded='true'] .weapon-rack-slots {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
