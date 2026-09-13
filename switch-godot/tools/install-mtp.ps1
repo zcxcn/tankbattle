@@ -62,7 +62,13 @@ if (-not $ieComplete) { throw 'Upload did not reach expected sizes within 120 se
 Write-Output 'Remote lengths match. Reading back for SHA256 verification ...'
 $ieCheck = Join-Path $ieRoot ('work\switch-readback-' + (Get-Date -Format 'yyyyMMdd-HHmmss-fff'))
 New-Item -ItemType Directory -Path $ieCheck | Out-Null
-$ieShell.Namespace($ieCheck).CopyHere($ieTarget, 0x414)
+foreach ($ieRecord in $ieManifest) {
+    $ieReadback = Join-Path (Join-Path $ieCheck 'IronEmbers') $ieRecord.path
+    $ieParent = Split-Path -Parent $ieReadback
+    New-Item -ItemType Directory -Path $ieParent -Force | Out-Null
+    $ieRemote = Find-IeRelative $ieTarget.GetFolder $ieRecord.path
+    $ieShell.Namespace($ieParent).CopyHere($ieRemote, 0x414)
+}
 $ieDeadline = (Get-Date).AddSeconds(120)
 do {
     $ieComplete = $true

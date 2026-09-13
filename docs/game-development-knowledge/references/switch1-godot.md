@@ -26,4 +26,6 @@ Godot 4 的 Forward+、场景格式和脚本 API 不能直接交给此 Godot 3.5
 
 分开验证编辑器内项目、实际导出的 PCK、NRO 结构、MTP 读回和主机启动。NRO 与同名 PCK 必须保持相邻；只检查编辑器源项目或上传 NRO 都不构成完整交付。HOME 入口还需正确的固定 NRO 路径及项目独立 TitleID。
 
+本次 DBI MTP 的 `CopyHere` 对已有同名文件没有完成覆盖；旧文件读回哈希匹配后，将其改名保留，再复制到空出的原名，最终新包读回校验通过。只对本项目已验证且已获更新授权的文件使用此流程；先确认改名成功。Shell 显示名可能隐藏扩展名，改名后须重新读取 `System.FileName`。验证传输时仅读回发行清单中的文件，避免把旧包备份也传回。此行为是本次设备上的实测，不推断所有 MTP 实现相同。
+
 来源：[社区发行版本](https://github.com/Stary2001/godot/releases/tag/v3.5.1-stable_switch_fixed)。项目内证据见 `docs/switch1/SELF_CHECK_0.1.0.md`、`switch-godot/tests/` 与本版产物回执，路径不作为全局依赖。

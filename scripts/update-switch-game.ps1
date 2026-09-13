@@ -44,6 +44,23 @@ foreach ($ieRecord in $ieChanged) {
     if ((Get-FileHash -LiteralPath (Join-Path $ieReadback $ieRecord.file.Name)).Hash.ToLowerInvariant() -ne $ieRecord.previous.sha256) { throw 'Remote file differs from our prior release; no files overwritten.' }
 }
 Write-Output 'Previous hashes confirmed. Updating only changed release files ...'
-foreach ($ieRecord in $ieChanged) { $ieTarget.GetFolder.CopyHere($ieRecord.file.FullName,0x414) }
+# DBI MTP did not replace existing names through CopyHere. Keep the verified
+# previous release on-device, then copy to a vacant name and verify below.
+$ieSuffix='.previous-'+(Get-Date -Format 'yyyyMMdd-HHmmss')
+foreach ($ieRecord in $ieChanged) {
+    $ieBackupName=$ieRecord.file.Name+$ieSuffix
+    if (Find-IeItem $ieTarget.GetFolder $ieBackupName) { throw 'Backup name already exists.' }
+    $ieRecord.remote.Name=$ieBackupName
+    $ieDeadline=(Get-Date).AddSeconds(15)
+    do {
+        $ieOriginal=Find-IeItem $ieTarget.GetFolder $ieRecord.file.Name
+        $ieBackup=Find-IeItem $ieTarget.GetFolder $ieBackupName
+        $ieRenamed=(-not $ieOriginal -and $ieBackup -and [long]$ieBackup.ExtendedProperty('System.Size') -eq $ieRecord.previous.bytes)
+        if (-not $ieRenamed) { Start-Sleep -Milliseconds 250 }
+    } while (-not $ieRenamed -and (Get-Date) -lt $ieDeadline)
+    if (-not $ieRenamed) { throw 'MTP rename was not confirmed; no replacement requested.' }
+    Write-Output "Preserved $ieBackupName; copying $($ieRecord.file.Name) ..."
+    $ieTarget.GetFolder.CopyHere($ieRecord.file.FullName,0x414)
+}
 # The original installer waits for new sizes and then performs a full readback.
 & (Join-Path $ieRoot 'switch-godot\tools\install-mtp.ps1') -VerifyOnly
