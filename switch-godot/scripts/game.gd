@@ -636,5 +636,7 @@ func save_progress():
 	var file=File.new()
 	if file.open("user://progress%d.json"%int((save_sequence+1)%2),File.WRITE)!=OK:return
 	file.store_string(JSON.print({"payload":payload,"checksum":payload.sha256_text()}))
+	# Godot 3 reports an unconfigured file after close(); inspect writes while open.
+	var write_ok=file.get_error()==OK
 	file.close()
-	if file.get_error()==OK:save_sequence+=1
+	if write_ok:save_sequence+=1

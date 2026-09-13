@@ -1,6 +1,6 @@
 """Run a bounded engine operation with isolated data and inspect the actual log."""
 from pathlib import Path
-import argparse, os, subprocess, sys, time
+import argparse, os, subprocess, sys, time, uuid
 from stage import ROOT, stage
 
 def run(mode):
@@ -18,6 +18,11 @@ def run(mode):
     elif mode=='test':args+=['--disable-render-loop','--script','tests/check.gd','--self-test']
     elif mode=='capture':args+=['--script','tests/capture.gd','--self-test']
     elif mode=='smoke':args+=['--disable-render-loop','--script','tests/smoke.gd','--self-test']
+    elif mode=='save':
+        isolated=ROOT/'work'/('switch-save-'+uuid.uuid4().hex)
+        isolated.mkdir()
+        env['XDG_DATA_HOME']=str(isolated)
+        args+=['--disable-render-loop','--script','tests/save.gd','--self-test']
     else:raise ValueError(mode)
     log=logs/(mode+'.log')
     with log.open('wb') as output:
@@ -37,11 +42,11 @@ def run(mode):
     if errors: print('ERROR SUMMARY:\n'+'\n'.join(errors[:20]))
     if process.returncode or errors:raise SystemExit(2)
     expected={'import':'IRON_SWITCH_IMPORT_FINISHED','test':'IRON_SWITCH_CHECKS_PASSED',
-              'capture':'IRON_SWITCH_CAPTURE_FINISHED','smoke':'IRON_SWITCH_SMOKE_FINISHED'}[mode]
+              'capture':'IRON_SWITCH_CAPTURE_FINISHED','smoke':'IRON_SWITCH_SMOKE_FINISHED','save':'IRON_SWITCH_SAVE_PASSED'}[mode]
     if expected not in text:raise SystemExit('Missing completion marker: '+expected)
 
 if __name__=='__main__':
     sys.stdout.reconfigure(errors='replace')
     parser=argparse.ArgumentParser()
-    parser.add_argument('mode',choices=['import','test','capture','smoke'])
+    parser.add_argument('mode',choices=['import','test','capture','smoke','save'])
     run(parser.parse_args().mode)

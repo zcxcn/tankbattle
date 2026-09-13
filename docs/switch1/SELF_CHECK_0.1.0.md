@@ -16,6 +16,7 @@
 - `final-check.log`：43 项通过，覆盖模型关节、关卡数量、桥梁/水域、地雷与脉冲、Boss 生成及死亡、连续 1→4 波、奖励不重复、升级购买与真实 A 键菜单事件。
 - `final-smoke.log`：6 项通过，真实物理循环验证炮口→炮弹→敌人伤害、76 米接敌射击、敌车追击、玩家按钮开火、巨怪移动和命中。
 - `package-smoke.log`：以最终导出的同一份 PCK 重新运行上述 6 项。并非复用源项目结果。
+- `save.log`：5 项通过，覆盖写入后立即递增序号、两槽轮换、读取最新有效槽和校验损坏后的回退。修复了 Godot 3 在 `File.close()` 后检查写入状态导致序号不更新的问题；修复后重新导出并验证成品。
 - 四张桌面运行时截图检查了菜单、城市第三人称、丘陵俯视与巨怪场景；发现并修复纹理夹取导致的地表长条拉伸。
 - 实际 NRO 原生段与锁定模板一致，AArch64 入口、ASET、NACP 所有 16 个语言槽、图标格式、PCK 全部资源 MD5 校验通过。
 - 音频验证使用 Dummy 驱动：已验证事件、资源和播放调用，未把它当作主机扬声器试听。
@@ -26,7 +27,7 @@
 
 `outputs/switch/IronEmbers/IronEmbers.nro`：45,159,776 字节。
 
-`outputs/switch/IronEmbers/IronEmbers.pck`：572,584,416 字节；SHA256 `225f74d5314b36dea3d1b19a665ae76d528f59e62a9a6e70dacefd7575257239`。
+`outputs/switch/IronEmbers/IronEmbers.pck`：572,584,464 字节；SHA256 `2d7169dd65bd2a2afd41ed6d840ef358938e5615e9b923cd56bd62d1505ebfc1`。
 
 HOME 助手单独位于 `outputs/switch-home/IronEmbersHome/`，目标固定为 `sdmc:/switch/IronEmbers/IronEmbers.nro`，TitleID `01cdcf1458845000`。助手检查游戏和 PCK 存在；A 安装到 SD 的 HOME 入口，Y 保存 NSP，B 退出。助手本身不代表入口已安装。
 
