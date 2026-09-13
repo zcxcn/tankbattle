@@ -52,3 +52,9 @@ android/local.properties
 /pc-godot/.editor/
 /pc-godot/.mono/
 /pc-godot/export_credentials.cfg
+
+# Switch staging and Python helper caches
+/switch-godot/.import/
+/switch-godot/.godot/
+/switch-godot/export_credentials.cfg
+__pycache__/

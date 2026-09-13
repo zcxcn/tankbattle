@@ -1,0 +1,25 @@
+{
+  "source": "https://github.com/Stary2001/godot/releases/tag/v3.5.1-stable_switch_fixed",
+  "tag": "v3.5.1-stable_switch_fixed",
+  "release_published_at": "2023-03-02T17:32:58Z",
+  "checked_at": "2026-09-13",
+  "reported_editor_version": "3.5.1.stable.custom_build.1ae5870ea",
+  "provenance": "Downloaded through HTTPS from the maintainer GitHub release and checked against release API lengths. SHA256 values below are locally measured reproducibility pins, not an upstream digital signature.",
+  "assets": [
+    {
+      "name": "godot-v3.5.1-windows-switch-support.zip",
+      "bytes": 36208107,
+      "sha256": "12e542b66e3a43874b5bb1d8db2f13dac960cfbf82ef3a7526c43005ffce06a5"
+    },
+    {
+      "name": "godot_template-v3.5.1-switch_only.tpz",
+      "bytes": 17203404,
+      "sha256": "14dca7b9bd11ebb881658986de63bb666c4bd690cc8586fe5722fab9f4ea7957"
+    }
+  ],
+  "switch_runtime_native_size": 45101056,
+  "switch_runtime_native_sha256": "d29e9766f71ca6728ae54b9fcc49d1fc491268edbcfa6eabe76a6527a47acfc1",
+  "switch_runtime_build_id": "6dfc1902f6e6e2bc36f3b419d38af3c773169b2a000000000000000000000000",
+  "architecture": "AArch64",
+  "hardware_tested": false
+}

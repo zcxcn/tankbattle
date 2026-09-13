@@ -19,6 +19,7 @@ description: Develop, extend, debug and validate playable games using reusable p
 | 丘陵河流、导航、天气、波次、奖励和存档 | [世界与进度](references/world-progression.md) |
 | 卡顿、回归测试、截图与性能证据 | [性能与验证](references/performance-validation.md) |
 | Windows/Mac 打包、发布、传文件 | [发布与交付](references/release.md) |
+| Godot 游戏移植 Switch 1、旧引擎兼容、NRO/PCK | [Switch 1 Godot 移植](references/switch1-godot.md) |
 | 保存新经验、修正旧结论、后续任务交接 | [维护与交接](references/maintenance.md) |
 
 先复现问题或定义可观察的验收行为，再做最小相关改动。验证应覆盖真实生产调用链；画面变化必须看实际渲染，成品变化必须检查实际产物。
