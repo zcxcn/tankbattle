@@ -36,6 +36,14 @@ flowchart LR
 
 离线局域网（两台设备都不能访问房间码服务）是单独的增强项：需要本机辅助程序提供发现/信令，或手动交换连接描述，并逐浏览器测试安全上下文与局域网权限。不要把它当作首版房间码联机已实现的能力。
 
+### 信令连接与 J6412 部署
+
+信令不是只发一次请求：每位玩家加入时需要交换 offer、answer 和逐步发现的 ICE 候选；网络切换、重连、ICE restart 时还会再交换。`RTCDataChannel` 建好后，坦克位置、炮弹和战斗事件直接经选中的 WebRTC 路径传送，不经过信令服务器。若房间禁止中途加入且不支持重连，已建立连接后可以关掉信令 WebSocket。首版房间码产品建议保留房主与信令服务之间的轻量连接或低频心跳，用来表示房间仍在线、让新玩家加入并处理重连；这条连接不承载每秒 60 次战斗计算或 10–15 次战斗快照。[WebRTC 会话流程](https://developer.mozilla.org/en-US/docs/Web/API/WebRTC_API/Session_lifetime)、[信令与 ICE 候选交换](https://developer.mozilla.org/en-US/docs/Web/API/WebRTC_API/Signaling_and_video_calling)。
+
+现有 J6412 可以替代上表的托管信令服务来运行小规模房间目录与 WebSocket 服务：Intel 标称 4 核 4 线程、基础频率 2.0 GHz；此角色主要处理建房/加入消息，通常由公网可达性、稳定性和房间滥用防护决定体验，而非由 CPU 决定。实际可承载房间数还取决于这台机器的内存、系统、上行网络和实现，部署后应测连接数、消息率、CPU/内存及断线恢复，不能仅凭 CPU 型号保证容量。[Intel J6412 参数](https://www.intel.com/content/www/us/en/products/sku/214758/intel-celeron-processor-j6412-1-5m-cache-up-to-2-60-ghz/specifications.html)。
+
+如果 J6412 有可从公网访问的地址，可通过 HTTPS/WSS 暴露信令服务。如果 J6412 也在没有公网地址的家庭网络里，Cloudflare Tunnel 可以把本机 WebSocket 服务经其公网入口发布，不要求家庭路由器入站开放端口；稳定的公开地址仍要解决域名/隧道配置。也可以继续使用托管 Worker/Durable Object，省去家用设备在线率对建房的影响。**Cloudflare Tunnel 的 WebSocket 支持不等于可让浏览器通过该隧道访问普通 UDP TURN 服务。** TURN 应另用托管服务；只有 J6412 具备公网可达地址，或有可控的公网 UDP 端口映射时，才考虑在上面部署 coturn 并开放监听端口与中继端口范围。小规模时 J6412 的计算能力不是主要障碍，持续中继的上行带宽和网络路径才需要实测。[Tunnel WebSocket 支持](https://developers.cloudflare.com/cloudflare-one/faq/cloudflare-tunnels-faq/)、[Tunnel 公网路由限制](https://developers.cloudflare.com/tunnel/concepts/routing/)、[coturn 端口配置](https://github.com/coturn/coturn/blob/master/README.turnserver)。
+
 ### 房间与安全
 
 房主点“创建房间”，选择地图、玩法、难度和人数上限，得到随机房间码与邀请链接；加入者输入房间码，进入等待大厅，选择底盘并点“准备”。房主确认后开始，同一战斗种子和协议版本发给所有人。房间码应高熵且短期有效；房主令牌与邀请令牌分开，房主可以拒绝/踢出玩家。信令服务只转发限定大小和频率的 SDP/ICE 消息，不接收战斗输入，也不保存长期存档。按房间人数、创建频率、消息尺寸与请求来源限流；TURN 临时凭证须关联有效房间并限制期限。
