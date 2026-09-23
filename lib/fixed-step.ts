@@ -3,7 +3,7 @@ import type { Battle, Input } from './engine';
 export class FixedStep {
   accumulator = 0;
   readonly step = 1 / 60;
-  advance(battle: Battle, delta: number, input: Input) {
+  advance(battle: Battle, delta: number, input: Input, remoteInputs: Record<number, Input> = {}) {
     if (battle.paused || battle.result) {
       this.accumulator = 0;
       return 0;
@@ -11,13 +11,15 @@ export class FixedStep {
     this.accumulator += Math.min(0.15, Math.max(0, delta));
     let steps = 0;
     while (this.accumulator + 1e-10 >= this.step && steps < 9) {
-      battle.step(this.step, input);
-      input.dash = false;
-      input.emp = false;
-      input.support = false;
-      input.weapon = undefined;
-      input.nextWeapon = false;
-      input.mine = false;
+      battle.step(this.step, input, remoteInputs);
+      for (const controls of [input, ...Object.values(remoteInputs)]) {
+        controls.dash = false;
+        controls.emp = false;
+        controls.support = false;
+        controls.weapon = undefined;
+        controls.nextWeapon = false;
+        controls.mine = false;
+      }
       this.accumulator -= this.step;
       steps++;
       if (battle.result) break;

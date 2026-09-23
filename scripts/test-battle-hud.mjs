@@ -50,8 +50,10 @@ const ast = ts.createSourceFile(
   true,
   ts.ScriptKind.TSX,
 );
-let frameLoop, keydownSource;
+let frameLoop, keydownSource, pauseSource;
 function visit(node) {
+  if (ts.isFunctionDeclaration(node) && node.name?.text === 'pause')
+    pauseSource = node.getText(ast);
   if (
     ts.isVariableDeclaration(node) &&
     node.initializer &&
@@ -136,6 +138,7 @@ for (const outcome of ['defeat', 'victory']) {
     policy: { fps: 60 },
     pacer: { take: () => true, reset() {} },
     fixed: new FixedStep(),
+    multiplayer: null,
     controls,
     keys: new Set(),
     touch: { current: { x: 0, y: 0 } },
@@ -366,3 +369,26 @@ assert.equal(battle.paused, true, 'Escape must still pause active combat');
 console.log(
   'PASS: dialogs and form controls retain Space/C/F while active battle shortcuts still work',
 );
+
+assert(pauseSource, 'battle pause handler must exist');
+const pauseJavascript = ts.transpileModule(`${pauseSource}\npause`, {
+  compilerOptions: {
+    target: ts.ScriptTarget.ES2022,
+    module: ts.ModuleKind.ES2022,
+  },
+}).outputText;
+const guestBattle = { paused: true, result: null };
+const notices = [];
+const guestPause = vm.runInNewContext(pauseJavascript, {
+  engine: { current: guestBattle },
+  errorRef: { current: '' },
+  multiplayer: { session: { role: 'guest' } },
+  clearInput: { current() {} },
+  sound: { current: { suspend() {} } },
+  setConnectionNotice: (message) => notices.push(message),
+});
+guestPause(false);
+guestPause(true);
+assert.equal(guestBattle.paused, true, 'a guest cannot change host pause state');
+assert.equal(notices.length, 2);
+console.log('PASS: only the host can pause or resume cooperative battle');

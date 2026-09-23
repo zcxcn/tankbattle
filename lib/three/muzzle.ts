@@ -75,7 +75,7 @@ export class MuzzleEffects {
       this.seen = new WeakSet();
     }
     this.lastTime = b.elapsed;
-    for (const tank of [b.player, ...b.enemies]) {
+    for (const tank of [...(b.players ?? [b.player]), ...b.enemies]) {
       const shot = tank.lastShot;
       if (!shot || this.seen.has(shot)) continue;
       this.seen.add(shot);

@@ -52,6 +52,9 @@ import {
 } from '@/lib/campaign';
 import type { BattleResult } from '@/lib/engine';
 import BattleGame from '@/components/game/battle-game';
+import MultiplayerLobby, {
+  type MultiplayerRun,
+} from '@/components/game/multiplayer-lobby';
 import DeploymentMenu from '@/components/game/deployment-menu';
 import { preloadRenderer } from '@/lib/three/renderer-loader';
 import type { BattlefieldId, OperationId } from '@/lib/battlefields';
@@ -77,6 +80,7 @@ const upgradeIcons = [Shield, Target, RotateCcw, Wind, Zap, Heart];
 
 export default function Home() {
   const [tab, setTab] = useState('campaign');
+  const [lobbyEpoch, setLobbyEpoch] = useState(0);
   const [garageSection, setGarageSection] = useState('tank');
   const [archiveSection, setArchiveSection] = useState('story');
   const [save, setSaveState] = useState<Save>(defaultSave),
@@ -89,6 +93,7 @@ export default function Home() {
       endless: boolean;
       id: string;
       scenario?: { battlefield: BattlefieldId; operation: OperationId };
+      multiplayer?: MultiplayerRun;
     } | null>(null),
     [result, setResult] = useState<(BattleResult & { reward: number }) | null>(
       null,
@@ -263,6 +268,8 @@ export default function Home() {
     setRun({ mission, endless, id, scenario });
   }
   function exit() {
+    run?.multiplayer?.session.close();
+    if (run?.multiplayer) setLobbyEpoch((epoch) => epoch + 1);
     setMusicScene('menu');
     setMusicPaused(false);
     music.current?.unlock();
@@ -273,6 +280,12 @@ export default function Home() {
     setSave((s) => creditRunKills(s, id, kills));
   }
   function finish(r: BattleResult) {
+    if (run?.multiplayer) {
+      setMusicScene(r.won ? 'victory' : 'defeat');
+      setMusicPaused(false);
+      setResult({ ...r, reward: 0 });
+      return;
+    }
     const settled = settleRun(saveRef.current, r);
     if (!settled.accepted) return;
     setMusicScene(r.won ? 'victory' : 'defeat');
@@ -384,6 +397,10 @@ export default function Home() {
               <Flag />
               战役行动
             </TabsTrigger>
+            <TabsTrigger value="multiplayer">
+              <Swords />
+              联机协作
+            </TabsTrigger>
             <TabsTrigger value="garage">
               <Layers3 />
               装甲车库
@@ -437,6 +454,8 @@ export default function Home() {
             <div className="eyebrow">
               {tab === 'campaign'
                 ? 'OPERATIONS / 战役行动'
+                : tab === 'multiplayer'
+                  ? 'CO-OP / 联机协作'
                 : tab === 'garage'
                   ? 'ARMORY / 装甲车库'
                   : 'INTELLIGENCE / 战地档案'}
@@ -444,12 +463,16 @@ export default function Home() {
             <h1>
               {tab === 'campaign'
                 ? '战役指挥中心'
+                : tab === 'multiplayer'
+                  ? '协同出击'
                 : tab === 'garage'
                   ? '整装，再出发'
                   : '来自尘湾的信号'}
               <span>
                 {tab === 'campaign'
                   ? 'CAMPAIGN COMMAND'
+                  : tab === 'multiplayer'
+                    ? 'MULTIPLAYER OPERATIONS'
                   : tab === 'garage'
                     ? 'PREPARE FOR THE NEXT FIGHT'
                     : 'VOICES FROM DUST BAY'}
@@ -490,6 +513,30 @@ export default function Home() {
               setTab('garage');
             }}
             onWarmup={warmRenderer}
+          />
+        )}
+        {tab === 'multiplayer' && (
+          <MultiplayerLobby
+            key={lobbyEpoch}
+            active={!!run}
+            save={save}
+            onStart={(multiplayer) => {
+              setDialog(null);
+              setResult(null);
+              setMusicScene('patrol');
+              setMusicPaused(false);
+              music.current?.unlock();
+              setRun({
+                mission: 0,
+                endless: false,
+                id: multiplayer.runId,
+                scenario: {
+                  battlefield: multiplayer.battlefield,
+                  operation: 'assault',
+                },
+                multiplayer,
+              });
+            }}
           />
         )}
         {tab === 'garage' && (
@@ -1152,10 +1199,12 @@ export default function Home() {
           endless={run.endless}
           save={{
             ...save,
+            ...run.multiplayer?.loadout,
             battlefield: run.scenario?.battlefield ?? 'campaign',
             operation: run.scenario?.operation ?? 'campaign',
           }}
           runId={run.id}
+          multiplayer={run.multiplayer}
           onProgress={recordProgress}
           onFinish={finish}
           onExit={exit}
@@ -1183,7 +1232,9 @@ export default function Home() {
             {result?.won ? 'MISSION ACCOMPLISHED' : 'END OF OPERATION'}
           </span>
           <DialogTitle>
-            {result?.won
+            {run?.multiplayer
+              ? '协同作战结束'
+              : result?.won
               ? !result.scenario && result.mission === MISSIONS.length - 1
                 ? '黎明，终于到来'
                 : '行动成功'
@@ -1192,7 +1243,9 @@ export default function Home() {
                 : '信号中断，战斗尚未结束'}
           </DialogTitle>
           <DialogDescription>
-            {result?.won
+            {run?.multiplayer
+              ? '房间战绩只在本局显示，单人战役存档不会改变。'
+              : result?.won
               ? result.scenario
                 ? '区域行动完成，战绩与坦克成长已保存。重新部署，挑战不同地图与玩法。'
                 : MISSIONS[result.mission].end
@@ -1217,7 +1270,7 @@ export default function Home() {
               </strong>
             </div>
           </div>
-          {result && (
+          {result && !run?.multiplayer && (
             <div className="result-growth">
               <strong>
                 {progression(result.totalKills).level >
@@ -1240,7 +1293,7 @@ export default function Home() {
               获得 {result.reward} 点战备升级奖励
             </p>
           )}
-          {result?.won &&
+          {!run?.multiplayer && result?.won &&
           !result.scenario &&
           result.mission < MISSIONS.length - 1 ? (
             <button
@@ -1260,12 +1313,17 @@ export default function Home() {
             <button
               className="deploy-button"
               onClick={() => {
-                if (result)
+                if (run?.multiplayer) exit();
+                else if (result)
                   start(result.endless, result.mission, run?.scenario);
               }}
             >
               <RotateCcw size={18} />
-              {result?.won ? '再战一次' : '重新挑战'}
+              {run?.multiplayer
+                ? '返回联机大厅'
+                : result?.won
+                  ? '再战一次'
+                  : '重新挑战'}
               <ArrowRight size={18} />
             </button>
           )}

@@ -126,6 +126,35 @@ await test('3D scene has modeled tanks, perspective camera, PBR materials and in
   assert(r.camera.mode === 0);
   assert(r.world.walls.size === battle.walls.length);
 });
+await test('cooperative tanks render as friendly units and camera follows the local guest', () => {
+  const b = new Battle(0, false, config(), 1234);
+  const ally = b.addPlayer(-10);
+  b.viewPlayerId = -10;
+  const view = new Renderer3D(canvas, b, {
+    headlessEngine: new NullEngine({ renderWidth: 1280, renderHeight: 800, textureSize: 128 }),
+    assets: false,
+  });
+  view.draw(b, null);
+  assert(view.models.has(-10));
+  assert(view.healthBars.has(-10));
+  assert.equal(view.weaponMounts.get(-10).index, 0);
+  assert(Math.abs(view.cameraTarget.x - worldPosition(ally.x, ally.y, 1).x) < 5);
+  ally.kit.ammo[1] = 3;
+  b.selectWeapon(1, ally);
+  view.draw(b, null);
+  assert.equal(view.weaponMounts.get(-10).index, 1);
+  ally.lastShot = {
+    at: 0, x: ally.x + 32, y: ally.y,
+    angle: 0, height: 21, weapon: 1,
+  };
+  b.elapsed = 0.02;
+  view.draw(b, null);
+  assert(view.muzzles.stats.active >= 1);
+  b.removePlayer(-10);
+  view.draw(b, null);
+  assert(!view.models.has(-10));
+  view.dispose();
+});
 await test('ground coordinates round trip and camera respects screen directions', () => {
   const pt = worldPosition(513, 692, 0);
   const back = simulationPosition(pt);

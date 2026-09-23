@@ -45,6 +45,7 @@ const {
   ENEMY_SPAWN_DISTANCE,
   segmentCircle,
   segmentRect,
+  sanitizeRemoteInput,
 } = await import(pathToFileURL(path.join(tmp, 'engine.mjs')));
 const {
   defaultSave,
@@ -2028,6 +2029,130 @@ test('a suicide attack on a nearby beacon cannot splash the player through cover
   b.step(0.01, idle);
   assert.equal(b.player.hp, hp);
   assert(b.base.hp < baseHp);
+});
+test('cooperative players spawn apart and use independent movement, weapons and mines', () => {
+  const b = make();
+  b.spawnTimer = 999;
+  const first = b.addPlayer(-10), second = b.addPlayer(-11);
+  assert.equal(b.addPlayer(-10), first);
+  assert(Math.hypot(first.x - second.x, first.y - second.y) > 50);
+  assert(Math.hypot(first.x - b.player.x, first.y - b.player.y) > 50);
+  assert(b.canOccupy(first.x, first.y, first.radius));
+  const oldX = first.x, oldHostX = b.player.x;
+  b.step(0.05, idle, { [-10]: { ...idle, x: 1, fire: true } });
+  assert(first.x > oldX);
+  assert.equal(b.player.x, oldHostX);
+  assert(first.lastShot);
+  assert.equal(b.player.lastShot, undefined);
+  first.kit.ammo[1] = 3;
+  assert(b.selectWeapon(1, first));
+  assert.equal(first.kit.weapon, 1);
+  assert.equal(b.weapon, 0);
+  assert(b.layMine(first));
+  assert.equal(first.kit.mineAmmo, 5);
+  assert.equal(b.mineAmmo, 6);
+  b.removePlayer(-11);
+  assert.equal(b.getPlayer(-11), undefined);
+});
+test('enemy shells, mines and pickups affect the correct cooperative player', () => {
+  const b = make();
+  const ally = b.addPlayer(-10);
+  b.spawnTimer = 999;
+  b.enemies = [];
+  b.walls = [];
+  b.player.x = ally.x + 300;
+  const hostHp = b.player.hp, allyHp = ally.hp;
+  b.bullets = [{
+    x: ally.x - 45, y: ally.y, vx: 1600, vy: 0,
+    damage: 30, enemy: true, life: 1, weapon: 0,
+  }];
+  b.step(0.05, idle);
+  assert(ally.hp < allyHp);
+  assert.equal(b.player.hp, hostHp);
+  const afterShot = ally.hp;
+  b.mines = [{
+    id: 800, x: ally.x, y: ally.y, enemy: true, owner: 500,
+    armedAt: 0, expiresAt: 99, damage: 40,
+  }];
+  ally.kit.shield = 0;
+  b.step(0.05, idle);
+  assert(ally.hp < afterShot);
+  assert.equal(b.player.hp, hostHp);
+  b.pickups = [{ x: ally.x, y: ally.y, kind: 3, weapon: 2, amount: 5, life: 10 }];
+  b.step(0, idle);
+  assert.equal(ally.kit.ammo[2], 5);
+  assert.equal(b.ammo[2], 0);
+});
+test('cooperative objective presence and last-survivor defeat use the whole team', () => {
+  const b = new Battle(0, false, { ...config(), operation: 'capture' }, 1234);
+  const ally = b.addPlayer(-10);
+  b.spawnTimer = 999;
+  b.enemies = [];
+  const objective = b.objectives[0];
+  Object.assign(ally, { x: objective.x, y: objective.y });
+  b.player.hp = 0;
+  b.step(0.05, idle);
+  assert.equal(b.result, null);
+  assert(objective.progress > 0);
+  ally.hp = 0;
+  b.step(0.05, idle);
+  assert.equal(b.result.won, false);
+});
+test('cooperative snapshot survives JSON transport with bounded effects', () => {
+  const host = make();
+  const ally = host.addPlayer(-10);
+  ally.kit.ammo[1] = 4;
+  ally.kit.weapon = 1;
+  host.player.hp -= 12;
+  host.walls[0].hp = 33;
+  host.particles = Array.from({ length: 300 }, (_, i) => ({
+    x: 1000 + i, y: 1000, vx: 5, vy: -8,
+    life: 1, max: 2, size: 3, color: '#ffaa33', smoke: false,
+  }));
+  host.tracks = Array.from({ length: 150 }, (_, i) => ({
+    x: i, y: 4, angle: 1, life: 3,
+  }));
+  const json = JSON.stringify(host.createSnapshot());
+  assert(Buffer.byteLength(json) < 60_000);
+  const guest = make();
+  guest.viewPlayerId = -10;
+  guest.applySnapshot(JSON.parse(json));
+  assert.equal(guest.viewPlayer.id, -10);
+  assert.equal(guest.player.hp, host.player.hp);
+  assert.equal(guest.ammo[0], Infinity);
+  assert.equal(guest.getPlayer(-10).kit.ammo[0], Infinity);
+  assert.equal(guest.getPlayer(-10).kit.ammo[1], 4);
+  assert.equal(guest.walls[0].hp, 33);
+  assert.equal(guest.particles.length, 120);
+  assert.equal(guest.tracks.length, 60);
+  const priorX = guest.viewPlayer.x;
+  host.spawnTimer = 999;
+  host.step(0.05, idle, { [-10]: { ...idle, x: 1 } });
+  guest.applySnapshot(JSON.parse(JSON.stringify(host.createSnapshot())));
+  assert(guest.viewPlayer.x > priorX);
+  const renderedX = guest.renderPosition(guest.viewPlayer).x;
+  assert(renderedX >= priorX && renderedX < guest.viewPlayer.x);
+  console.log(`Co-op snapshot: ${Buffer.byteLength(json)} bytes with capped FX`);
+});
+test('untrusted remote controls are finite, bounded and use strict action booleans', () => {
+  assert.equal(sanitizeRemoteInput(null).fire, false);
+  const input = sanitizeRemoteInput({
+    x: Infinity, y: -999, aim: { x: NaN, y: 2 },
+    fire: 'true', dash: 1, emp: false, support: 'yes',
+    weapon: 99, nextWeapon: 'true', mine: 1,
+  });
+  assert.equal(input.x, 0);
+  assert.equal(input.y, -1);
+  assert.equal(input.aim, null);
+  assert.equal(input.fire, false);
+  assert.equal(input.dash, false);
+  assert.equal(input.weapon, undefined);
+  const b = make();
+  const ally = b.addPlayer(-10);
+  b.spawnTimer = 999;
+  const before = { x: ally.x, y: ally.y };
+  b.step(0.05, idle, { [-10]: { x: NaN, y: Infinity, fire: 'yes' } });
+  assert.deepEqual({ x: ally.x, y: ally.y }, before);
 });
 console.log(`\n${passed} gameplay checks passed.`);
 await fs.rm(tmp, { recursive: true, force: true });

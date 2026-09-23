@@ -76,6 +76,7 @@ export class Renderer3D {
   readonly projectiles!: ProjectileEffects;
   readonly muzzles!: MuzzleEffects;
   private weaponMount: ReturnType<typeof createWeaponMount> | null = null;
+  private weaponMounts = new Map<number, ReturnType<typeof createWeaponMount>>();
   private sparkPool: Mesh[] = [];
   private trackPool: Mesh[] = [];
   readonly explosions!: ExplosionEffects;
@@ -481,6 +482,7 @@ export class Renderer3D {
         ring.isPickable = false;
       }
       this.syncTank(b.player, b);
+      for (const ally of b.allies) this.syncTank(ally, b);
       for (const e of b.enemies) this.syncTank(e, b);
       this.updateCamera(b, 0, true);
       this.scene.render();
@@ -644,11 +646,13 @@ export class Renderer3D {
     return this.renderOnlyRandom / 4294967296;
   }
   updateCamera(b: Battle, dt: number, snap = false) {
-    const p = worldPosition(b.player.x, b.player.y, 1);
+    const player = b.viewPlayer;
+    const position = b.renderPosition(player);
+    const p = worldPosition(position.x, position.y, 1);
     const ahead = new Vector3(
-      Math.cos(b.player.turret) * 4,
+      Math.cos(player.turret) * 4,
       0,
-      Math.sin(b.player.turret) * 4,
+      Math.sin(player.turret) * 4,
     );
     const target = p.add(ahead);
     const amount = snap ? 1 : 1 - Math.exp(-Math.min(dt, 0.06) * 5);
@@ -741,8 +745,9 @@ export class Renderer3D {
     if (this.world?.shadow) this.world.sun.shadowEnabled = effects > 0.6;
   }
   private syncTank(t: Tank, b: Battle) {
+    const position = b.renderPosition(t);
     let model = this.models.get(t.id);
-    if (model && t.id === 0 && model.evolutionLevel !== b.level) {
+    if (model && t.id <= 0 && model.evolutionLevel !== b.level) {
       for (const mesh of model.meshes)
         this.world.shadow?.removeShadowCaster(mesh);
       model.dispose();
@@ -753,16 +758,16 @@ export class Renderer3D {
       model = buildTank(
         this.scene,
         this.materials,
-        t.id === 0
+        t.id <= 0
           ? b.save.chassis
           : t.kind === 1
             ? 0
             : t.kind === 2 || t.kind === 3
               ? 2
               : 1,
-        t.id !== 0,
+        t.id > 0,
         t.kind === 3,
-        t.id === 0 ? b.level : 1,
+        t.id <= 0 ? b.level : 1,
         this.mobile || this.quality === 'performance',
       );
       const extras: Mesh[] = [];
@@ -829,10 +834,10 @@ export class Renderer3D {
       for (const mesh of model.meshes) {
         this.world.shadow?.addShadowCaster(mesh);
         mesh.metadata = { tankId: t.id };
-        mesh.isPickable = t.id !== 0;
+        mesh.isPickable = t.id > 0;
       }
       if (t.id !== 0) {
-        const root = new TransformNode('enemy-health-bar', this.scene);
+        const root = new TransformNode(t.id < 0 ? 'ally-health-bar' : 'enemy-health-bar', this.scene);
         box(
           this.scene,
           'health-background',
@@ -846,29 +851,33 @@ export class Renderer3D {
           'health-remaining',
           [3.6, 0.13, 0.07],
           [0, 0, -0.012],
-          this.materials.red,
+          t.id < 0 ? this.materials.blue : this.materials.red,
           root,
         );
         root.billboardMode = Mesh.BILLBOARDMODE_ALL;
         this.healthBars.set(t.id, { root, fill });
       }
     }
+    const mounted = this.weaponMounts.get(t.id);
+    const weapon = b.weaponFor(t.id);
     if (
-      t.id === 0 &&
-      (this.weaponMount?.model !== model || this.weaponMount.index !== b.weapon)
+      t.id <= 0 &&
+      (mounted?.model !== model || mounted.index !== weapon)
     ) {
-      if (this.weaponMount) {
-        for (const mesh of this.weaponMount.meshes)
+      if (mounted) {
+        for (const mesh of mounted.meshes)
           this.world.shadow?.removeShadowCaster(mesh);
-        this.weaponMount.root.dispose();
+        mounted.root.dispose();
       }
-      this.weaponMount = createWeaponMount(
+      const mount = createWeaponMount(
         this.scene,
         model,
-        b.weapon,
+        weapon,
         this.materials,
       );
-      for (const mesh of this.weaponMount.meshes)
+      this.weaponMounts.set(t.id, mount);
+      if (t.id === 0) this.weaponMount = mount;
+      for (const mesh of mount.meshes)
         this.world.shadow?.addShadowCaster(mesh);
     }
     model.root.setEnabled(t.hp > 0);
@@ -883,11 +892,11 @@ export class Renderer3D {
       contact.isPickable = false;
       this.contactShadows.set(t.id, contact);
     }
-    contact.position.copyFrom(worldPosition(t.x, t.y, 0.085));
+    contact.position.copyFrom(worldPosition(position.x, position.y, 0.085));
     contact.rotation.y = heading(t.angle);
     contact.scaling.set(t.radius / 20, 1, t.radius / 20);
     contact.setEnabled(t.hp > 0);
-    model.root.position.copyFrom(worldPosition(t.x, t.y));
+    model.root.position.copyFrom(worldPosition(position.x, position.y));
     model.root.scaling.setAll(t.radius / 20);
     model.body.rotation.y = heading(t.angle);
     model.turret.rotation.y = heading(t.turret);
@@ -898,14 +907,14 @@ export class Renderer3D {
     // Retain the shared muzzle anchor; the firing effects use transparent volumes.
     model.flash.setEnabled(false);
     model.shield.setEnabled(
-      t.id === 0
-        ? b.shield > 0.3
+      t.id <= 0
+        ? (t.kit?.shield ?? b.shield) > 0.3
         : t.stun > 0 || t.spawn > 0 || (t.slow ?? 0) > 0,
     );
     const health = this.healthBars.get(t.id);
     if (health) {
       health.root.position.copyFrom(
-        worldPosition(t.x, t.y, (t.radius / 20) * 3.7),
+        worldPosition(position.x, position.y, (t.radius / 20) * 3.7),
       );
       health.fill.scaling.x = Math.max(0, t.hp / t.maxHp);
       health.fill.position.x = -(1 - t.hp / t.maxHp) * 1.8;
@@ -914,12 +923,12 @@ export class Renderer3D {
     if (shotAge >= 0 && shotAge < 0.045) {
       this.flashLight.position.copyFrom(
         worldPosition(
-          t.x + Math.cos(t.turret) * muzzleDistance(t.radius),
-          t.y + Math.sin(t.turret) * muzzleDistance(t.radius),
+          position.x + Math.cos(t.turret) * muzzleDistance(t.radius),
+          position.y + Math.sin(t.turret) * muzzleDistance(t.radius),
           muzzleHeight(t.radius) * 0.1,
         ),
       );
-      this.flashLight.intensity = t.id === 0 ? 30 : 16;
+      this.flashLight.intensity = t.id <= 0 ? 30 : 16;
       this.muzzleTimer = 0.09;
     }
   }
@@ -951,13 +960,16 @@ export class Renderer3D {
       : 1 / 60;
     this.lastTime = b.elapsed;
     this.initialized = true;
-    const alive = new Set([0, ...b.enemies.map((e) => e.id)]);
+    const alive = new Set([...b.players.map((tank) => tank.id), ...b.enemies.map((e) => e.id)]);
     for (const [id, model] of this.models) {
       if (!alive.has(id)) {
         for (const mesh of model.meshes)
           this.world.shadow?.removeShadowCaster(mesh);
         model.dispose();
         this.models.delete(id);
+        this.weaponMounts.get(id)?.root.dispose();
+        this.weaponMounts.delete(id);
+        if (id === 0) this.weaponMount = null;
         this.contactShadows.get(id)?.dispose();
         this.contactShadows.delete(id);
         this.healthBars.get(id)?.root.dispose();
@@ -967,6 +979,7 @@ export class Renderer3D {
       }
     }
     this.syncTank(b.player, b);
+    for (const ally of b.allies) this.syncTank(ally, b);
     for (const e of b.enemies) {
       this.syncTank(e, b);
       if (e.kind === 5 || e.kind === 3) {
@@ -1092,7 +1105,7 @@ export class Renderer3D {
           ? 220
           : 135;
     for (const p of b.particles) {
-      if (this.mobile && Math.hypot(p.x - b.player.x, p.y - b.player.y) > 1000)
+      if (this.mobile && Math.hypot(p.x - b.viewPlayer.x, p.y - b.viewPlayer.y) > 1000)
         continue;
       if (!p.smoke) {
         if (sparks >= limit) continue;
@@ -1136,7 +1149,7 @@ export class Renderer3D {
     this.showPool(this.trackPool, trackCount * 2);
     const supplies = b.pickups
       .filter(
-        (item) => Math.hypot(item.x - b.player.x, item.y - b.player.y) < 1100,
+        (item) => Math.hypot(item.x - b.viewPlayer.x, item.y - b.viewPlayer.y) < 1100,
       )
       .slice(0, this.mobile ? 12 : 20);
     for (let i = 0; i < supplies.length; i++) {
@@ -1161,7 +1174,7 @@ export class Renderer3D {
     }
     for (let i = supplies.length; i < this.pickupPool.length; i++)
       this.pickupPool[i].setEnabled(false);
-    const playerModel = this.models.get(0);
+    const playerModel = this.models.get(b.viewPlayerId);
     if (
       playerModel &&
       b.tracks.length &&
@@ -1175,12 +1188,11 @@ export class Renderer3D {
     this.playerRing.scaling.setAll(
       b.levelUpTime > 0 ? 1 + (3.2 - b.levelUpTime) * 1.5 : 1,
     );
-    this.playerRing.position.copyFrom(
-      worldPosition(b.player.x, b.player.y, 0.06),
-    );
+    const viewPosition = b.renderPosition(b.viewPlayer);
+    this.playerRing.position.copyFrom(worldPosition(viewPosition.x, viewPosition.y, 0.06));
     this.emp.setEnabled(b.pulse > 0);
     if (b.pulse > 0) {
-      this.emp.position.copyFrom(worldPosition(b.player.x, b.player.y, 0.4));
+      this.emp.position.copyFrom(worldPosition(b.pulseOrigin.x, b.pulseOrigin.y, 0.4));
       this.emp.scaling.setAll((1 - b.pulse) * 30);
       this.emp.visibility = b.pulse;
     }

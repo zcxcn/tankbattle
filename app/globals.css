@@ -3697,3 +3697,309 @@ html {
     display: none;
   }
 }
+.multiplayer-lobby {
+  max-width: 1080px;
+  margin: 0 auto 36px;
+  color: #e4e8dc;
+}
+.multiplayer-hero {
+  display: flex;
+  align-items: center;
+  gap: 21px;
+  min-height: 116px;
+  padding: 20px 28px;
+  border: 1px solid #4f553e;
+  background: linear-gradient(105deg, #313923, #1b211a 72%);
+}
+.multiplayer-emblem {
+  display: grid;
+  place-items: center;
+  width: 68px;
+  height: 68px;
+  flex: none;
+  color: #edba70;
+  border: 1px solid #b18c55;
+  background: #0d120b77;
+  clip-path: polygon(15% 0, 85% 0, 100% 15%, 100% 85%, 85% 100%, 15% 100%, 0 85%, 0 15%);
+}
+.multiplayer-hero span {
+  color: #edba70;
+  font-size: 11px;
+  letter-spacing: 2px;
+}
+.multiplayer-hero h2 {
+  margin: 3px 0;
+  font-size: 25px;
+  font-weight: 700;
+}
+.multiplayer-hero p,
+.multiplayer-notes p {
+  color: #a8b09f;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.multiplayer-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 270px;
+  gap: 14px;
+  margin-top: 14px;
+}
+.multiplayer-panel,
+.multiplayer-notes {
+  border: 1px solid #383f33;
+  background: #1b211b;
+  padding: 23px;
+}
+.multiplayer-panel h3,
+.multiplayer-notes h3 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 20px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #eee8d6;
+}
+.multiplayer-panel label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+  color: #a9b0a1;
+  font-size: 12px;
+}
+.multiplayer-panel input,
+.multiplayer-panel select {
+  width: 100%;
+  min-width: 0;
+  height: 42px;
+  padding: 0 12px;
+  color: #e7eadd;
+  border: 1px solid #4a5445;
+  border-radius: 2px;
+  background: #111711;
+  font-size: 14px;
+}
+.multiplayer-panel input:focus-visible,
+.multiplayer-panel select:focus-visible,
+.multiplayer-panel button:focus-visible {
+  outline: 2px solid #f3ad63;
+  outline-offset: 2px;
+}
+.multiplayer-panel input:disabled {
+  opacity: 0.68;
+}
+.multiplayer-panel button {
+  min-height: 42px;
+  padding: 8px 16px;
+  border: 1px solid #7d8061;
+  border-radius: 2px;
+  background: #303a2b;
+  color: #e8ebde;
+  font-size: 13px;
+  font-weight: 700;
+}
+.multiplayer-panel button:hover:not(:disabled) {
+  border-color: #efb570;
+  color: #fff;
+}
+.multiplayer-panel button:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+.multiplayer-panel .multiplayer-primary {
+  border-color: #efae63;
+  background: linear-gradient(#ae6736, #8a4627);
+  color: white;
+}
+.multiplayer-entry {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: end;
+  margin-top: 23px;
+}
+.multiplayer-entry > div {
+  display: grid;
+  gap: 9px;
+}
+.multiplayer-entry > span {
+  align-self: center;
+  color: #747e70;
+  font-size: 12px;
+}
+.multiplayer-room {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+.multiplayer-code {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  color: #e9c080;
+}
+.multiplayer-code small {
+  font-size: 11px;
+  letter-spacing: 2px;
+}
+.multiplayer-code strong {
+  font-family: monospace;
+  font-size: 29px;
+  letter-spacing: 5px;
+}
+.multiplayer-room > button,
+.multiplayer-room > input {
+  justify-self: stretch;
+}
+.multiplayer-room > button svg,
+.multiplayer-status svg,
+.multiplayer-notes p svg {
+  display: inline-block;
+  vertical-align: -3px;
+  margin-right: 6px;
+}
+.multiplayer-members {
+  display: grid;
+  gap: 5px;
+  margin: 3px 0;
+}
+.multiplayer-members span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 35px;
+  padding: 0 10px;
+  border: 1px solid #333c31;
+  background: #151a15;
+  font-size: 12px;
+}
+.multiplayer-members b {
+  margin-left: auto;
+  color: #b7cd9d;
+  font-weight: 500;
+}
+.multiplayer-maps {
+  display: flex;
+  gap: 9px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.multiplayer-maps button {
+  flex: 1;
+}
+.multiplayer-maps button[aria-pressed='true'] {
+  border-color: #e9b778;
+  background: #52412b;
+}
+.multiplayer-panel .multiplayer-leave {
+  color: #bdc1b7;
+  background: none;
+  border-color: #454a42;
+}
+.multiplayer-wait {
+  color: #d5bd8e;
+  font-size: 13px;
+  text-align: center;
+}
+.multiplayer-status {
+  display: block;
+  color: #a8bba0;
+  margin: 18px 0 0;
+  font-size: 12px;
+}
+.multiplayer-error {
+  margin: 12px 0 0;
+  padding: 9px 12px;
+  color: #ffd5c5;
+  background: #713c3055;
+  border-left: 2px solid #e48167;
+  font-size: 12px;
+}
+.multiplayer-notes p + p {
+  margin-top: 16px;
+}
+.multiplayer-link-status {
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+  z-index: 3;
+  max-width: min(60%, 360px);
+  padding: 5px 9px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #c7d5bf;
+  background: #111b16ab;
+  border: 1px solid #58625188;
+  font-size: 11px;
+  pointer-events: none;
+}
+.multiplayer-link-status svg {
+  display: inline-block;
+  vertical-align: -2px;
+}
+.multiplayer-disconnected {
+  position: absolute;
+  inset: 0;
+  z-index: 24;
+  display: grid;
+  place-content: center;
+  gap: 12px;
+  background: #101410df;
+  text-align: center;
+}
+.multiplayer-disconnected strong {
+  color: #f0c194;
+  font-size: 22px;
+}
+.multiplayer-disconnected p {
+  color: #d5d9cb;
+  font-size: 13px;
+}
+.multiplayer-disconnected button {
+  justify-self: center;
+  padding: 9px 22px;
+  border: 1px solid #db9561;
+  color: #f5ddc4;
+  background: #6c3c28;
+}
+@media (max-width: 760px) {
+  .main-tabs {
+    gap: 8px !important;
+  }
+  .main-tabs [data-slot='tabs-trigger'] {
+    font-size: 11px;
+    padding: 0 2px;
+  }
+  .multiplayer-grid {
+    grid-template-columns: 1fr;
+  }
+  .multiplayer-hero {
+    padding: 16px;
+  }
+  .multiplayer-hero h2 {
+    font-size: 21px;
+  }
+  .multiplayer-emblem {
+    width: 54px;
+    height: 54px;
+  }
+  .multiplayer-panel,
+  .multiplayer-notes {
+    padding: 17px;
+  }
+}
+@media (max-width: 440px) {
+  .multiplayer-entry {
+    grid-template-columns: 1fr;
+  }
+  .multiplayer-entry > span {
+    display: none;
+  }
+  .multiplayer-hero p {
+    font-size: 11px;
+  }
+}

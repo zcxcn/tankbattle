@@ -192,7 +192,7 @@ export class ExplosionEffects {
         (e) =>
           time - e.bornAt <
             (e.kind === 'impact' ? (e.playerHit ? 1.2 : 0.6) : 5.5) &&
-          Math.hypot(e.x - b.player.x, e.y - b.player.y) <
+          Math.hypot(e.x - b.viewPlayer.x, e.y - b.viewPlayer.y) <
             (lightMode ? 800 : 1250),
       )
       .sort(

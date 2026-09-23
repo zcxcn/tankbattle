@@ -69,6 +69,25 @@ export type Tank = Vec & {
   patrolTarget?: Vec;
   patrolUntil?: number;
   returning?: boolean;
+  /** Cooperative players carry their own ammunition and ability timers. */
+  kit?: PlayerKit;
+  windupTargetId?: number;
+  trackReadyAt?: number;
+};
+export type PlayerKit = {
+  weapon: number;
+  ammo: number[];
+  weaponReadyAt: number[];
+  mineAmmo: number;
+  mineCd: number;
+  dashCd: number;
+  empCd: number;
+  dashTime: number;
+  shield: number;
+  rapid: number;
+  supportCd: number;
+  hitSalvo: number;
+  hitSalvoUntil: number;
 };
 export type Mine = Vec & {
   id: number;
@@ -149,6 +168,42 @@ export type Input = {
   nextWeapon?: boolean;
   mine?: boolean;
 };
+const IDLE_INPUT: Input = {
+  x: 0, y: 0, aim: null, fire: false, dash: false, emp: false,
+};
+/** Network input is untrusted even when the WebRTC envelope is valid. */
+export function sanitizeRemoteInput(raw: unknown): Input {
+  if (!raw || typeof raw !== 'object') return { ...IDLE_INPUT };
+  const data = raw as Record<string, unknown>;
+  const axis = (value: unknown) =>
+    typeof value === 'number' && Number.isFinite(value)
+      ? Math.max(-1, Math.min(1, value))
+      : 0;
+  const aim = data.aim && typeof data.aim === 'object'
+    ? data.aim as Record<string, unknown>
+    : null;
+  const x = aim?.x, y = aim?.y;
+  return {
+    x: axis(data.x),
+    y: axis(data.y),
+    aim: typeof x === 'number' && Number.isFinite(x) &&
+      typeof y === 'number' && Number.isFinite(y) &&
+      x >= 0 && x <= W && y >= 0 && y <= H
+      ? { x, y }
+      : null,
+    fire: data.fire === true,
+    dash: data.dash === true,
+    emp: data.emp === true,
+    support: data.support === true,
+    weapon: Number.isInteger(data.weapon) &&
+      (data.weapon as number) >= 0 &&
+      (data.weapon as number) < WEAPONS.length
+      ? data.weapon as number
+      : undefined,
+    nextWeapon: data.nextWeapon === true,
+    mine: data.mine === true,
+  };
+}
 export type Objective = Vec & {
   id: number;
   kind: 'capture' | 'intel' | 'facility' | 'exit' | 'checkpoint';
@@ -180,6 +235,53 @@ export type SoundEvent =
   | 'pickup'
   | 'dash'
   | 'levelup';
+export type BattleSnapshot = {
+  version: 1;
+  elapsed: number;
+  player: Tank;
+  allies: Tank[];
+  enemies: Tank[];
+  bullets: Bullet[];
+  particles: Particle[];
+  explosions: Explosion[];
+  pickups: Pickup[];
+  mines: Mine[];
+  scars: (Vec & { r: number })[];
+  tracks: (Vec & { angle: number; life: number })[];
+  wallHp: (number | null)[];
+  objectives: Objective[];
+  base: Battle['base'];
+  result: BattleResult | null;
+  state: {
+    weapon: number;
+    ammo: (number | null)[];
+    mineAmmo: number;
+    mineCd: number;
+    bossSpawned: boolean;
+    bossDefeated: boolean;
+    routeIndex: number;
+    supportCd: number;
+    kills: number;
+    score: number;
+    spawned: number;
+    wave: number;
+    spawnTimer: number;
+    paused: boolean;
+    dashCd: number;
+    empCd: number;
+    dashTime: number;
+    shield: number;
+    rapid: number;
+    shake: number;
+    pulse: number;
+    pulseOrigin: Vec;
+    notice: string;
+    noticeTime: number;
+    bossThreshold: number;
+    level: number;
+    levelUpTime: number;
+  };
+};
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 const distance = (a: Vec, b: Vec) => Math.hypot(a.x - b.x, a.y - b.y);
 export function seeded(seed: number) {
@@ -283,6 +385,10 @@ export class Battle {
   private reinforcementRetry = 0;
   random: () => number;
   player: Tank;
+  allies: Tank[] = [];
+  viewPlayerId = 0;
+  private hasSnapshot = false;
+  private snapshotMotion = new Map<number, { from: Vec; started: number; duration: number }>();
   enemies: Tank[] = [];
   walls: Wall[] = [];
   roads: Road[] = [];
@@ -317,6 +423,7 @@ export class Battle {
   rapid = 0;
   shake = 0;
   pulse = 0;
+  pulseOrigin: Vec = { x: W / 2, y: H - 185 };
   notice = '加农炮弹药无限 · 击毁敌车，拾取特殊弹药';
   noticeTime = 4;
   bossThreshold = 0;
@@ -382,6 +489,183 @@ export class Battle {
       this.spawnEnemy(0);
     }
   }
+  get players(): Tank[] {
+    return [this.player, ...this.allies];
+  }
+  getPlayer(id: number): Tank | undefined {
+    return id === 0 ? this.player : this.allies.find((tank) => tank.id === id);
+  }
+  get viewPlayer(): Tank {
+    return this.getPlayer(this.viewPlayerId) ?? this.player;
+  }
+  /** Visual interpolation only; simulation and hit detection always use host coordinates. */
+  renderPosition(tank: Tank): Vec {
+    const motion = this.snapshotMotion.get(tank.id);
+    if (!motion) return tank;
+    const blend = Math.max(0, Math.min(1, (performance.now() - motion.started) / motion.duration));
+    return {
+      x: motion.from.x + (tank.x - motion.from.x) * blend,
+      y: motion.from.y + (tank.y - motion.from.y) * blend,
+    };
+  }
+  weaponFor(id: number): number {
+    return this.getPlayer(id)?.kit?.weapon ?? this.weapon;
+  }
+  ammoFor(id: number): number[] {
+    return this.getPlayer(id)?.kit?.ammo ?? this.ammo;
+  }
+  mineAmmoFor(id: number): number {
+    return this.getPlayer(id)?.kit?.mineAmmo ?? this.mineAmmo;
+  }
+  addPlayer(id: number): Tank {
+    if (!Number.isInteger(id) || id > -10 || id < -12)
+      throw new RangeError('Cooperative player id must be -10, -11 or -12');
+    const existing = this.getPlayer(id);
+    if (existing) return existing;
+    if (this.allies.length >= 3) throw new RangeError('Room is full');
+    const slot = -id - 10;
+    const candidates = [
+      { x: this.player.x - 85, y: this.player.y },
+      { x: this.player.x + 85, y: this.player.y },
+      { x: this.player.x, y: this.player.y - 85 },
+      { x: this.player.x - 130, y: this.player.y - 85 },
+      { x: this.player.x + 130, y: this.player.y - 85 },
+    ];
+    const preferred = [candidates[slot], ...candidates];
+    const spawn = preferred.find(
+      (point) =>
+        this.canOccupy(point.x, point.y, this.player.radius) &&
+        this.players.every(
+          (other) => distance(point, other) > this.player.radius * 2 + 12,
+        ),
+    ) ?? { x: this.player.x, y: this.player.y };
+    const tank: Tank = {
+      ...this.player,
+      ...spawn,
+      id,
+      lastShot: undefined,
+      kit: {
+        weapon: 0,
+        ammo: WEAPONS.map((_, index) => (index === 0 ? Infinity : 0)),
+        weaponReadyAt: WEAPONS.map(() => 0),
+        mineAmmo: 6,
+        mineCd: 0,
+        dashCd: 0,
+        empCd: 0,
+        dashTime: 0,
+        shield: 0,
+        rapid: 0,
+        supportCd: 0,
+        hitSalvo: -1,
+        hitSalvoUntil: 0,
+      },
+    };
+    this.allies.push(tank);
+    return tank;
+  }
+  removePlayer(id: number): void {
+    this.allies = this.allies.filter((tank) => tank.id !== id);
+    if (this.viewPlayerId === id) this.viewPlayerId = 0;
+  }
+  /** Host sends a JSON-safe world state; static terrain is recreated from the seed. */
+  createSnapshot(): BattleSnapshot {
+    const copy = <T>(value: T): T => structuredClone(value);
+    return {
+      version: 1,
+      elapsed: this.elapsed,
+      player: copy(this.player),
+      allies: this.allies.map((tank) => ({
+        ...copy(tank),
+        kit: tank.kit
+          ? { ...copy(tank.kit), ammo: tank.kit.ammo.map((n) => Number.isFinite(n) ? n : null) as number[] }
+          : undefined,
+      })),
+      enemies: copy(this.enemies),
+      bullets: copy(this.bullets),
+      particles: copy(this.particles.slice(-120)),
+      explosions: copy(this.explosions.slice(-24)),
+      pickups: copy(this.pickups),
+      mines: copy(this.mines),
+      scars: copy(this.scars.slice(-40)),
+      tracks: copy(this.tracks.slice(-60)),
+      wallHp: this.walls.map((wall) => Number.isFinite(wall.hp) ? wall.hp : null),
+      objectives: copy(this.objectives),
+      base: copy(this.base),
+      result: copy(this.result),
+      state: {
+        weapon: this.weapon,
+        ammo: this.ammo.map((n) => Number.isFinite(n) ? n : null),
+        mineAmmo: this.mineAmmo,
+        mineCd: this.mineCd,
+        bossSpawned: this.bossSpawned,
+        bossDefeated: this.bossDefeated,
+        routeIndex: this.routeIndex,
+        supportCd: this.supportCd,
+        kills: this.kills,
+        score: this.score,
+        spawned: this.spawned,
+        wave: this.wave,
+        spawnTimer: this.spawnTimer,
+        paused: this.paused,
+        dashCd: this.dashCd,
+        empCd: this.empCd,
+        dashTime: this.dashTime,
+        shield: this.shield,
+        rapid: this.rapid,
+        shake: this.shake,
+        pulse: this.pulse,
+        pulseOrigin: copy(this.pulseOrigin),
+        notice: this.notice,
+        noticeTime: this.noticeTime,
+        bossThreshold: this.bossThreshold,
+        level: this.level,
+        levelUpTime: this.levelUpTime,
+      },
+    };
+  }
+  applySnapshot(snapshot: BattleSnapshot): void {
+    if (snapshot.version !== 1 || snapshot.wallHp.length !== this.walls.length)
+      throw new Error('Incompatible battle snapshot');
+    const oldElapsed = this.elapsed;
+    const oldPositions = new Map(
+      [...this.players, ...this.enemies].map((tank) => [tank.id, this.renderPosition(tank)]),
+    );
+    const copy = <T>(value: T): T => structuredClone(value);
+    this.elapsed = snapshot.elapsed;
+    this.player = copy(snapshot.player);
+    this.allies = copy(snapshot.allies).map((tank) => {
+      if (tank.kit) tank.kit.ammo = tank.kit.ammo.map((n) => n === null ? Infinity : n);
+      return tank;
+    });
+    this.enemies = copy(snapshot.enemies);
+    this.bullets = copy(snapshot.bullets);
+    this.particles = copy(snapshot.particles);
+    this.explosions = copy(snapshot.explosions);
+    this.pickups = copy(snapshot.pickups);
+    this.mines = copy(snapshot.mines);
+    this.scars = copy(snapshot.scars);
+    this.tracks = copy(snapshot.tracks);
+    this.walls.forEach((wall, index) => {
+      wall.hp = snapshot.wallHp[index] === null ? Infinity : snapshot.wallHp[index];
+    });
+    this.objectives = copy(snapshot.objectives);
+    this.base = copy(snapshot.base);
+    this.result = copy(snapshot.result);
+    for (const [key, value] of Object.entries(snapshot.state))
+      (this as unknown as Record<string, unknown>)[key] = copy(value);
+    this.ammo = snapshot.state.ammo.map((n) => n === null ? Infinity : n);
+    this.snapshotMotion.clear();
+    if (this.hasSnapshot) {
+      const started = performance.now();
+      const duration = Math.max(60, Math.min(180, (snapshot.elapsed - oldElapsed) * 1000));
+      for (const tank of [...this.players, ...this.enemies]) {
+        const from = oldPositions.get(tank.id);
+        if (from && distance(from, tank) < 550)
+          this.snapshotMotion.set(tank.id, { from, started, duration });
+      }
+    }
+    this.hasSnapshot = true;
+  }
   get career() {
     return progression(this.startingKills + this.kills);
   }
@@ -401,6 +685,19 @@ export class Battle {
     p.damage = stats.damage;
     p.rate = stats.rate;
     p.speed = stats.speed;
+    for (const ally of this.allies) {
+      const allyStats = loadoutStats(
+        this.save,
+        this.startingKills + this.kills,
+        ally.kit?.weapon ?? 0,
+      );
+      if (ally.hp > 0)
+        ally.hp = Math.min(allyStats.hp, ally.hp + Math.max(0, allyStats.hp - ally.maxHp));
+      ally.maxHp = allyStats.hp;
+      ally.damage = allyStats.damage;
+      ally.rate = allyStats.rate;
+      ally.speed = allyStats.speed;
+    }
     this.levelUpTime = 3.2;
     this.notice = `晋升 LV.${career.level} · ${career.title} · ${career.evolution.name}`;
     this.noticeTime = 3.2;
@@ -474,12 +771,12 @@ export class Battle {
       return `突破路标 ${done}/3 · ${done < 3 ? '依次抵达金色路标' : '抵达北侧绿色撤离点'}`;
     if (this.type === 'capture') {
       const active = this.objectives.find(
-        (o) => !o.done && distance(o, this.player) < 115,
+        (o) => !o.done && distance(o, this.viewPlayer) < 115,
       );
       return `中继站 ${done}/3${active ? (active.contested ? ' · 敌军争夺中' : ` · 接管 ${Math.floor((active.progress / 8) * 100)}%`) : ' · 进入金色圆圈驻守'}`;
     }
     if (this.type === 'escort')
-      return `护送路标 ${Math.min(this.routeIndex, this.route.length)}/${this.route.length} · 车体 ${Math.ceil((this.base.hp / this.base.maxHp) * 100)}% · ${distance(this.base, this.player) > 260 ? '靠近运输车' : '清除车队周围敌军'}`;
+      return `护送路标 ${Math.min(this.routeIndex, this.route.length)}/${this.route.length} · 车体 ${Math.ceil((this.base.hp / this.base.maxHp) * 100)}% · ${distance(this.base, this.viewPlayer) > 260 ? '靠近运输车' : '清除车队周围敌军'}`;
     if (this.type === 'extract')
       return done < 3
         ? `情报 ${done}/3 · 驶近金色标记回收`
@@ -557,13 +854,15 @@ export class Battle {
     }
   }
   updateObjectives(dt: number) {
-    const p = this.player;
+    const players = this.players.filter((tank) => tank.hp > 0);
+    const near = (point: Vec, radius: number) =>
+      players.some((tank) => distance(tank, point) < radius);
     for (const o of this.objectives) {
       if (o.done) continue;
       o.contested = this.enemies.some(
         (e) => e.hp > 0 && e.spawn <= 0 && distance(e, o) < 150,
       );
-      if (o.kind === 'capture' && distance(p, o) < 115 && !o.contested) {
+      if (o.kind === 'capture' && near(o, 115) && !o.contested) {
         o.progress = Math.min(8, o.progress + dt);
         if (o.progress >= 8) {
           o.done = true;
@@ -573,7 +872,7 @@ export class Battle {
       }
       if (
         o.kind === 'checkpoint' &&
-        distance(p, o) < 100 &&
+        near(o, 100) &&
         this.objectives
           .filter((previous) => previous.id < o.id)
           .every((previous) => previous.done)
@@ -582,7 +881,7 @@ export class Battle {
         this.score += 300;
         this.onSound?.('pickup');
       }
-      if (o.kind === 'intel' && distance(p, o) < 65) {
+      if (o.kind === 'intel' && near(o, 65)) {
         o.done = true;
         this.score += 250;
         this.onSound?.('pickup');
@@ -592,7 +891,7 @@ export class Battle {
         this.objectives
           .filter((v) => v.kind === 'intel' || v.kind === 'checkpoint')
           .every((v) => v.done) &&
-        distance(p, o) < 100
+        near(o, 100)
       )
         o.done = true;
       if (o.kind === 'facility' && o.hp <= 0) {
@@ -606,7 +905,7 @@ export class Battle {
     if (
       this.type === 'escort' &&
       this.routeIndex < this.route.length &&
-      distance(p, this.base) < 260 &&
+      near(this.base, 260) &&
       !this.enemies.some((e) => e.hp > 0 && distance(e, this.base) < 180)
     ) {
       const next = this.route[this.routeIndex],
@@ -619,17 +918,23 @@ export class Battle {
       if (d <= travel) this.routeIndex++;
     }
   }
-  useSupport() {
-    if (this.paused || this.result || this.supportCd > 0 || this.player.hp <= 0)
+  useSupport(p = this.player) {
+    const kit = p.kit;
+    if (this.paused || this.result || (kit?.supportCd ?? this.supportCd) > 0 || p.hp <= 0)
       return;
-    const support = SUPPORTS[this.save.support],
-      p = this.player;
-    this.supportCd = support.cooldown;
+    const support = SUPPORTS[this.save.support];
+    const ammo = kit?.ammo ?? this.ammo;
+    if (kit) kit.supportCd = support.cooldown;
+    else this.supportCd = support.cooldown;
     if (this.save.support === 0) p.hp = Math.min(p.maxHp, p.hp + 65);
-    if (this.save.support === 1) this.shield = Math.max(this.shield, 4);
+    if (this.save.support === 1) {
+      if (kit) kit.shield = Math.max(kit.shield, 4);
+      else this.shield = Math.max(this.shield, 4);
+    }
     if (this.save.support === 2) {
-      if (this.ammo[6] <= 0) {
-        this.supportCd = 0;
+      if (ammo[6] <= 0) {
+        if (kit) kit.supportCd = 0;
+        else this.supportCd = 0;
         this.notice = '火箭弹药不足 · 击毁敌车拾取火箭补给';
         this.noticeTime = 2;
         return;
@@ -646,15 +951,17 @@ export class Battle {
             ),
         )
         .sort((a, b) => distance(a, p) - distance(b, p))
-        .slice(0, Math.min(3, this.ammo[6]));
+        .slice(0, Math.min(3, ammo[6]));
       if (!targets.length) {
-        this.supportCd = 0;
+        if (kit) kit.supportCd = 0;
+        else this.supportCd = 0;
         this.notice = '火箭待命 · 950 米内没有可直视的目标';
         this.noticeTime = 2;
         return;
       }
-      this.ammo[6] -= targets.length;
-      if (this.weapon === 6 && this.ammo[6] === 0) this.selectWeapon(0);
+      ammo[6] -= targets.length;
+      if ((kit?.weapon ?? this.weapon) === 6 && ammo[6] === 0)
+        this.selectWeapon(0, p);
       this.onSound?.('fire', 6);
       for (const e of targets) {
         const a = Math.atan2(e.y - p.y, e.x - p.x);
@@ -925,33 +1232,37 @@ export class Battle {
     });
     if (this.explosions.length > 32) this.explosions.shift();
   }
-  selectWeapon(index: number) {
+  selectWeapon(index: number, tank = this.player) {
+    const kit = tank.kit;
+    const selected = kit?.weapon ?? this.weapon;
+    const ammo = kit?.ammo ?? this.ammo;
     if (
       this.paused ||
       this.result ||
-      this.player.hp <= 0 ||
+      tank.hp <= 0 ||
       !Number.isInteger(index) ||
       index < 0 ||
       index >= WEAPONS.length ||
-      index === this.weapon
+      index === selected
     )
       return false;
-    if (this.ammo[index] <= 0) {
+    if (ammo[index] <= 0) {
       this.notice = WEAPONS[index].name + ' · 弹药不足，击毁敌车拾取补给';
       this.noticeTime = 2;
       return false;
     }
-    this.weapon = index;
+    if (kit) kit.weapon = index;
+    else this.weapon = index;
     const stats = loadoutStats(
       this.save,
       this.startingKills + this.kills,
       index,
     );
-    this.player.damage = stats.damage;
-    this.player.rate = stats.rate;
-    this.player.cooldown = Math.max(
+    tank.damage = stats.damage;
+    tank.rate = stats.rate;
+    tank.cooldown = Math.max(
       0.25,
-      this.weaponReadyAt[index] - this.elapsed,
+      (kit?.weaponReadyAt ?? this.weaponReadyAt)[index] - this.elapsed,
     );
     this.notice = WEAPONS[index].name + ' · ' + WEAPONS[index].role;
     this.noticeTime = 1.4;
@@ -964,10 +1275,11 @@ export class Battle {
           t.kind,
           t.hp / t.maxHp <= 0.35 ? 2 : t.hp / t.maxHp <= 0.7 ? 1 : 0,
         )
-      : this.weapon;
+      : t.kit?.weapon ?? this.weapon;
     const weapon = WEAPONS[index];
-    if (!enemy && this.ammo[index] <= 0) {
-      this.selectWeapon(0);
+    const ammo = t.kit?.ammo ?? this.ammo;
+    if (!enemy && ammo[index] <= 0) {
+      this.selectWeapon(0, t);
       return;
     }
     const rocketTarget =
@@ -1030,9 +1342,9 @@ export class Battle {
     t.cooldown =
       t.rate *
       (t.kind === 3 && t.hp < t.maxHp / 2 ? 0.7 : 1) *
-      (!enemy && this.rapid > 0 ? 0.5 : 1);
+      (!enemy && (t.kit?.rapid ?? this.rapid) > 0 ? 0.5 : 1);
     t.flash = 0.14;
-    if (!enemy) this.weaponReadyAt[index] = this.elapsed + t.cooldown;
+    if (!enemy) (t.kit?.weaponReadyAt ?? this.weaponReadyAt)[index] = this.elapsed + t.cooldown;
     if (index !== 0)
       this.burst(
         t.x + Math.cos(t.turret) * (t.radius + 16),
@@ -1047,8 +1359,8 @@ export class Battle {
         this.shake,
         index === 1 ? 0.5 : index === 3 || index === 6 ? 3 : 2,
       );
-      if (index > 0 && --this.ammo[index] === 0) {
-        this.selectWeapon(0);
+      if (index > 0 && --ammo[index] === 0) {
+        this.selectWeapon(0, t);
         this.notice = weapon.name + ' 弹药耗尽 · 已切回加农炮';
         this.noticeTime = 2.5;
       }
@@ -1077,21 +1389,28 @@ export class Battle {
       })
       .sort((a, b) => distance(origin, a) - distance(origin, b))[0];
   }
-  private playerHit(damage: number, bullet?: Bullet) {
+  private playerHit(damage: number, bullet?: Bullet, p = this.player) {
+    const kit = p.kit;
+    const shield = kit?.shield ?? this.shield;
     const sameSalvo =
       bullet?.salvo !== undefined &&
-      bullet.salvo === this.hitSalvo &&
-      this.elapsed <= this.hitSalvoUntil &&
-      this.shield <= 0.22;
-    if ((this.shield > 0 && !sameSalvo) || this.player.hp <= 0) return;
+      bullet.salvo === (kit?.hitSalvo ?? this.hitSalvo) &&
+      this.elapsed <= (kit?.hitSalvoUntil ?? this.hitSalvoUntil) &&
+      shield <= 0.22;
+    if ((shield > 0 && !sameSalvo) || p.hp <= 0) return;
     if (!sameSalvo) {
-      this.hitSalvo = bullet?.salvo ?? -1;
-      this.hitSalvoUntil = this.elapsed + 0.08;
+      if (kit) {
+        kit.hitSalvo = bullet?.salvo ?? -1;
+        kit.hitSalvoUntil = this.elapsed + 0.08;
+      } else {
+        this.hitSalvo = bullet?.salvo ?? -1;
+        this.hitSalvoUntil = this.elapsed + 0.08;
+      }
     }
-    const p = this.player;
     p.hp = Math.max(0, p.hp - damage);
     p.slow = Math.max(p.slow ?? 0, bullet?.slow ?? 0);
-    this.shield = 0.22;
+    if (kit) kit.shield = 0.22;
+    else this.shield = 0.22;
     this.shake = Math.max(
       this.shake,
       sameSalvo ? 8 : bullet?.weapon === 1 ? 10 : 14,
@@ -1130,18 +1449,23 @@ export class Battle {
     if (t.hp === 0) {
       if (t.kind === 3) this.bossDefeated = true;
       this.kills++;
-      if (this.kills % 3 === 0) this.mineAmmo = Math.min(8, this.mineAmmo + 1);
+      if (this.kills % 3 === 0) {
+        this.mineAmmo = Math.min(8, this.mineAmmo + 1);
+        for (const ally of this.allies)
+          if (ally.kit) ally.kit.mineAmmo = Math.min(8, ally.kit.mineAmmo + 1);
+      }
       this.applyGrowth();
       this.onProgress?.(this.kills);
       this.score +=
         t.kind === 3 ? 1500 : t.kind === 2 || t.kind === 4 ? 180 : 100;
-      if (this.player.hp > 0)
-        this.player.hp = Math.min(
-          this.player.maxHp,
-          this.player.hp +
-            this.save.upgrades[5] * 4 +
-            (this.save.module === 3 ? 3 : 0),
-        );
+      for (const ally of this.players)
+        if (ally.hp > 0)
+          ally.hp = Math.min(
+            ally.maxHp,
+            ally.hp +
+              this.save.upgrades[5] * 4 +
+              (this.save.module === 3 ? 3 : 0),
+          );
       this.burst(t.x, t.y, t.kind === 3 ? 90 : 40, 180, '#ffae51');
       this.burst(t.x, t.y, 16, 40, '#4d4b43', true);
       this.explode(t.x, t.y, t.kind === 3 ? 2.3 : t.radius / 20);
@@ -1182,7 +1506,9 @@ export class Battle {
   layMine(tank = this.player, enemy = false) {
     if (this.paused || this.result || tank.hp <= 0 || tank.spawn > 0)
       return false;
-    if (!enemy && (this.mineAmmo <= 0 || this.mineCd > 0)) return false;
+    const kit = tank.kit;
+    if (!enemy && ((kit?.mineAmmo ?? this.mineAmmo) <= 0 || (kit?.mineCd ?? this.mineCd) > 0))
+      return false;
     if (
       this.mines.length >= 32 ||
       this.mines.filter((m) => m.owner === tank.id).length >= 8
@@ -1206,8 +1532,13 @@ export class Battle {
       damage: enemy ? (tank.kind === 3 ? 105 : 75) : 220 + this.level * 3,
     });
     if (!enemy) {
-      this.mineAmmo--;
-      this.mineCd = 2;
+      if (kit) {
+        kit.mineAmmo--;
+        kit.mineCd = 2;
+      } else {
+        this.mineAmmo--;
+        this.mineCd = 2;
+      }
       this.notice = '地雷已布设 · 1.2 秒后就绪 · 每击毁 3 辆补充 1 枚';
       this.noticeTime = 3;
       this.onSound?.('pickup');
@@ -1220,7 +1551,7 @@ export class Battle {
       if (mine.expiresAt <= this.elapsed) continue;
       const targets = mine.enemy
         ? [
-            this.player,
+            ...this.players,
             ...(this.protectsBase
               ? [{ ...this.base, id: -2, radius: 30, spawn: 0 }]
               : []),
@@ -1256,7 +1587,9 @@ export class Battle {
             w.hp > 0 && w.kind !== 'water' && segmentRect(mine, t, w) !== null,
         );
       if (mine.enemy) {
-        if (exposed(this.player)) this.playerHit(mine.damage);
+        for (const player of this.players)
+          if (player.hp > 0 && exposed(player))
+            this.playerHit(mine.damage, undefined, player);
         if (this.protectsBase && exposed(this.base))
           this.base.hp = Math.max(0, this.base.hp - mine.damage);
       } else
@@ -1270,10 +1603,130 @@ export class Battle {
     this.mines = survivors;
     this.scars = this.scars.slice(-55);
   }
-  step(rawDt: number, input: Input) {
+  private controlPlayer(p: Tank, input: Input, dt: number) {
+    const kit = p.kit;
+    if (kit) {
+      kit.dashCd = Math.max(0, kit.dashCd - dt);
+      kit.empCd = Math.max(0, kit.empCd - dt);
+      kit.supportCd = Math.max(0, kit.supportCd - dt);
+      kit.mineCd = Math.max(0, kit.mineCd - dt);
+      kit.shield = Math.max(0, kit.shield - dt);
+      kit.rapid = Math.max(0, kit.rapid - dt);
+      kit.dashTime = Math.max(0, kit.dashTime - dt);
+    }
+    p.cooldown -= dt;
+    p.slow = Math.max(0, (p.slow ?? 0) - dt);
+    p.flash = Math.max(0, p.flash - dt);
+    if (p.hp <= 0) return;
+    const ammo = kit?.ammo ?? this.ammo;
+    const weapon = kit?.weapon ?? this.weapon;
+    if (input.weapon !== undefined) this.selectWeapon(input.weapon, p);
+    else if (input.nextWeapon) {
+      for (let i = 1; i < WEAPONS.length; i++) {
+        const next = (weapon + i) % WEAPONS.length;
+        if (ammo[next] > 0) {
+          this.selectWeapon(next, p);
+          break;
+        }
+      }
+    }
+    if (input.support) this.useSupport(p);
+    if (input.mine) this.layMine(p);
+    if (input.emp && (kit?.empCd ?? this.empCd) <= 0) {
+      const beforeMines = this.mines.length;
+      this.mines = this.mines.filter((m) => distance(m, p) > 300);
+      if (kit) kit.empCd = 13;
+      else this.empCd = 13;
+      this.pulse = 1;
+      this.pulseOrigin = { x: p.x, y: p.y };
+      this.shake = 9;
+      for (const e of this.enemies) {
+        if (distance(e, p) < 280) {
+          e.stun = 3;
+          e.attackWindup = 0;
+          e.cooldown = Math.max(e.cooldown, 1.2);
+          this.hitEnemy(e, 65);
+        }
+      }
+      this.bullets = this.bullets.filter(
+        (b) => !b.enemy || distance(b, p) > 300,
+      );
+      this.notice = '电磁脉冲 · 周围敌军瘫痪 3 秒';
+      if (beforeMines > this.mines.length)
+        this.notice += ` · 已排除 ${beforeMines - this.mines.length} 枚地雷`;
+      this.noticeTime = 2;
+      this.onSound?.('emp');
+    }
+    let mx = Number.isFinite(input.x) ? input.x : 0;
+    let my = Number.isFinite(input.y) ? input.y : 0;
+    let len = Math.hypot(mx, my);
+    if (len > 1) {
+      mx /= len;
+      my /= len;
+    }
+    const dashCd = kit?.dashCd ?? this.dashCd;
+    if (input.dash && dashCd <= 0) {
+      if (kit) {
+        kit.dashCd = 4;
+        kit.dashTime = 0.25;
+        kit.shield = Math.max(kit.shield, 0.4);
+      } else {
+        this.dashCd = 4;
+        this.dashTime = 0.25;
+        this.shield = Math.max(this.shield, 0.4);
+      }
+      this.onSound?.('dash');
+    }
+    const dashTime = kit?.dashTime ?? this.dashTime;
+    if (dashTime > 0 && len === 0) {
+      mx = Math.cos(p.angle);
+      my = Math.sin(p.angle);
+      len = 1;
+    }
+    if (len > 0) {
+      p.angle = Math.atan2(my, mx);
+      this.move(
+        p,
+        mx * p.speed * dt * (dashTime > 0 ? 3.4 : (p.slow ?? 0) > 0 ? 0.55 : 1),
+        my * p.speed * dt * (dashTime > 0 ? 3.4 : (p.slow ?? 0) > 0 ? 0.55 : 1),
+      );
+      if (kit) {
+        if (this.elapsed >= (p.trackReadyAt ?? 0)) {
+          this.tracks.push({ x: p.x, y: p.y, angle: p.angle, life: 9 });
+          p.trackReadyAt = this.elapsed + 0.085;
+        }
+      } else {
+        this.trackTimer -= dt;
+        if (this.trackTimer <= 0) {
+          this.tracks.push({ x: p.x, y: p.y, angle: p.angle, life: 9 });
+          this.trackTimer = 0.085;
+        }
+      }
+    }
+    if (input.aim && Number.isFinite(input.aim.x) && Number.isFinite(input.aim.y))
+      p.turret = Math.atan2(input.aim.y - p.y, input.aim.x - p.x);
+    else if (input.fire) {
+      const nearest = this.enemies
+        .filter(
+          (e) =>
+            e.hp > 0 &&
+            e.spawn <= 0 &&
+            !this.walls.some(
+              (w) =>
+                w.hp > 0 && w.kind !== 'water' && segmentRect(p, e, w) !== null,
+            ),
+        )
+        .sort((a, b) => distance(a, p) - distance(b, p))[0];
+      p.turret = nearest
+        ? Math.atan2(nearest.y - p.y, nearest.x - p.x)
+        : p.angle;
+    }
+    if (input.fire && p.cooldown <= 0) this.shoot(p, false);
+  }
+  step(rawDt: number, input: Input, remoteInputs: Record<number, Input> = {}) {
     if (this.paused || this.result) return;
     const previousPositions = new Map<number, Vec>(
-      [this.player, ...this.enemies].map((t) => [t.id, { x: t.x, y: t.y }]),
+      [...this.players, ...this.enemies].map((t) => [t.id, { x: t.x, y: t.y }]),
     );
     previousPositions.set(-2, { x: this.base.x, y: this.base.y });
     const dt = Math.min(0.05, Math.max(0, rawDt));
@@ -1295,99 +1748,9 @@ export class Battle {
     this.shake = Math.max(0, this.shake - dt * 25);
     this.pulse = Math.max(0, this.pulse - dt * 1.3);
     const p = this.player;
-    p.cooldown -= dt;
-    if (input.weapon !== undefined) this.selectWeapon(input.weapon);
-    else if (input.nextWeapon) {
-      for (let i = 1; i < WEAPONS.length; i++) {
-        const next = (this.weapon + i) % WEAPONS.length;
-        if (this.ammo[next] > 0) {
-          this.selectWeapon(next);
-          break;
-        }
-      }
-    }
-    p.slow = Math.max(0, (p.slow ?? 0) - dt);
-    if (input.support) this.useSupport();
-    if (input.mine) this.layMine();
-    p.flash = Math.max(0, p.flash - dt);
-    if (input.emp && this.empCd <= 0) {
-      const beforeMines = this.mines.length;
-      this.mines = this.mines.filter((m) => distance(m, p) > 300);
-      this.empCd = 13;
-      this.pulse = 1;
-      this.shake = 9;
-      for (const e of this.enemies) {
-        if (distance(e, p) < 280) {
-          e.stun = 3;
-          e.attackWindup = 0;
-          e.cooldown = Math.max(e.cooldown, 1.2);
-          this.hitEnemy(e, 65);
-        }
-      }
-      this.bullets = this.bullets.filter(
-        (b) => !b.enemy || distance(b, p) > 300,
-      );
-      this.notice = '电磁脉冲 · 周围敌军瘫痪 3 秒';
-      if (beforeMines > this.mines.length)
-        this.notice += ` · 已排除 ${beforeMines - this.mines.length} 枚地雷`;
-      this.noticeTime = 2;
-      this.onSound?.('emp');
-    }
-    let mx = input.x,
-      my = input.y,
-      len = Math.hypot(mx, my);
-    if (len > 1) {
-      mx /= len;
-      my /= len;
-    }
-    if (input.dash && this.dashCd <= 0) {
-      this.dashCd = 4;
-      this.dashTime = 0.25;
-      this.shield = Math.max(this.shield, 0.4);
-      this.onSound?.('dash');
-    }
-    if (this.dashTime > 0 && len === 0) {
-      mx = Math.cos(p.angle);
-      my = Math.sin(p.angle);
-      len = 1;
-    }
-    if (len > 0) {
-      p.angle = Math.atan2(my, mx);
-      this.move(
-        p,
-        mx *
-          p.speed *
-          dt *
-          (this.dashTime > 0 ? 3.4 : (p.slow ?? 0) > 0 ? 0.55 : 1),
-        my *
-          p.speed *
-          dt *
-          (this.dashTime > 0 ? 3.4 : (p.slow ?? 0) > 0 ? 0.55 : 1),
-      );
-      this.trackTimer -= dt;
-      if (this.trackTimer <= 0) {
-        this.tracks.push({ x: p.x, y: p.y, angle: p.angle, life: 9 });
-        this.trackTimer = 0.085;
-      }
-    }
-    if (input.aim) p.turret = Math.atan2(input.aim.y - p.y, input.aim.x - p.x);
-    else if (input.fire) {
-      const nearest = this.enemies
-        .filter(
-          (e) =>
-            e.hp > 0 &&
-            e.spawn <= 0 &&
-            !this.walls.some(
-              (w) =>
-                w.hp > 0 && w.kind !== 'water' && segmentRect(p, e, w) !== null,
-            ),
-        )
-        .sort((a, b) => distance(a, p) - distance(b, p))[0];
-      p.turret = nearest
-        ? Math.atan2(nearest.y - p.y, nearest.x - p.x)
-        : p.angle;
-    }
-    if (input.fire && p.cooldown <= 0) this.shoot(p, false);
+    this.controlPlayer(p, input, dt);
+    for (const ally of this.allies)
+      this.controlPlayer(ally, sanitizeRemoteInput(remoteInputs[ally.id]), dt);
     // A blocked deployment is retried; an absent Boss can never grant victory.
     if (!this.endless && !this.bossSpawned && this.reinforcementRetry <= 0) {
       this.spawnEnemy(3);
@@ -1461,12 +1824,11 @@ export class Battle {
             wall.kind !== 'water' &&
             segmentRect(e, target, wall) !== null,
         );
+      const nearestPlayer = this.players
+        .filter((tank) => tank.hp > 0 && visible(tank))
+        .sort((a, b) => distance(e, a) - distance(e, b))[0];
       const hostile = !e.returning
-        ? visible(p)
-          ? p
-          : this.protectsBase && visible(this.base)
-            ? this.base
-            : null
+        ? nearestPlayer ?? (this.protectsBase && visible(this.base) ? this.base : null)
         : null;
       e.cooldown -= dt;
       e.decision -= dt;
@@ -1524,7 +1886,9 @@ export class Battle {
         this.burst(e.x, e.y, 45, 160);
         this.explode(e.x, e.y, 1.35, 'fuel');
         this.onSound?.('explosion');
-        if (distance(e, p) < 110 && visible(p)) this.playerHit(e.damage);
+        for (const player of this.players)
+          if (player.hp > 0 && distance(e, player) < 110 && visible(player))
+            this.playerHit(e.damage, undefined, player);
         if (
           this.protectsBase &&
           distance(e, this.base) < 110 &&
@@ -1533,12 +1897,16 @@ export class Battle {
           this.base.hp = Math.max(0, this.base.hp - e.damage);
         continue;
       }
-      const lead =
-        target === p && dt > 0 ? Math.min(0.45, distance(e, p) / 700) / dt : 0;
-      const oldPlayer = previousPositions.get(0)!;
+      const aimedPlayer = 'id' in target ? target as Tank : undefined;
+      const lead = aimedPlayer && dt > 0
+        ? Math.min(0.45, distance(e, aimedPlayer) / 700) / dt
+        : 0;
+      const oldPlayer = aimedPlayer
+        ? previousPositions.get(aimedPlayer.id) ?? aimedPlayer
+        : target;
       const aimAngle = Math.atan2(
-        target.y + (p.y - oldPlayer.y) * lead - e.y,
-        target.x + (p.x - oldPlayer.x) * lead - e.x,
+        target.y + (target.y - oldPlayer.y) * lead - e.y,
+        target.x + (target.x - oldPlayer.x) * lead - e.x,
       );
       const angle = Math.atan2(target.y - e.y, target.x - e.x);
       const difference =
@@ -1611,8 +1979,10 @@ export class Battle {
       }
       if (e.kind === 3 && (e.attackWindup ?? 0) > 0) {
         // A visible alternate objective must not authorize a stale player shot.
-        const aimed = e.windupTarget === 'base' ? this.base : p;
-        if (e.returning || !visible(aimed)) {
+        const aimed = e.windupTarget === 'base'
+          ? this.base
+          : this.getPlayer(e.windupTargetId ?? 0);
+        if (e.returning || !aimed || !visible(aimed)) {
           e.attackWindup = 0;
           e.windupTarget = undefined;
           continue;
@@ -1634,7 +2004,8 @@ export class Battle {
       ) {
         if (e.kind === 3) {
           e.attackWindup = 0.9 - this.bossThreshold * 0.15;
-          e.windupTarget = hostile === p ? 'player' : 'base';
+          e.windupTarget = 'id' in hostile ? 'player' : 'base';
+          e.windupTargetId = 'id' in hostile ? hostile.id : undefined;
         } else this.shoot(e, true);
       }
     }
@@ -1653,16 +2024,33 @@ export class Battle {
           this.move(b, ((b.x - a.x) / d) * push, ((b.y - a.y) / d) * push);
         }
       }
-      const d = distance(a, p),
-        min = a.radius + p.radius;
-      if (d < min) {
-        const nx = d > 0.01 ? (a.x - p.x) / d : 1,
-          ny = d > 0.01 ? (a.y - p.y) / d : 0;
-        this.move(a, nx * (min - d), ny * (min - d));
-        const remaining = min - distance(a, p);
-        if (remaining > 0) this.move(p, -nx * remaining, -ny * remaining);
+      for (const player of this.players) {
+        if (player.hp <= 0) continue;
+        const d = distance(a, player),
+          min = a.radius + player.radius;
+        if (d < min) {
+          const nx = d > 0.01 ? (a.x - player.x) / d : 1,
+            ny = d > 0.01 ? (a.y - player.y) / d : 0;
+          this.move(a, nx * (min - d), ny * (min - d));
+          const remaining = min - distance(a, player);
+          if (remaining > 0)
+            this.move(player, -nx * remaining, -ny * remaining);
+        }
       }
     }
+    const players = this.players;
+    for (let i = 0; i < players.length; i++)
+      for (let j = i + 1; j < players.length; j++) {
+        const a = players[i], b = players[j];
+        if (a.hp <= 0 || b.hp <= 0) continue;
+        const d = distance(a, b), min = a.radius + b.radius + 3;
+        if (d >= min) continue;
+        const nx = d > 0.01 ? (a.x - b.x) / d : 1;
+        const ny = d > 0.01 ? (a.y - b.y) / d : 0;
+        const push = (min - d) / 2;
+        this.move(a, nx * push, ny * push);
+        this.move(b, -nx * push, -ny * push);
+      }
     for (const b of this.bullets) {
       if (b.life <= 0) continue;
       b.life -= dt;
@@ -1708,7 +2096,7 @@ export class Battle {
           hitType = 'wall';
         }
       }
-      const tanks = b.enemy ? [p] : this.enemies;
+      const tanks = b.enemy ? this.players : this.enemies;
       for (const t of tanks) {
         if (t.hp <= 0 || t.spawn > 0 || b.hits?.includes(t.id)) continue;
         const at = segmentCircle(from, to, t, t.radius + 3);
@@ -1770,7 +2158,7 @@ export class Battle {
         } else if (hitType === 'facility') {
           (hit as Objective).hp = Math.max(0, (hit as Objective).hp - b.damage);
         } else if (hitType === 'player') {
-          this.playerHit(b.damage, b);
+          this.playerHit(b.damage, b, hit as Tank);
         } else if (hitType === 'base') {
           this.base.hp = Math.max(0, this.base.hp - b.damage);
         }
@@ -1801,9 +2189,9 @@ export class Battle {
               if (o !== hit && o.kind === 'facility' && exposed(o))
                 o.hp = Math.max(0, o.hp - b.damage * 0.65);
           } else {
-            if (hitType !== 'player' && this.shield <= 0 && exposed(p)) {
-              this.playerHit(b.damage * 0.65, b);
-            }
+            for (const player of this.players)
+              if (player !== hit && player.hp > 0 && exposed(player))
+                this.playerHit(b.damage * 0.65, b, player);
             if (hitType !== 'base' && this.protectsBase && exposed(this.base))
               this.base.hp = Math.max(0, this.base.hp - b.damage * 0.65);
           }
@@ -1827,34 +2215,34 @@ export class Battle {
     this.tracks = this.tracks.filter((t) => t.life > 0).slice(-160);
     for (const s of this.pickups) {
       s.life -= dt;
-      if (
+      const collector = this.players.find((tank) =>
         s.life > 0 &&
-        p.hp > 0 &&
-        distance(s, p) < (this.save.module === 3 ? 140 : 65)
-      ) {
-        if (
-          s.kind === 3 &&
-          s.weapon &&
-          this.ammo[s.weapon] >= WEAPONS[s.weapon].capacity
-        )
-          continue;
+        tank.hp > 0 &&
+        distance(s, tank) < (this.save.module === 3 ? 140 : 65) &&
+        !(s.kind === 3 && s.weapon &&
+          (tank.kit?.ammo ?? this.ammo)[s.weapon] >= WEAPONS[s.weapon].capacity),
+      );
+      if (collector) {
+        const ammo = collector.kit?.ammo ?? this.ammo;
         s.life = 0;
         if (s.kind === 3 && s.weapon && WEAPONS[s.weapon]) {
           const weapon = WEAPONS[s.weapon];
-          const before = this.ammo[s.weapon];
-          this.ammo[s.weapon] = Math.min(
+          const before = ammo[s.weapon];
+          ammo[s.weapon] = Math.min(
             weapon.capacity,
             before + (s.amount ?? weapon.supply),
           );
-          this.notice = `${weapon.name} +${this.ammo[s.weapon] - before} · 备弹 ${this.ammo[s.weapon]}`;
+          this.notice = `${weapon.name} +${ammo[s.weapon] - before} · 备弹 ${ammo[s.weapon]}`;
         } else if (s.kind === 0) {
-          p.hp = Math.min(p.maxHp, p.hp + 50);
+          collector.hp = Math.min(collector.maxHp, collector.hp + 50);
           this.notice = '维修补给 · 恢复 50 装甲';
         } else if (s.kind === 1) {
-          this.rapid = 8;
+          if (collector.kit) collector.kit.rapid = 8;
+          else this.rapid = 8;
           this.notice = '超频装填 · 8 秒双倍射速';
         } else {
-          this.shield = 6;
+          if (collector.kit) collector.kit.shield = 6;
+          else this.shield = 6;
           this.notice = '能量护盾 · 6 秒免疫伤害';
         }
         this.noticeTime = 2.5;
@@ -1865,9 +2253,9 @@ export class Battle {
     this.enemies = this.enemies.filter((e) => e.hp > 0);
     this.updateMines(previousPositions);
     this.enemies = this.enemies.filter((e) => e.hp > 0);
-    if (p.hp <= 0 || (this.protectsBase && this.base.hp <= 0)) {
-      const wreck = p.hp <= 0 ? p : this.base;
-      this.explode(wreck.x, wreck.y, p.hp <= 0 ? 1.3 : 2.2, 'fuel');
+    if (this.players.every((tank) => tank.hp <= 0) || (this.protectsBase && this.base.hp <= 0)) {
+      const wreck = this.protectsBase && this.base.hp <= 0 ? this.base : p;
+      this.explode(wreck.x, wreck.y, wreck === p ? 1.3 : 2.2, 'fuel');
       this.onSound?.('explosion');
       this.finish(false);
       return;

@@ -1,6 +1,8 @@
 # 网页版房主联机设计
 
-2026-09-23 方案。目标是 2–4 人合作对抗敌军：玩家创建房间当房主，朋友输入房间码加入；优先局域网直连，跨网络优先直连，穿透失败再用中继。保留现有单人模式和静态网页入口。本文是设计，尚未实现联机。
+2026-09-23 方案与实施记录。目标是 2–4 人合作对抗敌军：玩家创建房间当房主，朋友输入房间码加入；优先局域网直连，跨网络优先直连，穿透失败再用中继。保留现有单人模式和静态网页入口。
+
+首版已实现网页版房间大厅、WebSocket 信令、WebRTC 双数据通道、房主权威战斗、2–4 辆友军坦克、两张地图、联机专用结算与断线提示。J6412 上的信令进程作为用户服务运行，`127.0.0.1:8787/health` 已验证；临时 Cloudflare Quick Tunnel 的公开 WSS 已在两浏览器建房/加入中实测。[Cloudflare 官方说明](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/trycloudflare/)明确 Quick Tunnel 地址重启会变化且没有可用性承诺，不能当作稳定正式入口。当前只有 STUN 直连，没有 TURN，严格 NAT 下不能保证连通；公网跨运营商、手机实体机、TURN 强制回退和长时间运行尚未验收。2026-09-23 本地两浏览器实际进入同一战场，加入者布雷只扣自己的库存，房主离开会令加入者显示断线。
 
 ## 关键边界
 
@@ -8,16 +10,16 @@ GitHub Pages 只能交付静态网页，不能让浏览器凭一个房间码找�
 
 如果要求真正没有任何线上服务，只能让玩家通过聊天手动交换连接描述与候选信息；这不能提供自动查找房间、稳定跨 NAT 加入。局域网离线自动发现还需要局域网内的辅助程序或服务，不能只靠当前 GitHub Pages 网页完成。
 
-## 推荐技术选型
+## 当前技术选型与后续部署选项
 
 | 职责 | 方案 | 放置位置 |
 | --- | --- | --- |
 | 网页、菜单、3D 画面 | 现有 React + Babylon.js + Vite | 继续放在 GitHub Pages |
 | 游戏计算 | 房主浏览器独占战斗模拟，客户端只发输入、渲染房主状态 | 玩家设备，不设中心游戏服 |
 | 玩家间数据 | 原生 `RTCPeerConnection` + 两条 `RTCDataChannel` | 浏览器间，必要时经 TURN |
-| 房间码与握手 | 轻量 Worker + 每房间一个 Durable Object，WebSocket 只转发信令并维护等待大厅 | 托管服务，无常驻游戏进程 |
-| NAT 穿透 | ICE `iceTransportPolicy: 'all'`，STUN + 托管 TURN | 先直连，失败时中继 |
-| TURN 密钥 | Worker 为已加入房间的玩家申请短期凭证 | 长期密钥只留服务端 |
+| 房间码与握手 | 当前为 J6412 上的 Node/WebSocket 房间目录 | J6412 用户服务，经临时 HTTPS 隧道公开 |
+| NAT 穿透 | 当前为 ICE `iceTransportPolicy: 'all'` + STUN | 优先直连；严格 NAT 暂无中继兜底 |
+| 稳定入口与 TURN | 待选：固定域名的隧道或公网直连 WSS，加托管 TURN | 不把 TURN 长期密钥放在静态网页中 |
 
 Cloudflare Workers/Durable Objects 及 Realtime TURN 是一套具体可试的托管组合；Durable Object 支持 WebSocket 休眠。TURN 的长期密钥不能放进公开网页，须由 Worker 签发短期凭证。使用额度、价格和国内不同网络的可达性要在实施时实测；信令与 TURN 均保留供应商适配层，不能把供应商 API 写进战斗引擎。[Durable Objects WebSocket](https://developers.cloudflare.com/durable-objects/best-practices/websockets/)、[TURN 凭证](https://developers.cloudflare.com/realtime/turn/generate-credentials/)、[Cloudflare 当前计费说明](https://developers.cloudflare.com/realtime/sfu/platform/pricing/)。
 
@@ -44,19 +46,21 @@ flowchart LR
 
 如果 J6412 有可从公网访问的地址，可通过 HTTPS/WSS 暴露信令服务。如果 J6412 也在没有公网地址的家庭网络里，Cloudflare Tunnel 可以把本机 WebSocket 服务经其公网入口发布，不要求家庭路由器入站开放端口；稳定的公开地址仍要解决域名/隧道配置。也可以继续使用托管 Worker/Durable Object，省去家用设备在线率对建房的影响。**Cloudflare Tunnel 的 WebSocket 支持不等于可让浏览器通过该隧道访问普通 UDP TURN 服务。** TURN 应另用托管服务；只有 J6412 具备公网可达地址，或有可控的公网 UDP 端口映射时，才考虑在上面部署 coturn 并开放监听端口与中继端口范围。小规模时 J6412 的计算能力不是主要障碍，持续中继的上行带宽和网络路径才需要实测。[Tunnel WebSocket 支持](https://developers.cloudflare.com/cloudflare-one/faq/cloudflare-tunnels-faq/)、[Tunnel 公网路由限制](https://developers.cloudflare.com/tunnel/concepts/routing/)、[coturn 端口配置](https://github.com/coturn/coturn/blob/master/README.turnserver)。
 
+当前机器上的 DuckDNS A/AAAA 会更新到现有公网地址，但路由器管理接口需要登录，公网入站映射和 IPv6 防火墙尚未证实。DuckDNS 更新凭据由 root 私有文件保存；普通 `zcx` 用户无法读取，且无免密 sudo。若要改用 `wss://zcxserver.duckdns.org:9443/ws` 这种固定入口，需先确认路由器 TCP 9443 入站可达，再用 DuckDNS DNS-01 签可信证书并配置 J6412 防火墙；这些条件没有完成前，不应将该地址发布为可用。自建 TURN 还需公网 UDP 3478 与中继 UDP 端口段。现有 WakeWeb 的 8443 端口保持不变。[DuckDNS TXT API](https://www.duckdns.org/spec.jsp)、[Let's Encrypt DNS-01](https://letsencrypt.org/docs/challenge-types/)。
+
 ### 房间与安全
 
-房主点“创建房间”，选择地图、玩法、难度和人数上限，得到随机房间码与邀请链接；加入者输入房间码，进入等待大厅，选择底盘并点“准备”。房主确认后开始，同一战斗种子和协议版本发给所有人。房间码应高熵且短期有效；房主令牌与邀请令牌分开，房主可以拒绝/踢出玩家。信令服务只转发限定大小和频率的 SDP/ICE 消息，不接收战斗输入，也不保存长期存档。按房间人数、创建频率、消息尺寸与请求来源限流；TURN 临时凭证须关联有效房间并限制期限。
+当前房主创建房间、选择两张地图之一和人数上限，得到随机房间码与邀请链接；加入者连接房主后，房主锁定准确名单并开始歼灭突击。单独的队友底盘、准备按钮、踢人和重入已锁定房间尚未实现。信令服务只转发限定大小和频率的 SDP/ICE 消息，不接收战斗输入，也不保存长期存档；它限制房间人数、创建频率、消息尺寸和浏览器来源。TURN 临时凭证须在部署中继时另行设计。
 
 WebRTC 数据通道本身使用 DTLS 加密；直连玩家可能获知对方的网络地址，因此界面应说明“优先直连”的隐私含义，另外提供“仅中继”选项（牺牲部分延迟和流量成本）。[MDN 数据通道安全](https://developer.mozilla.org/en-US/docs/Web/API/WebRTC_API/Using_data_channels)、[ICE 地址隐私](https://developer.mozilla.org/en-US/docs/Web/API/RTCIceCandidate/address)。
 
 ### 战斗同步
 
-采用房主权威的星形拓扑：客户端每秒约 20–30 次发送完整的移动、瞄准、开火状态与单调递增序号；房主以现有固定 60 Hz 步长处理所有玩家、敌军、炮弹、地雷、掉落和胜负，每秒约 10–15 次向每位玩家发包含时刻/序号的状态快照。数值只是初始调参目标，须由实际延迟、丢包和手机耗电测试决定。旧快照直接丢弃，远端坦克插值，本地坦克预测后按房主状态温和校正；输入断流约 200 ms 后房主自动松开开火与移动。
+当前采用房主权威的星形拓扑：加入者最多每秒约 30 次发送移动、瞄准、开火状态；房主以固定 60 Hz 步长处理所有玩家、敌军、炮弹、地雷、掉落和胜负，约每 100 ms 发送完整状态快照。旧快照按序号丢弃，远端坦克做短时插值；加入者本车也以房主快照为准，尚无本地预测。输入断流约 200 ms 后，房主自动松开该玩家的持续移动和开火。
 
-实时输入/快照通道使用 `ordered:false, maxRetransmits:0`；房间准备、开始、拾取确认、升级、结算等关键事件使用默认可靠有序通道，带事件 ID 去重和断线后的完整状态重发。避免把整张地图或大型 JSON 每帧广播，先做增量快照和带宽测量，再决定是否上二进制编码；积压时丢弃旧快照，不积累延迟。[DataChannel 配置](https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/createDataChannel)、[缓冲量](https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel/bufferedAmount)。
+实时输入/快照通道使用 `ordered:false, maxRetransmits:0`；房间开始、一次性战斗操作与终局状态走默认可靠有序通道，按序号过滤旧消息。当前每份完整快照在压力测试中约 17 KiB，特效数量有上限；积压时丢弃旧实时快照，不积累延迟。增量快照、二进制编码和弱网带宽测量仍属后续优化。[DataChannel 配置](https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/createDataChannel)、[缓冲量](https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel/bufferedAmount)。
 
-现有 `Battle` 只有 `player` 一辆玩家车，`weapon`、`ammo`、`mineAmmo`、`shield`、`kills` 和 `result` 也是单人字段，`FixedStep.advance()` 只接收一份输入；`Renderer3D` 的镜头、特效与可见范围直接读取 `b.player`。不能把单人 `Battle` 在每位玩家浏览器各运行一次来假装同步。改造时把每人生命/武器/弹药/技能/地雷等放进 `PlayerState`，让 `Battle.step()` 接收按玩家 ID 索引的输入；共享任务、敌人、炮弹、掉落由房主掌管。渲染器改为接收与模拟分离的 `BattleView` 和本地玩家 ID。房主视角也走同一份渲染接口，单人模式仍走本地模拟。首版房主网页转后台时暂停全房间；房主连接中断后给短暂重连窗口，超时则结束房间。房主迁移以后再做。
+`Battle` 已支持最多四辆友军坦克，各有生命、武器、弹药和技能；`FixedStep.advance()` 接受按玩家 ID 索引的输入，渲染器按本地玩家 ID 跟随镜头。敌人、炮弹、地雷、补给和胜负只由房主计算。房主网页转后台时暂停全房间；ICE 短暂中断会尝试重启，超过重试次数则移出队友或结束加入者连接。当前没有重新加入已开始房间或房主迁移。
 
 首版只开放两张现有地图与“歼灭突击”合作模式，每人独立生命、弹药和技能，团队共用目标与 Boss，友军伤害关闭；死亡玩家观战到本局结束。现有八种玩法在多人输入和目标归属验证后逐步放开。无账号的房主权威只能防止加入者随意改伤害，不能防房主作弊，所以多人局不发放可竞争的排行榜奖励；单机成长存档保持独立。
 
