@@ -41,7 +41,6 @@ const {
   ENEMY_PATROL_RADIUS,
   ENEMY_LEASH_RADIUS,
   ENEMY_ALERT_DISTANCE,
-  wallDistance,
   ENEMY_SPAWN_DISTANCE,
   segmentCircle,
   segmentRect,
@@ -1589,7 +1588,7 @@ test('music switching on gamepad View uses a release edge and saves validate the
 const { BATTLEFIELDS, OPERATIONS } = await import(
   pathToFileURL(path.join(tmp, 'battlefields.mjs'))
 );
-test('two maps have distinct geometry and every operation has navigable deployment and objectives', () => {
+test('city map supports navigable deployment and objectives for every operation', () => {
   const layouts = new Set();
   for (const field of BATTLEFIELDS) {
     for (const operation of OPERATIONS) {
@@ -1660,7 +1659,7 @@ test('two maps have distinct geometry and every operation has navigable deployme
         layouts.add(JSON.stringify({ roads: b.roads, walls: b.walls }));
     }
   }
-  assert.equal(layouts.size, 2);
+  assert.equal(layouts.size, 1);
 });
 test('spawn sampling spreads across both dimensions of the opposing region', () => {
   const xs = new Set(),
@@ -1753,7 +1752,7 @@ test('scenario options migrate safely and quick victories retain kills without u
     'survival',
   );
   for (const selection of [
-    { battlefield: 'highlands' },
+    { battlefield: 'city' },
     { operation: 'survival' },
   ]) {
     const save = beginRun({ ...config(), ...selection }, 'scenario');
@@ -1774,71 +1773,16 @@ test('quick objectives have stable targets even after selecting a boss chapter',
     assert(b.target >= 18);
   }
 });
-test('wilderness has only natural cover, fordable water and exact elliptical hills', () => {
-  assert.deepEqual(
-    BATTLEFIELDS.map((f) => f.id),
-    ['city', 'highlands'],
-  );
-  const b = new Battle(0, false, { ...config(), battlefield: 'highlands' });
-  assert(
-    b.walls.every((wall) => ['hill', 'tree', 'boundary'].includes(wall.kind)),
-  );
-  const ponds = b.terrain.filter((feature) => feature.kind === 'water');
-  assert.equal(ponds.length, 3);
-  for (const pond of ponds) {
-    const x = pond.x + pond.w / 2,
-      y = pond.y + pond.h / 2;
-    assert(b.inWater(x, y));
-    assert(b.canOccupy(x, y, 46));
-    Object.assign(b.player, { x, y });
-    const start = b.player.x;
-    b.move(b.player, 20, 0);
-    assert(Math.abs(b.player.x - start - 14.4) < 1e-6);
-    assert(
-      b.navigation.guide(
-        { x: pond.x - 80, y },
-        { x: pond.x + pond.w + 80, y },
-        26,
-        0,
-      ),
-    );
+test('city is the only battlefield; old wilderness selections migrate safely', () => {
+  assert.deepEqual(BATTLEFIELDS.map((field) => field.id), ['city']);
+  for (let mission = 0; mission < 18; mission++) {
+    const b = new Battle(mission, false, config());
+    assert.equal(b.battlefield.id, 'city');
   }
-  const hill = {
-    x: 1000,
-    y: 500,
-    w: 400,
-    h: 240,
-    hp: Infinity,
-    maxHp: Infinity,
-    steel: true,
-    kind: 'hill',
-    shape: 'ellipse',
-  };
-  assert.equal(
-    segmentRect({ x: 950, y: 501 }, { x: 1100, y: 501 }, hill),
-    null,
-  );
-  assert.equal(
-    segmentRect({ x: 900, y: 620 }, { x: 1500, y: 620 }, hill),
-    1 / 6,
-  );
-  assert(Math.abs(wallDistance({ x: 980, y: 620 }, hill) - 20) < 1e-5);
-  b.walls = [hill];
-  assert(b.canOccupy(1005, 505, 20));
-  assert(!b.canOccupy(1200, 620, 20));
-  b.enemies = [];
-  b.spawnTimer = 999;
-  b.bullets = [
-    { x: 900, y: 620, vx: 2000, vy: 0, damage: 999, enemy: false, life: 2 },
-  ];
-  b.step(0.1, idle);
-  assert.equal(hill.hp, Infinity);
-  assert.equal(b.bullets.length, 0);
-  for (const id of ['desert', 'tropical', 'railway', 'wetlands'])
-    assert.equal(
-      parseSave(JSON.stringify({ battlefield: id })).battlefield,
-      'highlands',
-    );
+  for (const id of ['highlands', 'desert', 'tropical', 'railway', 'wetlands']) {
+    assert.equal(parseSave(JSON.stringify({ battlefield: id })).battlefield, 'city');
+    assert.equal(new Battle(0, false, { ...config(), battlefield: id }).battlefield.id, 'city');
+  }
 });
 const localPatrol = () => {
   const b = new Battle(0, true, config(), 77);

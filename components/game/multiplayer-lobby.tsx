@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Copy, Globe2, Link2, Radio, Shield, Swords, Users, Wifi } from 'lucide-react';
 import type { BattlefieldId } from '@/lib/battlefields';
 import type { Save } from '@/lib/campaign';
+import { createClientId } from '@/lib/client-id';
 import {
   createRoom,
   joinRoom,
@@ -44,7 +45,7 @@ function isStartMessage(value: unknown): value is StartMessage {
     message.version === VERSION &&
     typeof message.runId === 'string' &&
     message.runId.length <= 64 &&
-    (message.battlefield === 'city' || message.battlefield === 'highlands') &&
+    message.battlefield === 'city' &&
     !!message.roster &&
     typeof message.roster === 'object' &&
     Object.values(message.roster).every((id) => Number.isSafeInteger(id) && id <= 0 && id >= -12) &&
@@ -91,7 +92,7 @@ export default function MultiplayerLobby({
   const [fields] = useState(initialFields);
   const [signalUrl, setSignalUrl] = useState(fields.url);
   const [roomCode, setRoomCode] = useState(fields.code);
-  const [battlefield, setBattlefield] = useState<BattlefieldId>('city');
+  const battlefield: BattlefieldId = 'city';
   const [maxPlayers, setMaxPlayers] = useState(4);
   const [session, setSession] = useState<MultiplayerSession | null>(null);
   const [status, setStatus] = useState('选择创建房间或输入房间码加入');
@@ -226,7 +227,7 @@ export default function MultiplayerLobby({
         throw new Error('队友连接中断，请等待重连');
       const roster: Record<string, number> = { [session.peerId]: 0 };
       peers.sort().forEach((peerId, index) => (roster[peerId] = -10 - index));
-      const runId = crypto.randomUUID();
+      const runId = createClientId();
       const message: StartMessage = {
         type: 'start',
         version: VERSION,
@@ -342,11 +343,6 @@ export default function MultiplayerLobby({
               </div>
               {session.role === 'host' && (
                 <>
-                  <fieldset className="multiplayer-maps">
-                    <legend className="sr-only">联机地图</legend>
-                    <button aria-pressed={battlefield === 'city'} onClick={() => setBattlefield('city')}>尘湾城区</button>
-                    <button aria-pressed={battlefield === 'highlands'} onClick={() => setBattlefield('highlands')}>山林荒野</button>
-                  </fieldset>
                   <button className="multiplayer-primary" disabled={busy || !session.peers.size || [...session.peers.values()].some((peer) => peer.status !== 'connected')} onClick={() => void start()}>
                     <Swords size={18} /> 全队出击
                   </button>

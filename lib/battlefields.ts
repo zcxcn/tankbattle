@@ -6,16 +6,15 @@ export const BATTLEFIELDS = [
     biome: 'city',
     accent: '#e6b96a',
   },
-  {
-    id: 'highlands',
-    name: '山林荒野',
-    description: '山林巡游 · 天然山丘与可涉浅水',
-    biome: 'highlands',
-    accent: '#9ebc9a',
-  },
 ] as const;
-export type Battlefield = (typeof BATTLEFIELDS)[number];
-export type BattlefieldId = Battlefield['id'];
+export type BattlefieldId = (typeof BATTLEFIELDS)[number]['id'];
+export type Battlefield = {
+  readonly id: BattlefieldId;
+  readonly name: string;
+  readonly description: string;
+  readonly biome: string;
+  readonly accent: string;
+};
 export type BattlefieldChoice = 'campaign' | BattlefieldId;
 export const OPERATIONS = [
   {
@@ -70,31 +69,9 @@ export type TerrainFeature = {
   h: number;
   height: number;
 };
-const CAMPAIGN_FIELDS: BattlefieldId[] = [
-  'city',
-  'highlands',
-  'highlands',
-  'city',
-  'highlands',
-  'city',
-  'highlands',
-  'highlands',
-  'highlands',
-  'highlands',
-  'highlands',
-  'highlands',
-  'highlands',
-  'highlands',
-  'highlands',
-  'highlands',
-  'highlands',
-  'city',
-];
 export function battlefieldFor(
-  mission: number,
-  choice: BattlefieldChoice = 'campaign',
+  _mission: number,
+  _choice: BattlefieldChoice = 'campaign',
 ): Battlefield {
-  const id =
-    choice === 'campaign' ? (CAMPAIGN_FIELDS[mission] ?? 'city') : choice;
-  return BATTLEFIELDS.find((field) => field.id === id) ?? BATTLEFIELDS[0];
+  return BATTLEFIELDS[0];
 }

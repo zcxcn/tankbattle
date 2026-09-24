@@ -5,7 +5,6 @@ import {
   ChevronRight,
   Check,
   Lock,
-  Mountain,
   Building2,
   Play,
   Crosshair,
@@ -14,7 +13,6 @@ import {
 } from 'lucide-react';
 import { MISSIONS, CHASSIS, type Save } from '@/lib/campaign';
 import {
-  BATTLEFIELDS,
   OPERATIONS,
   battlefieldFor,
   type BattlefieldId,
@@ -24,10 +22,6 @@ import { progression } from '@/lib/progression';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import battlefieldCover from '../../web/assets/iron-embers-cover.png?url';
 
-const fieldIcons = {
-  city: Building2,
-  highlands: Mountain,
-};
 type Launch = { battlefield: BattlefieldId; operation: OperationId };
 export default function DeploymentMenu({
   save,
@@ -51,7 +45,6 @@ export default function DeploymentMenu({
   onWarmup: () => void;
 }) {
   const [mode, setMode] = useState('campaign');
-  const [setup, setSetup] = useState('field');
   const [actPage, setActPage] = useState({
     selected,
     page: Math.floor(selected / 6),
@@ -60,16 +53,12 @@ export default function DeploymentMenu({
     actPage.selected === selected ? actPage.page : Math.floor(selected / 6);
   const setAct = (update: (page: number) => number) =>
     setActPage({ selected, page: update(act) });
-  const [fieldId, setFieldId] = useState<BattlefieldId>('highlands');
+  const fieldId: BattlefieldId = 'city';
   const [operationId, setOperationId] = useState<OperationId>('breakthrough');
   const mission = MISSIONS[selected],
     rank = progression(save.kills);
-  const field =
-    mode === 'campaign'
-      ? battlefieldFor(selected)
-      : BATTLEFIELDS.find((f) => f.id === fieldId)!;
+  const field = battlefieldFor(selected);
   const operation = OPERATIONS.find((o) => o.id === operationId)!;
-  const FieldIcon = fieldIcons[field.id];
   return (
     <section className="deployment-menu" aria-label="作战部署">
       <div className="deployment-art" data-biome={field.biome}>
@@ -87,7 +76,7 @@ export default function DeploymentMenu({
           <small>ARMORED OPERATIONS</small>
         </div>
         <div className="deployment-field-stamp">
-          <FieldIcon size={24} />
+          <Building2 size={24} />
           <div>
             <small>作战区域</small>
             <strong>{field.name}</strong>
@@ -195,58 +184,22 @@ export default function DeploymentMenu({
                   <small>{field.name} · 每局独立部署</small>
                 </div>
               </div>
-              <Tabs value={setup} onValueChange={setSetup}>
-                <TabsList className="deployment-setup-tabs">
-                  <TabsTrigger value="field">
-                    选择地图 · {BATTLEFIELDS.length}
-                  </TabsTrigger>
-                  <TabsTrigger value="operation">
-                    选择玩法 · {OPERATIONS.length}
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
-              {setup === 'field' ? (
-                <div className="deployment-map-grid">
-                  {BATTLEFIELDS.map((f) => {
-                    const Icon = fieldIcons[f.id];
-                    return (
-                      <button
-                        key={f.id}
-                        data-biome={f.biome}
-                        aria-pressed={fieldId === f.id}
-                        onClick={() => {
-                          setFieldId(f.id);
-                          onWarmup();
-                        }}
-                      >
-                        <Icon size={25} />
-                        <strong>{f.name}</strong>
-                        <small>{f.description}</small>
-                        {fieldId === f.id && (
-                          <Check className="chosen-tick" size={15} />
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="deployment-operation-grid">
-                  {OPERATIONS.map((o) => (
-                    <button
-                      key={o.id}
-                      aria-pressed={o.id === operationId}
-                      onClick={() => {
-                        setOperationId(o.id);
-                        onWarmup();
-                      }}
-                    >
-                      <strong>{o.title}</strong>
-                      <small>{o.description}</small>
-                      {o.id === operationId && <Check size={14} />}
-                    </button>
-                  ))}
-                </div>
-              )}
+              <div className="deployment-operation-grid">
+                {OPERATIONS.map((o) => (
+                  <button
+                    key={o.id}
+                    aria-pressed={o.id === operationId}
+                    onClick={() => {
+                      setOperationId(o.id);
+                      onWarmup();
+                    }}
+                  >
+                    <strong>{o.title}</strong>
+                    <small>{o.description}</small>
+                    {o.id === operationId && <Check size={14} />}
+                  </button>
+                ))}
+              </div>
               <div className="deployment-objective">
                 <Target size={18} />
                 <span>

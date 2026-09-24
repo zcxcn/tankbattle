@@ -555,8 +555,8 @@ export function parseSave(raw: string | null): Save {
     return {
       battlefield: BATTLEFIELDS.some((field) => field.id === d.battlefield)
         ? d.battlefield
-        : ['desert', 'tropical', 'railway', 'wetlands'].includes(d.battlefield)
-          ? 'highlands'
+        : ['highlands', 'desert', 'tropical', 'railway', 'wetlands'].includes(d.battlefield)
+          ? 'city'
           : 'campaign',
       operation: OPERATIONS.some((operation) => operation.id === d.operation)
         ? d.operation

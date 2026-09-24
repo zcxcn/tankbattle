@@ -141,48 +141,12 @@ for (const { id: battlefield } of BATTLEFIELDS) {
     console.log(
       `PASS ${battlefield}: staged damage and rubble without new allocations`,
     );
-  } else {
-    assert(!wall);
-    assert(
-      !b.walls.some((wall) =>
-        ['office', 'warehouse', 'container', 'water'].includes(wall.kind),
-      ),
-    );
-    assert(
-      !world.staticMeshes.some((mesh) =>
-        /distant-industrial|rail-spur|rail-sleeper/.test(mesh.name),
-      ),
-    );
-    const water = world.staticMeshes.filter(
-      (mesh) => mesh.metadata?.terrain === 'water',
-    );
-    const bottoms = world.staticMeshes.filter(
-      (mesh) => mesh.metadata?.terrain === 'ford-bottom',
-    );
-    assert.equal(water.length, 3);
-    assert.equal(bottoms.length, 3);
-    for (const mesh of water) {
-      assert(mesh.metadata.fordable && mesh.material.needAlphaBlending());
-      assert(
-        Math.max(
-          ...mesh.getVerticesData('position').filter((_, i) => i % 3 === 1),
-        ) < 0.07,
-      );
-      assert(
-        mesh
-          .getVerticesData('color')
-          .some((value, i) => i % 4 === 3 && value === 0),
-      );
-    }
-    console.log(
-      `PASS ${battlefield}: rounded hills match collision, fordable shallow water, no houses or rail`,
-    );
   }
   scene.dispose();
   await new Promise((resolve) => setTimeout(resolve, 0));
 }
 const scene = new Scene(engine),
-  b = new Battle(0, false, { ...defaultSave, battlefield: 'highlands' }, 1234),
+  b = new Battle(0, false, { ...defaultSave, battlefield: 'city' }, 1234),
   progress = [];
 let ticks = 0;
 const timer = setInterval(() => ticks++, 0);

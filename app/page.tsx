@@ -1,5 +1,6 @@
 'use client';
 import { assetUrl } from '@/lib/asset-url';
+import { createClientId } from '@/lib/client-id';
 import battlefieldCover from '../web/assets/iron-embers-cover.png?url';
 import { isMobileDevice, deviceState } from '@/lib/performance';
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -263,7 +264,7 @@ export default function Home() {
     music.current?.unlock();
     setDialog(null);
     setResult(null);
-    const id = crypto.randomUUID();
+    const id = createClientId();
     setSave((s) => beginRun(s, id));
     setRun({ mission, endless, id, scenario });
   }
@@ -1247,7 +1248,7 @@ export default function Home() {
               ? '房间战绩只在本局显示，单人战役存档不会改变。'
               : result?.won
               ? result.scenario
-                ? '区域行动完成，战绩与坦克成长已保存。重新部署，挑战不同地图与玩法。'
+                ? '区域行动完成，战绩与坦克成长已保存。重新部署，挑战不同玩法。'
                 : MISSIONS[result.mission].end
               : result?.endless
                 ? '这一次的记录已经保存。整装待发，下一次走得更远。'
