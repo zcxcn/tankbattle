@@ -147,6 +147,9 @@ if (-not $SkipTests) {
     & $GodotPath --headless --path $projectRoot --script "res://tests/gamepad_regression_test.gd" -- --test
     Assert-LastExitCode -Action "Godot controller input and menu tests"
 
+    & $GodotPath --headless --path $projectRoot --script "res://tests/title_selection_test.gd" -- --test
+    Assert-LastExitCode -Action "Godot title vehicle selection without arena rebuild"
+
     Write-Host "Running expanded deployment, wreck and battlefield audio tests..."
     & $GodotPath --headless --path $projectRoot --script "res://tests/deployment_expansion_test.gd" -- --test
     Assert-LastExitCode -Action "Godot expanded deployment tests"
@@ -256,7 +259,7 @@ foreach ($credit in $creditSources.GetEnumerator()) {
     }
 }
 
-$productVersion = "0.4.13"
+$productVersion = "0.4.14"
 $manifestPath = Join-Path $artifactDirectory "build-manifest.json"
 $payloadFiles = @(Get-ChildItem -LiteralPath $artifactDirectory -File -Recurse | Sort-Object FullName)
 $manifestFiles = @(

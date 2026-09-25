@@ -80,7 +80,7 @@ func _ready() -> void:
 	get_tree().auto_accept_quit = false
 	Input.joy_connection_changed.connect(_on_joy_connection_changed)
 	_smoke_test = "--smoke-test" in OS.get_cmdline_user_args()
-	print("IRON_EMBERS_PC_READY | Godot native | Campaign 0.4.13 | city-scale beasts + continuous waves")
+	print("IRON_EMBERS_PC_READY | Godot native | Campaign 0.4.14 | city-scale beasts + continuous waves")
 	if _smoke_test:
 		call_deferred("start_game")
 
@@ -1072,7 +1072,13 @@ func cycle_chassis() -> void:
 	selected_chassis = (selected_chassis + 1) % VehicleCatalog.player_options().size()
 	SaveService.profile["selected_chassis"] = selected_chassis
 	SaveService.save_now()
-	_show_title_tank()
+	# The backdrop, weather and title camera are unchanged by vehicle selection.
+	# Rebuilding the whole arena here caused a long main-thread stall per click.
+	if is_instance_valid(player):
+		player.free()
+	player = _spawn_tank("CommandTank", Vector3(7.0, 0.05, 44.5), TankActor.TEAM_PLAYER, true, false, ["scout", "line", "heavy"][selected_chassis])
+	player.rotation.y = PI - 0.05
+	player.active = false
 	AudioService.play_ui("click")
 
 func next_mission() -> void:
